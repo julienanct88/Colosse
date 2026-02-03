@@ -317,7 +317,7 @@ input:focus {
   right: 0;
   background: linear-gradient(180deg, var(--card2), var(--card));
   border-top: 1px solid var(--border);
-  padding: 12px 16px calc(var(--safe-bottom) + 12px);
+  padding: 14px 16px calc(var(--safe-bottom) + 14px);
   z-index: 1000;
   display: none;
   backdrop-filter: blur(20px);
@@ -328,19 +328,23 @@ input:focus {
 .chr-in {
   max-width: 500px;
   margin: 0 auto;
+}
+.chr-row1 {
   display: flex;
   align-items: center;
-  gap: 12px;
   justify-content: center;
+  gap: 14px;
+  margin-bottom: 10px;
 }
 .chr-d {
-  font-size: 2.5rem;
+  font-size: 3.2rem;
   font-weight: 700;
   font-family: var(--mono);
   color: var(--accent);
-  min-width: 100px;
+  min-width: 140px;
   text-align: center;
-  letter-spacing: -1px;
+  letter-spacing: 2px;
+  line-height: 1;
 }
 .chr-d.w { color: var(--yellow); }
 .chr-d.r { color: var(--red); animation: pls 0.5s infinite; }
@@ -362,16 +366,21 @@ input:focus {
 .c-pl { background: var(--green); color: #fff; }
 .c-rs { background: var(--red); color: #fff; }
 .c-cl { background: var(--card2); color: var(--sub); border: 1px solid var(--border); }
-.pre { display: flex; gap: 4px; }
+.chr-row2 {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 8px;
+}
+.pre { display: flex; gap: 6px; }
 .pre button {
   background: var(--card2);
   border: 1px solid var(--border);
   color: var(--sub);
-  padding: 6px 10px;
+  padding: 8px 14px;
   border-radius: 12px;
   cursor: pointer;
   font-family: var(--font);
-  font-size: 0.7rem;
+  font-size: 0.8rem;
   font-weight: 600;
   transition: all 0.15s;
 }
@@ -684,7 +693,8 @@ input:focus {
 @media (max-width: 380px) {
   .tab { font-size: 8px; padding: 8px 2px; }
   input { width: 44px; }
-  .chr-d { font-size: 2rem; }
+  .chr-d { font-size: 2.5rem; min-width: 110px; }
+  .pre button { padding: 6px 10px; font-size: .7rem; }
 }
 
 /* Disable iOS rubber band on body but keep scroll on content */
@@ -925,20 +935,25 @@ input:focus {
 <!-- CHRONO -->
 <div class="chr" id="chr">
 <div class="chr-in">
-<div><div class="chr-d" id="cd">0:00</div></div>
+<div class="chr-row1">
+<div class="chr-d" id="cd">0:00</div>
 <div class="chr-bt">
 <button class="chr-b c-pl" id="bp" onclick="toggle()">▶</button>
 <button class="chr-b c-rs" onclick="reset()">↺</button>
 <button class="chr-b c-cl" onclick="close_()">✕</button>
 </div>
+</div>
+<div class="chr-row2">
 <div class="pre">
-<button onclick="P(60)">60s</button>
-<button onclick="P(90)">90s</button>
-<button onclick="P(120)">2m</button>
-<button class="on" onclick="P(180)">3m</button>
+<button onclick="P(60,this)">60s</button>
+<button onclick="P(90,this)">90s</button>
+<button onclick="P(120,this)">2m</button>
+<button onclick="P(150,this)">2m30</button>
+<button class="on" onclick="P(180,this)">3m</button>
 </div>
 </div>
 <div class="chr-br"><div class="chr-fl" id="cb" style="width:100%"></div></div>
+</div>
 </div>
 <div class="msg" id="mg">💾 Sauvegardé !</div>
 </body>
@@ -974,10 +989,10 @@ function toggle() {
 function reset() { haptic(); clearInterval(I); run=false; t=mx; U(); document.getElementById('bp').textContent='▶'; }
 function close_() { haptic(); clearInterval(I); run=false; document.getElementById('chr').classList.remove('show'); }
 
-function P(s) {
+function P(s,btn) {
   mx=s; t=s; U(); haptic();
   document.querySelectorAll('.pre button').forEach(b=>b.classList.remove('on'));
-  event.target.classList.add('on');
+  if(btn) btn.classList.add('on');
 }
 
 function U() {
@@ -1735,6 +1750,23 @@ document.querySelectorAll('.bdg').forEach(bdg => {
   vidBtn.textContent = '🎬';
   vidBtn.onclick = function(){ vid(this); };
   bdg.insertBefore(vidBtn, bdg.firstChild);
+});
+
+// === WAKE LOCK (prevent screen sleep) ===
+let wakeLock = null;
+async function requestWakeLock() {
+  try {
+    if('wakeLock' in navigator) {
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', () => { wakeLock = null; });
+    }
+  } catch(e) { /* permission denied or not supported */ }
+}
+// Request on load
+requestWakeLock();
+// Re-request when app becomes visible again (after switching apps)
+document.addEventListener('visibilitychange', () => {
+  if(document.visibilityState === 'visible') requestWakeLock();
 });
 
 // Prevent zoom on double tap for iOS
