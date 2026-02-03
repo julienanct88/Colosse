@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Colosse">
+<meta name="theme-color" content="#0a0a0a">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Colosse</title>
+<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%230a0a0a' width='100' height='100' rx='20'/><text y='68' x='50' text-anchor='middle' font-size='55'>🏋️</text></svg>">
+<link rel="manifest" href="data:application/json;base64,eyJuYW1lIjoiUHJvZ3JhbW1lIENvbG9zc2UiLCJzaG9ydF9uYW1lIjoiQ29sb3NzZSIsInN0YXJ0X3VybCI6Ii4iLCJkaXNwbGF5Ijoic3RhbmRhbG9uZSIsImJhY2tncm91bmRfY29sb3IiOiIjMGEwYTBhIiwidGhlbWVfY29sb3IiOiIjMGEwYTBhIn0=">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&family=JetBrains+Mono:wght@700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0a0a0a;
+  --card: #111113;
+  --card2: #1a1a1e;
+  --border: #2a2a2e;
+  --text: #f0f0f0;
+  --sub: #888;
+  --accent: #ff6b35;
+  --accent2: #ff8c5a;
+  --green: #2ec4b6;
+  --yellow: #ffd166;
+  --blue: #3a86ff;
+  --red: #e63946;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --font: 'Space Grotesk', -apple-system, sans-serif;
+  --mono: 'JetBrains Mono', monospace;
+}
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+html { background: var(--bg); }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  padding: calc(var(--safe-top) + 8px) 12px calc(var(--safe-bottom) + 200px) 12px;
+  max-width: 500px;
+  margin: 0 auto;
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior: none;
+}
+
+/* === HEADER === */
+.app-header {
+  text-align: center;
+  padding: 8px 0 6px;
+}
+.app-header h1 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  letter-spacing: -0.5px;
+}
+
+/* === NAVIGATION TABS === */
+.nav {
+  position: sticky;
+  top: var(--safe-top);
+  z-index: 100;
+  background: var(--bg);
+  padding: 6px 0 10px;
+}
+.tabs {
+  display: flex;
+  gap: 4px;
+  background: var(--card);
+  padding: 4px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+}
+.tab {
+  flex: 1;
+  background: transparent;
+  color: var(--sub);
+  border: none;
+  padding: 10px 4px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  transition: all 0.2s ease;
+  min-width: 0;
+}
+.tab.on {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 2px 12px rgba(255,107,53,0.3);
+}
+.tab.rest.on {
+  background: var(--green);
+  box-shadow: 0 2px 12px rgba(46,196,182,0.3);
+}
+.tab.stat.on {
+  background: var(--blue);
+  box-shadow: 0 2px 12px rgba(58,134,255,0.3);
+}
+.tab:active { transform: scale(0.95); }
+
+/* === PAGES === */
+.pg { display: none; animation: fadeIn 0.25s ease; }
+.pg.show { display: block; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+/* === DAY HEADER === */
+.hdr {
+  background: linear-gradient(135deg, var(--card2), var(--card));
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent);
+  border-radius: 16px;
+  padding: 16px;
+  margin-bottom: 14px;
+}
+.hdr h2 {
+  color: var(--accent);
+  font-size: 1rem;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+.hdr p {
+  color: var(--sub);
+  font-size: 0.75rem;
+}
+.warm {
+  background: rgba(255,107,53,0.08);
+  border-left: 3px solid var(--accent);
+  padding: 8px 10px;
+  margin-top: 10px;
+  border-radius: 0 8px 8px 0;
+  font-size: 0.72rem;
+  color: #ccc;
+}
+
+/* === BLOC === */
+.blc {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+.blc-h {
+  background: var(--card2);
+  padding: 10px 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.blc-t { font-weight: 700; font-size: 0.85rem; }
+.blc-t.f { color: var(--accent); }
+.blc-t.h { color: var(--yellow); }
+.blc-t.a { color: var(--green); }
+.blc-d {
+  background: var(--border);
+  padding: 3px 8px;
+  border-radius: 10px;
+  font-size: 0.65rem;
+  color: var(--sub);
+}
+.blc-b { padding: 8px; }
+
+/* === EXERCICE === */
+.exo {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 8px;
+  transition: all 0.3s ease;
+}
+.exo.ok {
+  border-color: var(--green);
+  opacity: 0.6;
+  background: rgba(46,196,182,0.03);
+}
+.exo-h {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.exo-n { font-weight: 700; font-size: 0.85rem; flex: 1; }
+.bdg { display: flex; gap: 4px; }
+.bdg span {
+  padding: 3px 7px;
+  border-radius: 8px;
+  font-size: 0.6rem;
+  font-weight: 600;
+}
+.rpe { background: rgba(255,107,53,0.15); color: var(--accent); }
+.rst {
+  background: rgba(58,134,255,0.15);
+  color: var(--blue);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.rst:active { transform: scale(0.9); }
+.exo-i {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+  font-size: 0.7rem;
+  color: var(--sub);
+}
+.exo-i span {
+  background: var(--card2);
+  padding: 3px 7px;
+  border-radius: 6px;
+}
+.exo-nt {
+  background: rgba(255,107,53,0.06);
+  border-left: 2px solid var(--accent);
+  padding: 6px 10px;
+  font-size: 0.72rem;
+  color: #bbb;
+  margin-bottom: 8px;
+  border-radius: 0 6px 6px 0;
+}
+
+/* === TABLE === */
+table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+th {
+  background: var(--card2);
+  padding: 7px 4px;
+  text-align: center;
+  font-size: 0.65rem;
+  color: var(--sub);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+td { padding: 5px 3px; text-align: center; border-bottom: 1px solid var(--border); }
+input {
+  width: 52px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 4px;
+  border-radius: 8px;
+  text-align: center;
+  font-family: var(--font);
+  font-size: 0.8rem;
+  font-weight: 600;
+  transition: border-color 0.2s;
+}
+input:focus {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(255,107,53,0.1);
+}
+.sn { font-weight: 700; color: var(--accent); font-size: 0.75rem; }
+.ds { background: rgba(230,57,70,0.05); }
+.ds .sn { color: var(--red); }
+
+/* === CHECK BUTTON === */
+.ck {
+  background: var(--card2);
+  border: 2px solid var(--border);
+  color: var(--sub);
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ck:active { transform: scale(0.85); }
+.ck.on {
+  background: var(--green);
+  border-color: var(--green);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(46,196,182,0.3);
+}
+
+/* === VALIDATE BUTTON === */
+.val {
+  width: 100%;
+  background: var(--card2);
+  border: 1px solid var(--green);
+  color: var(--green);
+  padding: 12px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-family: var(--font);
+  font-weight: 700;
+  margin-top: 8px;
+  font-size: 0.85rem;
+  transition: all 0.2s ease;
+}
+.val:active { transform: scale(0.98); }
+.val.ok {
+  background: var(--green);
+  color: #fff;
+  box-shadow: 0 4px 15px rgba(46,196,182,0.25);
+}
+
+/* === CHRONO === */
+.chr {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(180deg, var(--card2), var(--card));
+  border-top: 1px solid var(--border);
+  padding: 12px 16px calc(var(--safe-bottom) + 12px);
+  z-index: 1000;
+  display: none;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+.chr.show { display: block; animation: slideUp 0.3s ease; }
+@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+.chr-in {
+  max-width: 500px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: center;
+}
+.chr-d {
+  font-size: 2.5rem;
+  font-weight: 700;
+  font-family: var(--mono);
+  color: var(--accent);
+  min-width: 100px;
+  text-align: center;
+  letter-spacing: -1px;
+}
+.chr-d.w { color: var(--yellow); }
+.chr-d.r { color: var(--red); animation: pls 0.5s infinite; }
+@keyframes pls { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+.chr-bt { display: flex; gap: 8px; }
+.chr-b {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: none;
+  font-size: 1.2rem;
+  cursor: pointer;
+  transition: transform 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.chr-b:active { transform: scale(0.85); }
+.c-pl { background: var(--green); color: #fff; }
+.c-rs { background: var(--red); color: #fff; }
+.c-cl { background: var(--card2); color: var(--sub); border: 1px solid var(--border); }
+.pre { display: flex; gap: 4px; }
+.pre button {
+  background: var(--card2);
+  border: 1px solid var(--border);
+  color: var(--sub);
+  padding: 6px 10px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 0.7rem;
+  font-weight: 600;
+  transition: all 0.15s;
+}
+.pre button:active { transform: scale(0.9); }
+.pre button.on {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.chr-br {
+  width: 100%;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  margin-top: 8px;
+  overflow: hidden;
+}
+.chr-fl {
+  height: 100%;
+  background: linear-gradient(90deg, var(--green), var(--accent));
+  border-radius: 2px;
+  transition: width 0.3s linear;
+}
+
+/* === TOAST MESSAGE === */
+.msg {
+  position: fixed;
+  top: calc(var(--safe-top) + 12px);
+  left: 50%;
+  transform: translateX(-50%) translateY(-20px);
+  background: var(--green);
+  color: #fff;
+  padding: 10px 20px;
+  border-radius: 14px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  opacity: 0;
+  transition: all 0.3s ease;
+  z-index: 1001;
+  box-shadow: 0 4px 20px rgba(46,196,182,0.3);
+}
+.msg.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* === STATS === */
+.sts {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 16px;
+  margin-bottom: 12px;
+}
+.sts h3 {
+  color: var(--accent);
+  margin-bottom: 12px;
+  font-size: 0.9rem;
+}
+.st-g {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+.st-c {
+  background: var(--card2);
+  padding: 14px 8px;
+  border-radius: 12px;
+  text-align: center;
+}
+.st-v {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--accent);
+  font-family: var(--mono);
+}
+.st-l {
+  font-size: 0.65rem;
+  color: var(--sub);
+  margin-top: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.acts { display: flex; gap: 8px; margin-top: 16px; }
+.act {
+  flex: 1;
+  padding: 14px;
+  border: none;
+  border-radius: 12px;
+  font-family: var(--font);
+  font-weight: 700;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: transform 0.15s;
+}
+.act:active { transform: scale(0.97); }
+.act-r { background: rgba(230,57,70,0.15); color: var(--red); border: 1px solid rgba(230,57,70,0.3); }
+.act-e { background: rgba(46,196,182,0.15); color: var(--green); border: 1px solid rgba(46,196,182,0.3); }
+
+/* === PROGRESS BAR PER DAY === */
+.day-prog {
+  height: 3px;
+  background: var(--border);
+  border-radius: 2px;
+  margin-top: 10px;
+  overflow: hidden;
+}
+.day-prog-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--green), var(--accent));
+  border-radius: 2px;
+  transition: width 0.5s ease;
+  width: 0%;
+}
+
+/* === RESPONSIVE === */
+@media (max-width: 380px) {
+  .tab { font-size: 8px; padding: 8px 2px; }
+  input { width: 44px; }
+  .chr-d { font-size: 2rem; }
+}
+
+/* Disable iOS rubber band on body but keep scroll on content */
+@supports (-webkit-touch-callout: none) {
+  body { min-height: 100vh; }
+}
+</style>
+</head>
+<body>
+
+<div class="app-header">
+  <h1>🏋️ Programme Colosse</h1>
+</div>
+
+<div class="nav">
+  <div class="tabs">
+    <button class="tab on" onclick="go('j1',this)">J1<br>Push</button>
+    <button class="tab" onclick="go('j2',this)">J2<br>Pull</button>
+    <button class="tab" onclick="go('j3',this)">J3<br>Legs</button>
+    <button class="tab" onclick="go('j4',this)">J4<br>Push</button>
+    <button class="tab" onclick="go('j5',this)">J5<br>Pull</button>
+    <button class="tab" onclick="go('j6',this)">J6<br>Legs</button>
+    <button class="tab rest" onclick="go('j7',this)">😴<br>Repos</button>
+    <button class="tab stat" onclick="go('st',this)">📊<br>Stats</button>
+  </div>
+</div>
+
+<!-- J1 PUSH A -->
+<div class="pg show" id="j1">
+<div class="hdr"><h2>💪 J1 — PUSH A + TRAPÈZES + COU</h2><p>📅 Lundi • ⏱️ 85-90 min</p><div class="warm">🔥 10 min rameur + rotations épaules + face pulls élastique</div></div>
+<div class="blc"><div class="blc-h"><span class="blc-t f">💪 BLOC FORCE</span><span class="blc-d">25-30 min</span></div><div class="blc-b">
+<div class="exo"><div class="exo-h"><span class="exo-n">1. Développé militaire debout</span><div class="bdg"><span class="rpe">RPE 8-9</span><span class="rst" onclick="T(180)">⏱️3m</span></div></div><div class="exo-i"><span>5×5</span><span>70-80% 1RM</span><span>Tempo 2-1-1-0</span></div><div class="exo-nt">💡 Gainage serré, pas de cambrure</div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j1e1s1p"></td><td><input data-x="j1e1s1r" value="5"></td><td><button class="ck" onclick="C(this,180)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j1e1s2p"></td><td><input data-x="j1e1s2r" value="5"></td><td><button class="ck" onclick="C(this,180)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j1e1s3p"></td><td><input data-x="j1e1s3r" value="5"></td><td><button class="ck" onclick="C(this,180)">○</button></td></tr><tr><td class="sn">4</td><td><input data-x="j1e1s4p"></td><td><input data-x="j1e1s4r" value="5"></td><td><button class="ck" onclick="C(this,180)">○</button></td></tr><tr><td class="sn">5</td><td><input data-x="j1e1s5p"></td><td><input data-x="j1e1s5r" value="5"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+<div class="exo"><div class="exo-h"><span class="exo-n">2. Développé incliné haltères 30°</span><div class="bdg"><span class="rpe">RPE 8</span><span class="rst" onclick="T(150)">⏱️2m30</span></div></div><div class="exo-i"><span>4×6</span><span>32-40kg</span><span>Tempo 3-0-1-0</span></div><div class="exo-nt">💡 Coudes 45°, squeeze en haut</div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j1e2s1p"></td><td><input data-x="j1e2s1r" value="6"></td><td><button class="ck" onclick="C(this,150)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j1e2s2p"></td><td><input data-x="j1e2s2r" value="6"></td><td><button class="ck" onclick="C(this,150)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j1e2s3p"></td><td><input data-x="j1e2s3r" value="6"></td><td><button class="ck" onclick="C(this,150)">○</button></td></tr><tr><td class="sn">4</td><td><input data-x="j1e2s4p"></td><td><input data-x="j1e2s4r" value="6"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+</div></div>
+<div class="blc"><div class="blc-h"><span class="blc-t h">🔥 BLOC HYPERTROPHIE</span><span class="blc-d">25-30 min</span></div><div class="blc-b">
+<div class="exo"><div class="exo-h"><span class="exo-n">3. Élévations latérales</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(90)">⏱️90s</span></div></div><div class="exo-i"><span>4×12-15+DS</span><span>10-14kg</span></div><div class="exo-nt">💡 Petit doigt vers haut</div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j1e3s1p"></td><td><input data-x="j1e3s1r" value="12"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j1e3s2p"></td><td><input data-x="j1e3s2r" value="12"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j1e3s3p"></td><td><input data-x="j1e3s3r" value="12"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">4</td><td><input data-x="j1e3s4p"></td><td><input data-x="j1e3s4r" value="12"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr><tr class="ds"><td class="sn">DS</td><td><input data-x="j1e3dsp"></td><td><input data-x="j1e3dsr" placeholder="max"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+<div class="exo"><div class="exo-h"><span class="exo-n">4. Dips lestés</span><div class="bdg"><span class="rpe">RPE 8</span><span class="rst" onclick="T(120)">⏱️2m</span></div></div><div class="exo-i"><span>3×8-10</span><span>+10-25kg</span></div><div class="exo-nt">💡 Coudes 90°, pousser fort</div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j1e4s1p"></td><td><input data-x="j1e4s1r" value="8"></td><td><button class="ck" onclick="C(this,120)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j1e4s2p"></td><td><input data-x="j1e4s2r" value="8"></td><td><button class="ck" onclick="C(this,120)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j1e4s3p"></td><td><input data-x="j1e4s3r" value="8"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+<div class="exo"><div class="exo-h"><span class="exo-n">5. Écartés poulie haute</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(90)">⏱️90s</span></div></div><div class="exo-i"><span>3×12</span><span>15-20kg</span></div><div class="exo-nt">💡 Croiser mains en bas</div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j1e5s1p"></td><td><input data-x="j1e5s1r" value="12"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j1e5s2p"></td><td><input data-x="j1e5s2r" value="12"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j1e5s3p"></td><td><input data-x="j1e5s3r" value="12"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+<div class="exo"><div class="exo-h"><span class="exo-n">6. Pushdown triceps corde</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(60)">⏱️60s</span></div></div><div class="exo-i"><span>3×12-15</span></div><div class="exo-nt">💡 Écarter corde en bas</div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j1e6s1p"></td><td><input data-x="j1e6s1r" value="12"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j1e6s2p"></td><td><input data-x="j1e6s2r" value="12"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j1e6s3p"></td><td><input data-x="j1e6s3r" value="12"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+</div></div>
+<div class="blc"><div class="blc-h"><span class="blc-t a">🦬 TRAPÈZES / COU</span><span class="blc-d">20-25 min</span></div><div class="blc-b">
+<div class="exo"><div class="exo-h"><span class="exo-n">7. Shrugs haltères lourds</span><div class="bdg"><span class="rpe">RPE 8</span><span class="rst" onclick="T(90)">⏱️90s</span></div></div><div class="exo-i"><span>4×10</span><span>40-50kg</span></div><div class="exo-nt">💡 PAUSE 2s en haut</div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j1e7s1p"></td><td><input data-x="j1e7s1r" value="10"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j1e7s2p"></td><td><input data-x="j1e7s2r" value="10"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j1e7s3p"></td><td><input data-x="j1e7s3r" value="10"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">4</td><td><input data-x="j1e7s4p"></td><td><input data-x="j1e7s4r" value="10"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+<div class="exo"><div class="exo-h"><span class="exo-n">8. Face pulls corde</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(60)">⏱️60s</span></div></div><div class="exo-i"><span>4×15</span><span>25-35kg</span></div><div class="exo-nt">💡 Coudes HAUTS</div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j1e8s1p"></td><td><input data-x="j1e8s1r" value="15"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j1e8s2p"></td><td><input data-x="j1e8s2r" value="15"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j1e8s3p"></td><td><input data-x="j1e8s3r" value="15"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">4</td><td><input data-x="j1e8s4p"></td><td><input data-x="j1e8s4r" value="15"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+<div class="exo"><div class="exo-h"><span class="exo-n">9. Shrugs barre derrière</span><div class="bdg"><span class="rpe">RPE 8</span><span class="rst" onclick="T(60)">⏱️60s</span></div></div><div class="exo-i"><span>3×12</span><span>80-100kg</span></div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j1e9s1p"></td><td><input data-x="j1e9s1r" value="12"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j1e9s2p"></td><td><input data-x="j1e9s2r" value="12"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j1e9s3p"></td><td><input data-x="j1e9s3r" value="12"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+<div class="exo"><div class="exo-h"><span class="exo-n">10. Neck curls</span><div class="bdg"><span class="rpe">RPE 8</span><span class="rst" onclick="T(60)">⏱️60s</span></div></div><div class="exo-i"><span>3×15-20</span><span>5-10kg</span></div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j1e10s1p"></td><td><input data-x="j1e10s1r" value="15"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j1e10s2p"></td><td><input data-x="j1e10s2r" value="15"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j1e10s3p"></td><td><input data-x="j1e10s3r" value="15"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+<div class="exo"><div class="exo-h"><span class="exo-n">11. Neck extensions</span><div class="bdg"><span class="rpe">RPE 8</span><span class="rst" onclick="T(60)">⏱️60s</span></div></div><div class="exo-i"><span>3×15-20</span><span>5-10kg</span></div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j1e11s1p"></td><td><input data-x="j1e11s1r" value="15"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j1e11s2p"></td><td><input data-x="j1e11s2r" value="15"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j1e11s3p"></td><td><input data-x="j1e11s3r" value="15"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+</div></div>
+</div>
+<!-- J2 PULL A -->
+<div class="pg" id="j2">
+<div class="hdr"><h2>🔥 J2 — PULL A + AVANT-BRAS</h2><p>📅 Mardi • ⏱️ 80-85 min</p><div class="warm">🔥 10 min rameur + tractions australiennes + band pull-aparts</div></div>
+<div class="blc"><div class="blc-h"><span class="blc-t f">💪 BLOC FORCE</span><span class="blc-d">25-30 min</span></div><div class="blc-b">
+<div class="exo"><div class="exo-h"><span class="exo-n">1. Soulevé de terre conventionnel</span><div class="bdg"><span class="rpe">RPE 8</span><span class="rst" onclick="T(210)">⏱️3m30</span></div></div><div class="exo-i"><span>5×3</span><span>85-90% 1RM</span></div><div class="exo-nt">💡 Reset chaque rep, dos PLAT</div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j2e1s1p"></td><td><input data-x="j2e1s1r" value="3"></td><td><button class="ck" onclick="C(this,210)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j2e1s2p"></td><td><input data-x="j2e1s2r" value="3"></td><td><button class="ck" onclick="C(this,210)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j2e1s3p"></td><td><input data-x="j2e1s3r" value="3"></td><td><button class="ck" onclick="C(this,210)">○</button></td></tr><tr><td class="sn">4</td><td><input data-x="j2e1s4p"></td><td><input data-x="j2e1s4r" value="3"></td><td><button class="ck" onclick="C(this,210)">○</button></td></tr><tr><td class="sn">5</td><td><input data-x="j2e1s5p"></td><td><input data-x="j2e1s5r" value="3"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+<div class="exo"><div class="exo-h"><span class="exo-n">2. Rowing barre pronation</span><div class="bdg"><span class="rpe">RPE 8</span><span class="rst" onclick="T(150)">⏱️2m30</span></div></div><div class="exo-i"><span>4×6</span><span>80-100kg</span></div><div class="exo-nt">💡 Buste 45°, tirer vers nombril</div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j2e2s1p"></td><td><input data-x="j2e2s1r" value="6"></td><td><button class="ck" onclick="C(this,150)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j2e2s2p"></td><td><input data-x="j2e2s2r" value="6"></td><td><button class="ck" onclick="C(this,150)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j2e2s3p"></td><td><input data-x="j2e2s3r" value="6"></td><td><button class="ck" onclick="C(this,150)">○</button></td></tr><tr><td class="sn">4</td><td><input data-x="j2e2s4p"></td><td><input data-x="j2e2s4r" value="6"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+</div></div>
+<div class="blc"><div class="blc-h"><span class="blc-t h">🔥 BLOC HYPERTROPHIE</span><span class="blc-d">25-30 min</span></div><div class="blc-b">
+<div class="exo"><div class="exo-h"><span class="exo-n">3. Tractions lestées prise large</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(120)">⏱️2m</span></div></div><div class="exo-i"><span>4×6-8</span><span>+10-20kg</span></div><div class="exo-nt">💡 Descente complète</div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j2e3s1p"></td><td><input data-x="j2e3s1r" value="6"></td><td><button class="ck" onclick="C(this,120)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j2e3s2p"></td><td><input data-x="j2e3s2r" value="6"></td><td><button class="ck" onclick="C(this,120)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j2e3s3p"></td><td><input data-x="j2e3s3r" value="6"></td><td><button class="ck" onclick="C(this,120)">○</button></td></tr><tr><td class="sn">4</td><td><input data-x="j2e3s4p"></td><td><input data-x="j2e3s4r" value="6"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+<div class="exo"><div class="exo-h"><span class="exo-n">4. Rowing 1 bras haltère</span><div class="bdg"><span class="rpe">RPE 8</span><span class="rst" onclick="T(90)">⏱️90s</span></div></div><div class="exo-i"><span>3×10</span><span>35-45kg</span></div><div class="exo-nt">💡 Tirer vers hanche</div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j2e4s1p"></td><td><input data-x="j2e4s1r" value="10"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j2e4s2p"></td><td><input data-x="j2e4s2r" value="10"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j2e4s3p"></td><td><input data-x="j2e4s3r" value="10"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+<div class="exo"><div class="exo-h"><span class="exo-n">5. Pullover poulie haute</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(90)">⏱️90s</span></div></div><div class="exo-i"><span>3×12</span><span>30-40kg</span></div><div class="exo-nt">💡 Sentir étirement dorsaux</div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j2e5s1p"></td><td><input data-x="j2e5s1r" value="12"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j2e5s2p"></td><td><input data-x="j2e5s2r" value="12"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j2e5s3p"></td><td><input data-x="j2e5s3r" value="12"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+<div class="exo"><div class="exo-h"><span class="exo-n">6. Curl barre EZ</span><div class="bdg"><span class="rpe">RPE 8</span><span class="rst" onclick="T(90)">⏱️90s</span></div></div><div class="exo-i"><span>3×10</span><span>30-40kg</span></div><div class="exo-nt">💡 Coudes FIXES</div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j2e6s1p"></td><td><input data-x="j2e6s1r" value="10"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j2e6s2p"></td><td><input data-x="j2e6s2r" value="10"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j2e6s3p"></td><td><input data-x="j2e6s3r" value="10"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+<div class="exo"><div class="exo-h"><span class="exo-n">7. Curl marteau haltères</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(60)">⏱️60s</span></div></div><div class="exo-i"><span>3×12</span><span>14-18kg</span></div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j2e7s1p"></td><td><input data-x="j2e7s1r" value="12"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j2e7s2p"></td><td><input data-x="j2e7s2r" value="12"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j2e7s3p"></td><td><input data-x="j2e7s3r" value="12"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+</div></div>
+<div class="blc"><div class="blc-h"><span class="blc-t a">💪 AVANT-BRAS</span><span class="blc-d">15-20 min</span></div><div class="blc-b">
+<div class="exo"><div class="exo-h"><span class="exo-n">8. Wrist curls barre</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(60)">⏱️60s</span></div></div><div class="exo-i"><span>4×15</span><span>20-30kg</span></div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j2e8s1p"></td><td><input data-x="j2e8s1r" value="15"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j2e8s2p"></td><td><input data-x="j2e8s2r" value="15"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j2e8s3p"></td><td><input data-x="j2e8s3r" value="15"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">4</td><td><input data-x="j2e8s4p"></td><td><input data-x="j2e8s4r" value="15"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+<div class="exo"><div class="exo-h"><span class="exo-n">9. Reverse wrist curls</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(60)">⏱️60s</span></div></div><div class="exo-i"><span>3×15</span><span>10-15kg</span></div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j2e9s1p"></td><td><input data-x="j2e9s1r" value="15"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j2e9s2p"></td><td><input data-x="j2e9s2r" value="15"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j2e9s3p"></td><td><input data-x="j2e9s3r" value="15"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+<div class="exo"><div class="exo-h"><span class="exo-n">10. Farmer's walk</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(90)">⏱️90s</span></div></div><div class="exo-i"><span>3×30sec</span><span>Max</span></div><table><tr><th>#</th><th>Kg</th><th>Durée</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j2e10s1p"></td><td><input data-x="j2e10s1r" value="30s"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j2e10s2p"></td><td><input data-x="j2e10s2r" value="30s"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j2e10s3p"></td><td><input data-x="j2e10s3r" value="30s"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+<div class="exo"><div class="exo-h"><span class="exo-n">11. Dead hangs</span><div class="bdg"><span class="rpe">RPE 10</span><span class="rst" onclick="T(60)">⏱️60s</span></div></div><div class="exo-i"><span>2×Max</span></div><table><tr><th>#</th><th>Durée</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j2e11s1r" placeholder="sec"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j2e11s2r" placeholder="sec"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+</div></div>
+</div>
+<!-- J3 LEGS A -->
+<div class="pg" id="j3">
+<div class="hdr"><h2>🦵 J3 — LEGS A + GAINAGE</h2><p>📅 Mercredi • ⏱️ 75-80 min</p><div class="warm">🔥 10 min vélo + squats goblet + mobilité hanches</div></div>
+<div class="blc"><div class="blc-h"><span class="blc-t f">💪 BLOC FORCE</span><span class="blc-d">20-25 min</span></div><div class="blc-b">
+<div class="exo"><div class="exo-h"><span class="exo-n">1. Back squat barre</span><div class="bdg"><span class="rpe">RPE 8</span><span class="rst" onclick="T(180)">⏱️3m</span></div></div><div class="exo-i"><span>5×5</span><span>80% 1RM</span></div><div class="exo-nt">💡 Parallèle minimum, genoux dehors</div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j3e1s1p"></td><td><input data-x="j3e1s1r" value="5"></td><td><button class="ck" onclick="C(this,180)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j3e1s2p"></td><td><input data-x="j3e1s2r" value="5"></td><td><button class="ck" onclick="C(this,180)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j3e1s3p"></td><td><input data-x="j3e1s3r" value="5"></td><td><button class="ck" onclick="C(this,180)">○</button></td></tr><tr><td class="sn">4</td><td><input data-x="j3e1s4p"></td><td><input data-x="j3e1s4r" value="5"></td><td><button class="ck" onclick="C(this,180)">○</button></td></tr><tr><td class="sn">5</td><td><input data-x="j3e1s5p"></td><td><input data-x="j3e1s5r" value="5"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+<div class="exo"><div class="exo-h"><span class="exo-n">2. Romanian deadlift (RDL)</span><div class="bdg"><span class="rpe">RPE 8</span><span class="rst" onclick="T(150)">⏱️2m30</span></div></div><div class="exo-i"><span>4×8</span><span>70% 1RM</span></div><div class="exo-nt">💡 Jambes quasi tendues, fesses en arrière</div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j3e2s1p"></td><td><input data-x="j3e2s1r" value="8"></td><td><button class="ck" onclick="C(this,150)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j3e2s2p"></td><td><input data-x="j3e2s2r" value="8"></td><td><button class="ck" onclick="C(this,150)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j3e2s3p"></td><td><input data-x="j3e2s3r" value="8"></td><td><button class="ck" onclick="C(this,150)">○</button></td></tr><tr><td class="sn">4</td><td><input data-x="j3e2s4p"></td><td><input data-x="j3e2s4r" value="8"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+</div></div>
+<div class="blc"><div class="blc-h"><span class="blc-t h">🔥 BLOC HYPERTROPHIE</span><span class="blc-d">25-30 min</span></div><div class="blc-b">
+<div class="exo"><div class="exo-h"><span class="exo-n">3. Presse jambes pieds hauts</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(120)">⏱️2m</span></div></div><div class="exo-i"><span>4×12</span><span>200-280kg</span></div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j3e3s1p"></td><td><input data-x="j3e3s1r" value="12"></td><td><button class="ck" onclick="C(this,120)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j3e3s2p"></td><td><input data-x="j3e3s2r" value="12"></td><td><button class="ck" onclick="C(this,120)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j3e3s3p"></td><td><input data-x="j3e3s3r" value="12"></td><td><button class="ck" onclick="C(this,120)">○</button></td></tr><tr><td class="sn">4</td><td><input data-x="j3e3s4p"></td><td><input data-x="j3e3s4r" value="12"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+<div class="exo"><div class="exo-h"><span class="exo-n">4. Leg curl allongé</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(90)">⏱️90s</span></div></div><div class="exo-i"><span>4×10</span><span>40-55kg</span></div><div class="exo-nt">💡 PAUSE 2s en contraction</div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j3e4s1p"></td><td><input data-x="j3e4s1r" value="10"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j3e4s2p"></td><td><input data-x="j3e4s2r" value="10"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j3e4s3p"></td><td><input data-x="j3e4s3r" value="10"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">4</td><td><input data-x="j3e4s4p"></td><td><input data-x="j3e4s4r" value="10"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+<div class="exo"><div class="exo-h"><span class="exo-n">5. Leg extension</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(90)">⏱️90s</span></div></div><div class="exo-i"><span>3×12</span><span>50-70kg</span></div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j3e5s1p"></td><td><input data-x="j3e5s1r" value="12"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j3e5s2p"></td><td><input data-x="j3e5s2r" value="12"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j3e5s3p"></td><td><input data-x="j3e5s3r" value="12"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+<div class="exo"><div class="exo-h"><span class="exo-n">6. Fentes marchées</span><div class="bdg"><span class="rpe">RPE 8</span><span class="rst" onclick="T(90)">⏱️90s</span></div></div><div class="exo-i"><span>3×12/jambe</span><span>20-30kg</span></div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j3e6s1p"></td><td><input data-x="j3e6s1r" value="12"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j3e6s2p"></td><td><input data-x="j3e6s2r" value="12"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j3e6s3p"></td><td><input data-x="j3e6s3r" value="12"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+<div class="exo"><div class="exo-h"><span class="exo-n">7. Mollets debout machine</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(60)">⏱️60s</span></div></div><div class="exo-i"><span>4×15</span></div><div class="exo-nt">💡 PAUSE 2s en bas (étirement)</div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j3e7s1p"></td><td><input data-x="j3e7s1r" value="15"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j3e7s2p"></td><td><input data-x="j3e7s2r" value="15"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j3e7s3p"></td><td><input data-x="j3e7s3r" value="15"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">4</td><td><input data-x="j3e7s4p"></td><td><input data-x="j3e7s4r" value="15"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+</div></div>
+<div class="blc"><div class="blc-h"><span class="blc-t a">🎯 TAILLE FINE</span><span class="blc-d">15 min</span></div><div class="blc-b">
+<div class="exo"><div class="exo-h"><span class="exo-n">8. Planche RKC</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(60)">⏱️60s</span></div></div><div class="exo-i"><span>4×30-45sec</span></div><table><tr><th>#</th><th>Durée</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j3e8s1r" value="30s"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j3e8s2r" value="30s"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j3e8s3r" value="30s"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">4</td><td><input data-x="j3e8s4r" value="30s"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+<div class="exo"><div class="exo-h"><span class="exo-n">9. Dead bug</span><div class="bdg"><span class="rpe">RPE 8</span><span class="rst" onclick="T(60)">⏱️60s</span></div></div><div class="exo-i"><span>3×10/côté</span></div><table><tr><th>#</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j3e9s1r" value="10"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j3e9s2r" value="10"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j3e9s3r" value="10"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+<div class="exo"><div class="exo-h"><span class="exo-n">10. Ab wheel rollout</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(90)">⏱️90s</span></div></div><div class="exo-i"><span>3×8-10</span></div><table><tr><th>#</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j3e10s1r" value="8"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j3e10s2r" value="8"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j3e10s3r" value="8"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+<div class="exo"><div class="exo-h"><span class="exo-n">11. Pallof press</span><div class="bdg"><span class="rpe">RPE 8</span><span class="rst" onclick="T(45)">⏱️45s</span></div></div><div class="exo-i"><span>3×20sec/côté</span></div><table><tr><th>#</th><th>Durée</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j3e11s1r" value="20s"></td><td><button class="ck" onclick="C(this,45)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j3e11s2r" value="20s"></td><td><button class="ck" onclick="C(this,45)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j3e11s3r" value="20s"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+</div></div>
+</div>
+<!-- J4 PUSH B -->
+<div class="pg" id="j4">
+<div class="hdr"><h2>💪 J4 — PUSH B + TRAPÈZES + COU</h2><p>📅 Jeudi • ⏱️ 85-90 min</p><div class="warm">🔥 10 min rameur + rotations épaules + échauffement coiffe</div></div>
+<div class="blc"><div class="blc-h"><span class="blc-t f">💪 BLOC FORCE</span><span class="blc-d">20-25 min</span></div><div class="blc-b">
+<div class="exo"><div class="exo-h"><span class="exo-n">1. Développé couché barre</span><div class="bdg"><span class="rpe">RPE 8-9</span><span class="rst" onclick="T(180)">⏱️3m</span></div></div><div class="exo-i"><span>5×5</span><span>80% 1RM</span></div><div class="exo-nt">💡 Omoplates serrées, toucher poitrine</div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j4e1s1p"></td><td><input data-x="j4e1s1r" value="5"></td><td><button class="ck" onclick="C(this,180)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j4e1s2p"></td><td><input data-x="j4e1s2r" value="5"></td><td><button class="ck" onclick="C(this,180)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j4e1s3p"></td><td><input data-x="j4e1s3r" value="5"></td><td><button class="ck" onclick="C(this,180)">○</button></td></tr><tr><td class="sn">4</td><td><input data-x="j4e1s4p"></td><td><input data-x="j4e1s4r" value="5"></td><td><button class="ck" onclick="C(this,180)">○</button></td></tr><tr><td class="sn">5</td><td><input data-x="j4e1s5p"></td><td><input data-x="j4e1s5r" value="5"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+<div class="exo"><div class="exo-h"><span class="exo-n">2. Push press</span><div class="bdg"><span class="rpe">RPE 8</span><span class="rst" onclick="T(150)">⏱️2m30</span></div></div><div class="exo-i"><span>4×6</span><span>70-80kg</span></div><div class="exo-nt">💡 Légère flexion genoux puis explosive</div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j4e2s1p"></td><td><input data-x="j4e2s1r" value="6"></td><td><button class="ck" onclick="C(this,150)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j4e2s2p"></td><td><input data-x="j4e2s2r" value="6"></td><td><button class="ck" onclick="C(this,150)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j4e2s3p"></td><td><input data-x="j4e2s3r" value="6"></td><td><button class="ck" onclick="C(this,150)">○</button></td></tr><tr><td class="sn">4</td><td><input data-x="j4e2s4p"></td><td><input data-x="j4e2s4r" value="6"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+</div></div>
+<div class="blc"><div class="blc-h"><span class="blc-t h">🔥 BLOC HYPERTROPHIE</span><span class="blc-d">25-30 min</span></div><div class="blc-b">
+<div class="exo"><div class="exo-h"><span class="exo-n">3. Développé haltères assis neutre</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(90)">⏱️90s</span></div></div><div class="exo-i"><span>4×10</span><span>28-36kg</span></div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j4e3s1p"></td><td><input data-x="j4e3s1r" value="10"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j4e3s2p"></td><td><input data-x="j4e3s2r" value="10"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j4e3s3p"></td><td><input data-x="j4e3s3r" value="10"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">4</td><td><input data-x="j4e3s4p"></td><td><input data-x="j4e3s4r" value="10"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+<div class="exo"><div class="exo-h"><span class="exo-n">4. Élévations latérales câble</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(60)">⏱️60s</span></div></div><div class="exo-i"><span>4×12/bras</span><span>8-12kg</span></div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j4e4s1p"></td><td><input data-x="j4e4s1r" value="12"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j4e4s2p"></td><td><input data-x="j4e4s2r" value="12"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j4e4s3p"></td><td><input data-x="j4e4s3r" value="12"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">4</td><td><input data-x="j4e4s4p"></td><td><input data-x="j4e4s4r" value="12"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+<div class="exo"><div class="exo-h"><span class="exo-n">5. Développé incliné machine</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(90)">⏱️90s</span></div></div><div class="exo-i"><span>3×12</span></div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j4e5s1p"></td><td><input data-x="j4e5s1r" value="12"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j4e5s2p"></td><td><input data-x="j4e5s2r" value="12"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j4e5s3p"></td><td><input data-x="j4e5s3r" value="12"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+<div class="exo"><div class="exo-h"><span class="exo-n">6. Extensions triceps overhead</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(60)">⏱️60s</span></div></div><div class="exo-i"><span>3×12</span><span>25-35kg</span></div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j4e6s1p"></td><td><input data-x="j4e6s1r" value="12"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j4e6s2p"></td><td><input data-x="j4e6s2r" value="12"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j4e6s3p"></td><td><input data-x="j4e6s3r" value="12"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+<div class="exo"><div class="exo-h"><span class="exo-n">7. Pompes diamant (finisher)</span><div class="bdg"><span class="rpe">RPE 10</span><span class="rst" onclick="T(60)">⏱️60s</span></div></div><div class="exo-i"><span>2×Max</span></div><table><tr><th>#</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j4e7s1r" placeholder="max"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j4e7s2r" placeholder="max"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+</div></div>
+<div class="blc"><div class="blc-h"><span class="blc-t a">🦬 TRAPÈZES / COU</span><span class="blc-d">20-25 min</span></div><div class="blc-b">
+<div class="exo"><div class="exo-h"><span class="exo-n">8. Shrugs machine ou barre</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(90)">⏱️90s</span></div></div><div class="exo-i"><span>4×12</span><span>100-140kg</span></div><div class="exo-nt">💡 PAUSE 2s en haut</div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j4e8s1p"></td><td><input data-x="j4e8s1r" value="12"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j4e8s2p"></td><td><input data-x="j4e8s2r" value="12"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j4e8s3p"></td><td><input data-x="j4e8s3r" value="12"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">4</td><td><input data-x="j4e8s4p"></td><td><input data-x="j4e8s4r" value="12"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+<div class="exo"><div class="exo-h"><span class="exo-n">9. Rowing menton prise large</span><div class="bdg"><span class="rpe">RPE 8</span><span class="rst" onclick="T(60)">⏱️60s</span></div></div><div class="exo-i"><span>3×12</span><span>40-50kg</span></div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j4e9s1p"></td><td><input data-x="j4e9s1r" value="12"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j4e9s2p"></td><td><input data-x="j4e9s2r" value="12"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j4e9s3p"></td><td><input data-x="j4e9s3r" value="12"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+<div class="exo"><div class="exo-h"><span class="exo-n">10. Face pulls (poulie basse)</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(60)">⏱️60s</span></div></div><div class="exo-i"><span>4×15</span><span>20-30kg</span></div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j4e10s1p"></td><td><input data-x="j4e10s1r" value="15"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j4e10s2p"></td><td><input data-x="j4e10s2r" value="15"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j4e10s3p"></td><td><input data-x="j4e10s3r" value="15"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">4</td><td><input data-x="j4e10s4p"></td><td><input data-x="j4e10s4r" value="15"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+<div class="exo"><div class="exo-h"><span class="exo-n">11. Neck curls</span><div class="bdg"><span class="rpe">RPE 8</span><span class="rst" onclick="T(60)">⏱️60s</span></div></div><div class="exo-i"><span>3×15-20</span><span>5-12kg</span></div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j4e11s1p"></td><td><input data-x="j4e11s1r" value="15"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j4e11s2p"></td><td><input data-x="j4e11s2r" value="15"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j4e11s3p"></td><td><input data-x="j4e11s3r" value="15"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+<div class="exo"><div class="exo-h"><span class="exo-n">12. Neck lateral raises</span><div class="bdg"><span class="rpe">RPE 8</span><span class="rst" onclick="T(45)">⏱️45s</span></div></div><div class="exo-i"><span>2×12/côté</span></div><table><tr><th>#</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j4e12s1r" value="12"></td><td><button class="ck" onclick="C(this,45)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j4e12s2r" value="12"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+</div></div>
+</div>
+<!-- J5 PULL B -->
+<div class="pg" id="j5">
+<div class="hdr"><h2>🔥 J5 — PULL B + AVANT-BRAS</h2><p>📅 Vendredi • ⏱️ 80-85 min</p><div class="warm">🔥 10 min rameur + tractions à vide + rotations thoraciques</div></div>
+<div class="blc"><div class="blc-h"><span class="blc-t f">💪 BLOC FORCE</span><span class="blc-d">20-25 min</span></div><div class="blc-b">
+<div class="exo"><div class="exo-h"><span class="exo-n">1. Rowing barre supination (Yates)</span><div class="bdg"><span class="rpe">RPE 8-9</span><span class="rst" onclick="T(150)">⏱️2m30</span></div></div><div class="exo-i"><span>5×6</span><span>80-100kg</span></div><div class="exo-nt">💡 Buste 60°, tirer vers bas ventre</div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j5e1s1p"></td><td><input data-x="j5e1s1r" value="6"></td><td><button class="ck" onclick="C(this,150)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j5e1s2p"></td><td><input data-x="j5e1s2r" value="6"></td><td><button class="ck" onclick="C(this,150)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j5e1s3p"></td><td><input data-x="j5e1s3r" value="6"></td><td><button class="ck" onclick="C(this,150)">○</button></td></tr><tr><td class="sn">4</td><td><input data-x="j5e1s4p"></td><td><input data-x="j5e1s4r" value="6"></td><td><button class="ck" onclick="C(this,150)">○</button></td></tr><tr><td class="sn">5</td><td><input data-x="j5e1s5p"></td><td><input data-x="j5e1s5r" value="6"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+<div class="exo"><div class="exo-h"><span class="exo-n">2. Tractions prise neutre lestées</span><div class="bdg"><span class="rpe">RPE 8</span><span class="rst" onclick="T(120)">⏱️2m</span></div></div><div class="exo-i"><span>4×6-8</span><span>+10-15kg</span></div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j5e2s1p"></td><td><input data-x="j5e2s1r" value="6"></td><td><button class="ck" onclick="C(this,120)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j5e2s2p"></td><td><input data-x="j5e2s2r" value="6"></td><td><button class="ck" onclick="C(this,120)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j5e2s3p"></td><td><input data-x="j5e2s3r" value="6"></td><td><button class="ck" onclick="C(this,120)">○</button></td></tr><tr><td class="sn">4</td><td><input data-x="j5e2s4p"></td><td><input data-x="j5e2s4r" value="6"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+</div></div>
+<div class="blc"><div class="blc-h"><span class="blc-t h">🔥 BLOC HYPERTROPHIE</span><span class="blc-d">25-30 min</span></div><div class="blc-b">
+<div class="exo"><div class="exo-h"><span class="exo-n">3. Tirage vertical prise large</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(90)">⏱️90s</span></div></div><div class="exo-i"><span>4×10</span><span>70-90kg</span></div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j5e3s1p"></td><td><input data-x="j5e3s1r" value="10"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j5e3s2p"></td><td><input data-x="j5e3s2r" value="10"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j5e3s3p"></td><td><input data-x="j5e3s3r" value="10"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">4</td><td><input data-x="j5e3s4p"></td><td><input data-x="j5e3s4r" value="10"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+<div class="exo"><div class="exo-h"><span class="exo-n">4. Rowing machine T-bar</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(90)">⏱️90s</span></div></div><div class="exo-i"><span>4×10</span></div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j5e4s1p"></td><td><input data-x="j5e4s1r" value="10"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j5e4s2p"></td><td><input data-x="j5e4s2r" value="10"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j5e4s3p"></td><td><input data-x="j5e4s3r" value="10"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">4</td><td><input data-x="j5e4s4p"></td><td><input data-x="j5e4s4r" value="10"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+<div class="exo"><div class="exo-h"><span class="exo-n">5. Pullover haltère</span><div class="bdg"><span class="rpe">RPE 8</span><span class="rst" onclick="T(90)">⏱️90s</span></div></div><div class="exo-i"><span>3×12</span><span>25-35kg</span></div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j5e5s1p"></td><td><input data-x="j5e5s1r" value="12"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j5e5s2p"></td><td><input data-x="j5e5s2r" value="12"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j5e5s3p"></td><td><input data-x="j5e5s3r" value="12"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+<div class="exo"><div class="exo-h"><span class="exo-n">6. Curl incliné 45°</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(90)">⏱️90s</span></div></div><div class="exo-i"><span>3×10</span><span>12-16kg</span></div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j5e6s1p"></td><td><input data-x="j5e6s1r" value="10"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j5e6s2p"></td><td><input data-x="j5e6s2r" value="10"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j5e6s3p"></td><td><input data-x="j5e6s3r" value="10"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+<div class="exo"><div class="exo-h"><span class="exo-n">7. Curl concentré</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(60)">⏱️60s</span></div></div><div class="exo-i"><span>2×12/bras</span><span>10-14kg</span></div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j5e7s1p"></td><td><input data-x="j5e7s1r" value="12"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j5e7s2p"></td><td><input data-x="j5e7s2r" value="12"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+</div></div>
+<div class="blc"><div class="blc-h"><span class="blc-t a">💪 AVANT-BRAS</span><span class="blc-d">15-20 min</span></div><div class="blc-b">
+<div class="exo"><div class="exo-h"><span class="exo-n">8. Reverse curl barre EZ</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(60)">⏱️60s</span></div></div><div class="exo-i"><span>3×12</span><span>25-35kg</span></div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j5e8s1p"></td><td><input data-x="j5e8s1r" value="12"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j5e8s2p"></td><td><input data-x="j5e8s2r" value="12"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j5e8s3p"></td><td><input data-x="j5e8s3r" value="12"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+<div class="exo"><div class="exo-h"><span class="exo-n">9. Wrist roller (enrouleur)</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(90)">⏱️90s</span></div></div><div class="exo-i"><span>3×2 A/R</span><span>5-10kg</span></div><table><tr><th>#</th><th>Kg</th><th>A/R</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j5e9s1p"></td><td><input data-x="j5e9s1r" value="2"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j5e9s2p"></td><td><input data-x="j5e9s2r" value="2"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j5e9s3p"></td><td><input data-x="j5e9s3r" value="2"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+<div class="exo"><div class="exo-h"><span class="exo-n">10. Pinch grip plate hold</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(60)">⏱️60s</span></div></div><div class="exo-i"><span>3×30sec</span></div><table><tr><th>#</th><th>Kg</th><th>Durée</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j5e10s1p"></td><td><input data-x="j5e10s1r" value="30s"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j5e10s2p"></td><td><input data-x="j5e10s2r" value="30s"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j5e10s3p"></td><td><input data-x="j5e10s3r" value="30s"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+<div class="exo"><div class="exo-h"><span class="exo-n">11. Farmer's walk (lourd)</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(90)">⏱️90s</span></div></div><div class="exo-i"><span>3×40sec</span></div><table><tr><th>#</th><th>Kg</th><th>Durée</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j5e11s1p"></td><td><input data-x="j5e11s1r" value="40s"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j5e11s2p"></td><td><input data-x="j5e11s2r" value="40s"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j5e11s3p"></td><td><input data-x="j5e11s3r" value="40s"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+</div></div>
+</div>
+<!-- J6 LEGS B -->
+<div class="pg" id="j6">
+<div class="hdr"><h2>🦵 J6 — LEGS B + GAINAGE</h2><p>📅 Samedi • ⏱️ 75-80 min</p><div class="warm">🔥 10 min vélo + goblet squats + étirements fléchisseurs</div></div>
+<div class="blc"><div class="blc-h"><span class="blc-t f">💪 BLOC FORCE</span><span class="blc-d">20-25 min</span></div><div class="blc-b">
+<div class="exo"><div class="exo-h"><span class="exo-n">1. Front squat</span><div class="bdg"><span class="rpe">RPE 8</span><span class="rst" onclick="T(180)">⏱️3m</span></div></div><div class="exo-i"><span>5×5</span><span>70% back squat</span></div><div class="exo-nt">💡 Coudes hauts, dos ultra droit</div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j6e1s1p"></td><td><input data-x="j6e1s1r" value="5"></td><td><button class="ck" onclick="C(this,180)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j6e1s2p"></td><td><input data-x="j6e1s2r" value="5"></td><td><button class="ck" onclick="C(this,180)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j6e1s3p"></td><td><input data-x="j6e1s3r" value="5"></td><td><button class="ck" onclick="C(this,180)">○</button></td></tr><tr><td class="sn">4</td><td><input data-x="j6e1s4p"></td><td><input data-x="j6e1s4r" value="5"></td><td><button class="ck" onclick="C(this,180)">○</button></td></tr><tr><td class="sn">5</td><td><input data-x="j6e1s5p"></td><td><input data-x="j6e1s5r" value="5"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+<div class="exo"><div class="exo-h"><span class="exo-n">2. Soulevé de terre sumo</span><div class="bdg"><span class="rpe">RPE 8</span><span class="rst" onclick="T(150)">⏱️2m30</span></div></div><div class="exo-i"><span>4×6</span><span>75-80% 1RM</span></div><div class="exo-nt">💡 Pieds larges, dos plat</div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j6e2s1p"></td><td><input data-x="j6e2s1r" value="6"></td><td><button class="ck" onclick="C(this,150)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j6e2s2p"></td><td><input data-x="j6e2s2r" value="6"></td><td><button class="ck" onclick="C(this,150)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j6e2s3p"></td><td><input data-x="j6e2s3r" value="6"></td><td><button class="ck" onclick="C(this,150)">○</button></td></tr><tr><td class="sn">4</td><td><input data-x="j6e2s4p"></td><td><input data-x="j6e2s4r" value="6"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+</div></div>
+<div class="blc"><div class="blc-h"><span class="blc-t h">🔥 BLOC HYPERTROPHIE</span><span class="blc-d">25-30 min</span></div><div class="blc-b">
+<div class="exo"><div class="exo-h"><span class="exo-n">3. Hack squat machine</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(120)">⏱️2m</span></div></div><div class="exo-i"><span>4×10</span></div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j6e3s1p"></td><td><input data-x="j6e3s1r" value="10"></td><td><button class="ck" onclick="C(this,120)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j6e3s2p"></td><td><input data-x="j6e3s2r" value="10"></td><td><button class="ck" onclick="C(this,120)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j6e3s3p"></td><td><input data-x="j6e3s3r" value="10"></td><td><button class="ck" onclick="C(this,120)">○</button></td></tr><tr><td class="sn">4</td><td><input data-x="j6e3s4p"></td><td><input data-x="j6e3s4r" value="10"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+<div class="exo"><div class="exo-h"><span class="exo-n">4. Leg curl assis</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(90)">⏱️90s</span></div></div><div class="exo-i"><span>4×12</span><span>40-55kg</span></div><div class="exo-nt">💡 PAUSE 2s en contraction</div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j6e4s1p"></td><td><input data-x="j6e4s1r" value="12"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j6e4s2p"></td><td><input data-x="j6e4s2r" value="12"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j6e4s3p"></td><td><input data-x="j6e4s3r" value="12"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">4</td><td><input data-x="j6e4s4p"></td><td><input data-x="j6e4s4r" value="12"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+<div class="exo"><div class="exo-h"><span class="exo-n">5. Split squat bulgare</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(90)">⏱️90s</span></div></div><div class="exo-i"><span>3×10/jambe</span><span>16-24kg</span></div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j6e5s1p"></td><td><input data-x="j6e5s1r" value="10"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j6e5s2p"></td><td><input data-x="j6e5s2r" value="10"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j6e5s3p"></td><td><input data-x="j6e5s3r" value="10"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+<div class="exo"><div class="exo-h"><span class="exo-n">6. Hip thrust barre</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(90)">⏱️90s</span></div></div><div class="exo-i"><span>3×12</span><span>100-140kg</span></div><div class="exo-nt">💡 Squeeze fessiers en haut</div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j6e6s1p"></td><td><input data-x="j6e6s1r" value="12"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j6e6s2p"></td><td><input data-x="j6e6s2r" value="12"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j6e6s3p"></td><td><input data-x="j6e6s3r" value="12"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+<div class="exo"><div class="exo-h"><span class="exo-n">7. Mollets assis</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(45)">⏱️45s</span></div></div><div class="exo-i"><span>4×20</span></div><div class="exo-nt">💡 Reps hautes, PAUSE en étirement</div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j6e7s1p"></td><td><input data-x="j6e7s1r" value="20"></td><td><button class="ck" onclick="C(this,45)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j6e7s2p"></td><td><input data-x="j6e7s2r" value="20"></td><td><button class="ck" onclick="C(this,45)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j6e7s3p"></td><td><input data-x="j6e7s3r" value="20"></td><td><button class="ck" onclick="C(this,45)">○</button></td></tr><tr><td class="sn">4</td><td><input data-x="j6e7s4p"></td><td><input data-x="j6e7s4r" value="20"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+</div></div>
+<div class="blc"><div class="blc-h"><span class="blc-t a">🎯 TAILLE FINE</span><span class="blc-d">15 min</span></div><div class="blc-b">
+<div class="exo"><div class="exo-h"><span class="exo-n">8. Planche latérale</span><div class="bdg"><span class="rpe">RPE 8</span><span class="rst" onclick="T(45)">⏱️45s</span></div></div><div class="exo-i"><span>3×30sec/côté</span></div><table><tr><th>#</th><th>Durée</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j6e8s1r" value="30s"></td><td><button class="ck" onclick="C(this,45)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j6e8s2r" value="30s"></td><td><button class="ck" onclick="C(this,45)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j6e8s3r" value="30s"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+<div class="exo"><div class="exo-h"><span class="exo-n">9. Bird dog</span><div class="bdg"><span class="rpe">RPE 8</span><span class="rst" onclick="T(60)">⏱️60s</span></div></div><div class="exo-i"><span>3×10/côté</span></div><div class="exo-nt">💡 PAUSE 2s bras/jambe tendus</div><table><tr><th>#</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j6e9s1r" value="10"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j6e9s2r" value="10"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j6e9s3r" value="10"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+<div class="exo"><div class="exo-h"><span class="exo-n">10. Crunch inversé</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(60)">⏱️60s</span></div></div><div class="exo-i"><span>3×12</span></div><table><tr><th>#</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j6e10s1r" value="12"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j6e10s2r" value="12"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j6e10s3r" value="12"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+<div class="exo"><div class="exo-h"><span class="exo-n">11. Hollow body hold</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(60)">⏱️60s</span></div></div><div class="exo-i"><span>3×20-30sec</span></div><table><tr><th>#</th><th>Durée</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j6e11s1r" value="20s"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j6e11s2r" value="20s"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j6e11s3r" value="20s"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
+</div></div>
+</div>
+<!-- J7 REPOS -->
+<div class="pg" id="j7">
+<div class="hdr" style="border-left-color:#2ec4b6"><h2 style="color:#2ec4b6">🧘 J7 — REPOS ACTIF</h2><p>📅 Dimanche • Récupération</p></div>
+<div class="blc" style="border-color:#2ec4b6"><div class="blc-b" style="text-align:center;padding:30px">
+<div style="font-size:4rem;margin-bottom:20px">🧘</div>
+<h3 style="color:#2ec4b6;margin-bottom:20px">Journée de récupération</h3>
+<div style="text-align:left;max-width:300px;margin:0 auto;color:#aaa;line-height:2">
+<p>🚶 <b>15-20 min</b> — Marche légère</p>
+<p>🤸 <b>10-15 min</b> — Étirements statiques</p>
+<p>🎾 <b>5-10 min</b> — Foam rolling</p>
+</div>
+<div style="margin-top:25px;padding:15px;background:#1a2a25;border-radius:10px;border:1px solid #2ec4b6">
+<h4 style="color:#2ec4b6;margin-bottom:8px">🎯 Routine quotidienne</h4>
+<p style="color:#888;font-size:.8rem">☀️ Matin: Planche RKC 3×30sec</p>
+<p style="color:#888;font-size:.8rem">🌙 Soir: Dead bug 2×10/côté</p>
+</div>
+</div></div>
+</div>
+<!-- STATS -->
+<div class="pg" id="st">
+<div class="hdr" style="border-left-color:#3a86ff"><h2 style="color:#3a86ff">📊 STATISTIQUES</h2></div>
+<div class="sts"><h3>📈 Cette semaine</h3><div class="st-g">
+<div class="st-c"><div class="st-v" id="s-ex">0</div><div class="st-l">Exercices</div></div>
+<div class="st-c"><div class="st-v" id="s-se">0</div><div class="st-l">Séries</div></div>
+<div class="st-c"><div class="st-v" id="s-to">0</div><div class="st-l">Tonnage (kg)</div></div>
+<div class="st-c"><div class="st-v" id="s-jr">0/6</div><div class="st-l">Jours</div></div>
+</div></div>
+<div class="sts"><h3>🏆 Records</h3>
+<table style="width:100%;font-size:.8rem">
+<tr style="border-bottom:1px solid #333"><td style="padding:8px;color:#888">Dév. militaire</td><td style="padding:8px;text-align:right;font-weight:bold" id="r1">-</td></tr>
+<tr style="border-bottom:1px solid #333"><td style="padding:8px;color:#888">Dév. couché</td><td style="padding:8px;text-align:right;font-weight:bold" id="r2">-</td></tr>
+<tr style="border-bottom:1px solid #333"><td style="padding:8px;color:#888">Soulevé terre</td><td style="padding:8px;text-align:right;font-weight:bold" id="r3">-</td></tr>
+<tr style="border-bottom:1px solid #333"><td style="padding:8px;color:#888">Back squat</td><td style="padding:8px;text-align:right;font-weight:bold" id="r4">-</td></tr>
+<tr style="border-bottom:1px solid #333"><td style="padding:8px;color:#888">Rowing barre</td><td style="padding:8px;text-align:right;font-weight:bold" id="r5">-</td></tr>
+<tr><td style="padding:8px;color:#888">Tractions lestées</td><td style="padding:8px;text-align:right;font-weight:bold" id="r6">-</td></tr>
+</table></div>
+<div class="acts">
+<button class="act act-r" onclick="resetAll()">🗑️ Reset</button>
+<button class="act act-e" onclick="exportData()">📤 Export</button>
+</div>
+</div>
+<!-- CHRONO -->
+<div class="chr" id="chr">
+<div class="chr-in">
+<div><div class="chr-d" id="cd">0:00</div></div>
+<div class="chr-bt">
+<button class="chr-b c-pl" id="bp" onclick="toggle()">▶</button>
+<button class="chr-b c-rs" onclick="reset()">↺</button>
+<button class="chr-b c-cl" onclick="close_()">✕</button>
+</div>
+<div class="pre">
+<button onclick="P(60)">60s</button>
+<button onclick="P(90)">90s</button>
+<button onclick="P(120)">2m</button>
+<button class="on" onclick="P(180)">3m</button>
+</div>
+</div>
+<div class="chr-br"><div class="chr-fl" id="cb" style="width:100%"></div></div>
+</div>
+<div class="msg" id="mg">💾 Sauvegardé !</div>
+</body>
+</html>
+<script>
+// === CHRONO ===
+let I=null, t=0, mx=180, run=false;
+
+function T(s) {
+  mx=s; t=s; U();
+  document.getElementById('chr').classList.add('show');
+  start();
+  haptic();
+}
+
+function start() {
+  if(I) clearInterval(I);
+  run=true;
+  document.getElementById('bp').textContent='⏸';
+  I=setInterval(()=>{
+    t--;
+    U();
+    if(t<=0) { clearInterval(I); run=false; document.getElementById('bp').textContent='▶'; fin(); }
+  }, 1000);
+}
+
+function toggle() {
+  haptic();
+  if(run) { clearInterval(I); run=false; document.getElementById('bp').textContent='▶'; }
+  else { if(t<=0) t=mx; start(); }
+}
+
+function reset() { haptic(); clearInterval(I); run=false; t=mx; U(); document.getElementById('bp').textContent='▶'; }
+function close_() { haptic(); clearInterval(I); run=false; document.getElementById('chr').classList.remove('show'); }
+
+function P(s) {
+  mx=s; t=s; U(); haptic();
+  document.querySelectorAll('.pre button').forEach(b=>b.classList.remove('on'));
+  event.target.classList.add('on');
+}
+
+function U() {
+  const m=Math.floor(t/60), s=t%60, d=document.getElementById('cd');
+  d.textContent=m+':'+(s<10?'0':'')+s;
+  d.classList.remove('w','r');
+  if(t<=10) d.classList.add('r');
+  else if(t<=30) d.classList.add('w');
+  document.getElementById('cb').style.width=(t/mx)*100+'%';
+}
+
+function fin() {
+  haptic('heavy');
+  // Triple beep
+  try {
+    const c=new(window.AudioContext||window.webkitAudioContext)();
+    [0, 0.25, 0.5].forEach(delay => {
+      const o=c.createOscillator(), g=c.createGain();
+      o.connect(g); g.connect(c.destination);
+      o.frequency.value=880; g.gain.value=0.25;
+      o.start(c.currentTime + delay);
+      o.stop(c.currentTime + delay + 0.15);
+    });
+  } catch(e){}
+  if('vibrate'in navigator) navigator.vibrate([200,100,200,100,300]);
+  msg('⏰ Repos terminé — C\'est reparti !');
+}
+
+// === HAPTIC FEEDBACK ===
+function haptic(style='light') {
+  if('vibrate' in navigator) {
+    if(style==='heavy') navigator.vibrate([50,30,50]);
+    else navigator.vibrate(10);
+  }
+}
+
+// === NAVIGATION ===
+function go(id, btn) {
+  haptic();
+  document.querySelectorAll('.pg').forEach(p=>p.classList.remove('show'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));
+  document.getElementById(id).classList.add('show');
+  btn.classList.add('on');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  if(id==='st') stats();
+}
+
+// === CHECK SÉRIE ===
+function C(b, r) {
+  b.classList.toggle('on');
+  b.textContent = b.classList.contains('on') ? '✓' : '○';
+  haptic(b.classList.contains('on') ? 'light' : 'light');
+  if(b.classList.contains('on') && r > 0) T(r);
+  save();
+  updateProgress();
+}
+
+// === VALIDER EXERCICE ===
+function V(b) {
+  const e=b.closest('.exo');
+  e.classList.toggle('ok');
+  b.classList.toggle('ok');
+  b.textContent = e.classList.contains('ok') ? '✓ Terminé !' : '✓ Valider';
+  haptic(e.classList.contains('ok') ? 'heavy' : 'light');
+  save();
+  updateProgress();
+  if(e.classList.contains('ok')) msg('💪 Exercice validé !');
+}
+
+// === PROGRESS PER DAY ===
+function updateProgress() {
+  for(let j=1; j<=6; j++) {
+    const pg = document.getElementById('j'+j);
+    if(!pg) continue;
+    const total = pg.querySelectorAll('.exo').length;
+    const done = pg.querySelectorAll('.exo.ok').length;
+    const bar = pg.querySelector('.day-prog-fill');
+    if(bar) bar.style.width = (done/total*100)+'%';
+  }
+}
+
+// === SAVE / LOAD ===
+function save() {
+  const d = { i:{}, c:[], e:[] };
+  document.querySelectorAll('input[data-x]').forEach(i=>{
+    if(i.value) d.i[i.dataset.x] = i.value;
+  });
+  document.querySelectorAll('.ck.on').forEach((b,i) => d.c.push(i));
+  document.querySelectorAll('.exo.ok').forEach(e => {
+    const n=e.querySelector('.exo-n');
+    if(n) d.e.push(n.textContent);
+  });
+  localStorage.setItem('colosse', JSON.stringify(d));
+}
+
+function load() {
+  const s=localStorage.getItem('colosse');
+  if(!s) return;
+  try {
+    const d=JSON.parse(s);
+    for(const k in d.i) {
+      const i=document.querySelector('[data-x="'+k+'"]');
+      if(i) i.value = d.i[k];
+    }
+    const cks=document.querySelectorAll('.ck');
+    d.c.forEach(i => {
+      if(cks[i]) { cks[i].classList.add('on'); cks[i].textContent='✓'; }
+    });
+    d.e?.forEach(n => {
+      document.querySelectorAll('.exo-n').forEach(el => {
+        if(el.textContent===n) {
+          const ex=el.closest('.exo');
+          ex.classList.add('ok');
+          const b=ex.querySelector('.val');
+          b.classList.add('ok');
+          b.textContent='✓ Terminé !';
+        }
+      });
+    });
+    updateProgress();
+  } catch(e) { console.log('Load error:', e); }
+}
+
+// === STATS ===
+function stats() {
+  const ex=document.querySelectorAll('.exo.ok').length;
+  const se=document.querySelectorAll('.ck.on').length;
+  let to=0;
+  document.querySelectorAll('input[data-x$="p"]').forEach(i=>{
+    const p=parseFloat(i.value)||0;
+    const row=i.closest('tr');
+    const ri=row?.querySelector('input[data-x$="r"]');
+    const r=parseFloat(ri?.value)||0;
+    to += p*r;
+  });
+  // Count active days
+  let days=0;
+  for(let j=1;j<=6;j++){
+    const pg=document.getElementById('j'+j);
+    if(pg && pg.querySelectorAll('.exo.ok').length > 0) days++;
+  }
+  document.getElementById('s-ex').textContent=ex;
+  document.getElementById('s-se').textContent=se;
+  document.getElementById('s-to').textContent=Math.round(to).toLocaleString();
+  document.getElementById('s-jr').textContent=days+'/6';
+  // Records
+  const gM=(pre)=>{
+    let m=0;
+    document.querySelectorAll('[data-x^="'+pre+'"][data-x$="p"]').forEach(i=>{
+      const v=parseFloat(i.value)||0;
+      if(v>m) m=v;
+    });
+    return m>0 ? m+' kg' : '—';
+  };
+  document.getElementById('r1').textContent=gM('j1e1');
+  document.getElementById('r2').textContent=gM('j4e1');
+  document.getElementById('r3').textContent=gM('j2e1');
+  document.getElementById('r4').textContent=gM('j3e1');
+  document.getElementById('r5').textContent=gM('j2e2');
+  document.getElementById('r6').textContent=gM('j2e3');
+}
+
+// === TOAST ===
+function msg(t) {
+  const m=document.getElementById('mg');
+  m.textContent=t;
+  m.classList.add('show');
+  setTimeout(()=>m.classList.remove('show'), 2500);
+}
+
+// === ACTIONS ===
+function resetAll() {
+  if(confirm('⚠️ Supprimer toutes les données ?')) {
+    localStorage.removeItem('colosse');
+    location.reload();
+  }
+}
+
+function exportData() {
+  const d=localStorage.getItem('colosse');
+  if(!d) { msg('❌ Aucune donnée'); return; }
+  const b=new Blob([d], {type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(b);
+  a.download='colosse-'+new Date().toISOString().split('T')[0]+'.json';
+  a.click();
+  msg('📤 Données exportées !');
+}
+
+// === INIT ===
+document.querySelectorAll('input').forEach(i=>i.addEventListener('change', save));
+
+// Add progress bars to each day header
+document.querySelectorAll('.hdr').forEach(hdr => {
+  const pg = hdr.closest('.pg');
+  if(pg && pg.id.match(/^j[1-6]$/)) {
+    const bar = document.createElement('div');
+    bar.className = 'day-prog';
+    bar.innerHTML = '<div class="day-prog-fill"></div>';
+    hdr.appendChild(bar);
+  }
+});
+
+// Prevent zoom on double tap for iOS
+let lastTouchEnd = 0;
+document.addEventListener('touchend', e => {
+  const now = Date.now();
+  if(now - lastTouchEnd <= 300) e.preventDefault();
+  lastTouchEnd = now;
+}, false);
+
+// iOS keyboard handling - scroll input into view
+document.querySelectorAll('input').forEach(i => {
+  i.addEventListener('focus', () => {
+    setTimeout(() => i.scrollIntoView({ behavior:'smooth', block:'center' }), 300);
+  });
+});
+
+load();
+</script>
