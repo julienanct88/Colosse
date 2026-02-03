@@ -484,6 +484,79 @@ input:focus {
   width: 0%;
 }
 
+/* === VIDEO BUTTON === */
+.vid {
+  background: rgba(230,57,70,0.15);
+  color: var(--red);
+  cursor: pointer;
+  transition: all 0.15s;
+  font-size: 0.65rem;
+  padding: 3px 7px;
+  border-radius: 8px;
+  font-weight: 600;
+}
+.vid:active { transform: scale(0.9); }
+
+/* === VIDEO MODAL === */
+.modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.85);
+  z-index: 2000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.modal-overlay.show {
+  display: flex;
+  animation: fadeIn 0.2s ease;
+}
+.modal-box {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  width: 100%;
+  max-width: 460px;
+  overflow: hidden;
+}
+.modal-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.modal-title {
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: var(--text);
+  flex: 1;
+  padding-right: 10px;
+}
+.modal-close {
+  background: var(--card2);
+  border: 1px solid var(--border);
+  color: var(--sub);
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.modal-close:active { transform: scale(0.9); }
+.modal-iframe {
+  width: 100%;
+  aspect-ratio: 16/9;
+  border: none;
+}
+
 /* === RESPONSIVE === */
 @media (max-width: 380px) {
   .tab { font-size: 8px; padding: 8px 2px; }
@@ -768,6 +841,92 @@ function fin() {
   msg('⏰ Repos terminé — C\'est reparti !');
 }
 
+// === VIDEO ===
+const videoMap = {
+  'Développé militaire debout': 'overhead press barbell form',
+  'Développé incliné haltères 30°': 'incline dumbbell press 30',
+  'Élévations latérales': 'lateral raises dumbbell form',
+  'Dips lestés': 'weighted dips chest triceps',
+  'Écartés poulie haute': 'cable fly high pulley',
+  'Pushdown triceps corde': 'tricep pushdown rope',
+  'Shrugs haltères lourds': 'heavy dumbbell shrugs',
+  'Face pulls corde': 'face pulls rope form',
+  'Shrugs barre derrière': 'behind back barbell shrugs',
+  'Neck curls': 'neck curls plate exercise',
+  'Neck extensions': 'neck extensions plate exercise',
+  'Soulevé de terre conventionnel': 'conventional deadlift form',
+  'Rowing barre pronation': 'barbell row overhand grip',
+  'Tractions lestées prise large': 'weighted pull ups wide grip',
+  'Rowing 1 bras haltère': 'one arm dumbbell row',
+  'Pullover poulie haute': 'straight arm pulldown cable',
+  'Curl barre EZ': 'ez bar curl biceps',
+  'Curl marteau haltères': 'hammer curl dumbbell',
+  'Wrist curls barre': 'wrist curls barbell forearm',
+  'Reverse wrist curls': 'reverse wrist curls forearm',
+  "Farmer's walk": 'farmers walk exercise form',
+  'Dead hangs': 'dead hang bar grip',
+  'Back squat barre': 'barbell back squat form',
+  'Romanian deadlift (RDL)': 'romanian deadlift rdl form',
+  'Presse jambes pieds hauts': 'leg press high feet placement',
+  'Leg curl allongé': 'lying leg curl hamstring',
+  'Leg extension': 'leg extension quadriceps',
+  'Fentes marchées': 'walking lunges dumbbell',
+  'Mollets debout machine': 'standing calf raise machine',
+  'Planche RKC': 'rkc plank exercise form',
+  'Dead bug': 'dead bug exercise core',
+  'Ab wheel rollout': 'ab wheel rollout form',
+  'Pallof press': 'pallof press cable core',
+  'Développé couché barre': 'barbell bench press form',
+  'Push press': 'push press barbell form',
+  'Développé haltères assis neutre': 'seated neutral grip dumbbell press',
+  'Élévations latérales câble': 'cable lateral raise one arm',
+  'Développé incliné machine': 'incline chest press machine',
+  'Extensions triceps overhead': 'overhead tricep extension cable',
+  'Pompes diamant (finisher)': 'diamond push ups form',
+  'Shrugs machine ou barre': 'shrug machine exercise',
+  'Rowing menton prise large': 'upright row wide grip',
+  'Face pulls assis': 'seated face pulls cable',
+  'Neck lateral raises': 'neck lateral flexion exercise',
+  'Rowing barre supination (Yates)': 'yates row underhand barbell',
+  'Tractions prise neutre lestées': 'weighted chin ups neutral grip',
+  'Tirage vertical prise large': 'lat pulldown wide grip',
+  'Rowing machine T-bar': 't bar row machine form',
+  'Pullover haltère': 'dumbbell pullover chest',
+  'Curl incliné 45°': 'incline dumbbell curl 45',
+  'Curl concentré': 'concentration curl dumbbell',
+  'Reverse curl barre EZ': 'reverse curl ez bar forearm',
+  'Wrist roller (enrouleur)': 'wrist roller forearm exercise',
+  'Pinch grip plate hold': 'pinch grip plate hold forearm',
+  'Front squat': 'front squat barbell form',
+  'Soulevé de terre sumo': 'sumo deadlift form',
+  'Hack squat machine': 'hack squat machine form',
+  'Leg curl assis': 'seated leg curl hamstring',
+  'Split squat bulgare': 'bulgarian split squat dumbbell',
+  'Hip thrust barre': 'barbell hip thrust glutes',
+  'Mollets assis': 'seated calf raise machine',
+  'Planche latérale': 'side plank exercise form',
+  'Bird dog': 'bird dog exercise core',
+  'Crunch inversé': 'reverse crunch abs',
+  'Hollow body hold': 'hollow body hold exercise',
+  'Face pulls (poulie basse)': 'face pulls low cable',
+  "Farmer's walk (lourd)": 'heavy farmers walk exercise'
+};
+
+function vid(btn) {
+  const name = btn.closest('.exo').querySelector('.exo-n').textContent.replace(/^\d+\.\s*/, '');
+  const query = videoMap[name] || name + ' exercise form';
+  const url = 'https://www.youtube.com/results?search_query=' + encodeURIComponent(query);
+  // PWA compatible: create a real link and click it
+  const a = document.createElement('a');
+  a.href = url;
+  a.target = '_blank';
+  a.rel = 'noopener';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  haptic();
+}
+
 // === HAPTIC FEEDBACK ===
 function haptic(style='light') {
   if('vibrate' in navigator) {
@@ -941,6 +1100,19 @@ document.querySelectorAll('.hdr').forEach(hdr => {
     bar.innerHTML = '<div class="day-prog-fill"></div>';
     hdr.appendChild(bar);
   }
+});
+
+// Add video buttons to every exercise
+document.querySelectorAll('.bdg').forEach(bdg => {
+  const exo = bdg.closest('.exo');
+  if(!exo) return;
+  const name = exo.querySelector('.exo-n');
+  if(!name) return;
+  const vidBtn = document.createElement('span');
+  vidBtn.className = 'vid';
+  vidBtn.textContent = '🎬';
+  vidBtn.onclick = function(){ vid(this); };
+  bdg.insertBefore(vidBtn, bdg.firstChild);
 });
 
 // Prevent zoom on double tap for iOS
