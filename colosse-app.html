@@ -557,6 +557,129 @@ input:focus {
   border: none;
 }
 
+/* === CALENDAR === */
+.cal-day-name { color: var(--sub); font-weight: 600; padding: 6px 0; font-size: .7rem; }
+.cal-day {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  border-radius: 10px;
+  color: var(--sub);
+  font-size: .75rem;
+  position: relative;
+  cursor: default;
+  gap: 2px;
+}
+.cal-day.today { border: 1.5px solid var(--accent); color: var(--text); font-weight: 700; }
+.cal-day.has-session { background: rgba(46,196,182,0.15); color: var(--green); font-weight: 700; cursor: pointer; }
+.cal-day.has-session:active { transform: scale(0.9); }
+.cal-dots { display: flex; gap: 2px; }
+.cal-dot { width: 5px; height: 5px; border-radius: 50%; }
+.cal-dot.push { background: #e63946; }
+.cal-dot.pull { background: #3a86ff; }
+.cal-dot.legs { background: #2ec4b6; }
+
+/* === HISTORY ITEMS === */
+.hist-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px;
+  background: var(--card2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.hist-item:active { transform: scale(0.98); }
+.hist-left { display: flex; align-items: center; gap: 10px; }
+.hist-type {
+  width: 38px; height: 38px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+.hist-type.push { background: rgba(230,57,70,0.15); color: #e63946; }
+.hist-type.pull { background: rgba(58,134,255,0.15); color: #3a86ff; }
+.hist-type.legs { background: rgba(46,196,182,0.15); color: #2ec4b6; }
+.hist-info { display: flex; flex-direction: column; gap: 2px; }
+.hist-day { font-weight: 700; font-size: .85rem; color: var(--text); }
+.hist-date { font-size: .7rem; color: var(--sub); }
+.hist-stats { text-align: right; }
+.hist-tonnage { font-weight: 700; font-size: .85rem; color: var(--accent); }
+.hist-exos { font-size: .7rem; color: var(--sub); }
+
+/* === END SESSION BUTTON === */
+.end-session {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: calc(100% - 32px);
+  margin: 24px 16px 40px;
+  padding: 18px;
+  background: linear-gradient(135deg, #2ec4b6, #20a99d);
+  color: #fff;
+  border: none;
+  border-radius: 16px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  cursor: pointer;
+  letter-spacing: 0.3px;
+  box-shadow: 0 4px 15px rgba(46,196,182,0.3);
+  transition: all 0.15s;
+}
+.end-session:active { transform: scale(0.96); }
+.end-session .es-icon { font-size: 1.3rem; }
+
+/* === CONFIRM POPUP === */
+.confirm-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.8);
+  z-index: 3000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+.confirm-overlay.show { display: flex; animation: fadeIn 0.2s ease; }
+.confirm-box {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  width: 100%;
+  max-width: 380px;
+  padding: 28px 24px;
+  text-align: center;
+}
+.confirm-emoji { font-size: 3rem; margin-bottom: 12px; }
+.confirm-title { font-size: 1.1rem; font-weight: 700; color: var(--text); margin-bottom: 6px; }
+.confirm-sub { font-size: 0.8rem; color: var(--sub); margin-bottom: 20px; line-height: 1.5; }
+.confirm-btns { display: flex; gap: 10px; }
+.confirm-btn {
+  flex: 1;
+  padding: 14px;
+  border-radius: 14px;
+  border: none;
+  font-weight: 700;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.confirm-btn:active { transform: scale(0.95); }
+.confirm-cancel { background: var(--card2); color: var(--sub); border: 1px solid var(--border); }
+.confirm-go { background: linear-gradient(135deg, #2ec4b6, #20a99d); color: #fff; }
+.confirm-ok { display: none; font-size: 0.8rem; color: var(--green); margin-top: 14px; font-weight: 600; }
+
 /* === RESPONSIVE === */
 @media (max-width: 380px) {
   .tab { font-size: 8px; padding: 8px 2px; }
@@ -737,26 +860,68 @@ input:focus {
 <!-- STATS -->
 <div class="pg" id="st">
 <div class="hdr" style="border-left-color:#3a86ff"><h2 style="color:#3a86ff">📊 STATISTIQUES</h2></div>
-<div class="sts"><h3>📈 Cette semaine</h3><div class="st-g">
+
+<!-- Stats semaine en cours -->
+<div class="sts"><h3>📈 Semaine en cours</h3><div class="st-g">
 <div class="st-c"><div class="st-v" id="s-ex">0</div><div class="st-l">Exercices</div></div>
 <div class="st-c"><div class="st-v" id="s-se">0</div><div class="st-l">Séries</div></div>
 <div class="st-c"><div class="st-v" id="s-to">0</div><div class="st-l">Tonnage (kg)</div></div>
 <div class="st-c"><div class="st-v" id="s-jr">0/6</div><div class="st-l">Jours</div></div>
 </div></div>
-<div class="sts"><h3>🏆 Records</h3>
+
+<!-- Records -->
+<div class="sts"><h3>🏆 Records (tous temps)</h3>
 <table style="width:100%;font-size:.8rem">
-<tr style="border-bottom:1px solid #333"><td style="padding:8px;color:#888">Dév. militaire</td><td style="padding:8px;text-align:right;font-weight:bold" id="r1">-</td></tr>
-<tr style="border-bottom:1px solid #333"><td style="padding:8px;color:#888">Dév. couché</td><td style="padding:8px;text-align:right;font-weight:bold" id="r2">-</td></tr>
-<tr style="border-bottom:1px solid #333"><td style="padding:8px;color:#888">Soulevé terre</td><td style="padding:8px;text-align:right;font-weight:bold" id="r3">-</td></tr>
-<tr style="border-bottom:1px solid #333"><td style="padding:8px;color:#888">Back squat</td><td style="padding:8px;text-align:right;font-weight:bold" id="r4">-</td></tr>
-<tr style="border-bottom:1px solid #333"><td style="padding:8px;color:#888">Rowing barre</td><td style="padding:8px;text-align:right;font-weight:bold" id="r5">-</td></tr>
-<tr><td style="padding:8px;color:#888">Tractions lestées</td><td style="padding:8px;text-align:right;font-weight:bold" id="r6">-</td></tr>
+<tr style="border-bottom:1px solid #333"><td style="padding:8px;color:#888">Dév. militaire</td><td style="padding:8px;text-align:right;font-weight:bold" id="r1">—</td></tr>
+<tr style="border-bottom:1px solid #333"><td style="padding:8px;color:#888">Dév. couché</td><td style="padding:8px;text-align:right;font-weight:bold" id="r2">—</td></tr>
+<tr style="border-bottom:1px solid #333"><td style="padding:8px;color:#888">Soulevé terre</td><td style="padding:8px;text-align:right;font-weight:bold" id="r3">—</td></tr>
+<tr style="border-bottom:1px solid #333"><td style="padding:8px;color:#888">Back squat</td><td style="padding:8px;text-align:right;font-weight:bold" id="r4">—</td></tr>
+<tr style="border-bottom:1px solid #333"><td style="padding:8px;color:#888">Rowing barre</td><td style="padding:8px;text-align:right;font-weight:bold" id="r5">—</td></tr>
+<tr><td style="padding:8px;color:#888">Tractions lestées</td><td style="padding:8px;text-align:right;font-weight:bold" id="r6">—</td></tr>
 </table></div>
+
+<!-- Calendrier -->
+<div class="sts">
+<h3>📅 Calendrier</h3>
+<div id="calNav" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+  <button onclick="calPrev()" style="background:var(--card2);border:1px solid var(--border);color:var(--text);width:36px;height:36px;border-radius:10px;font-size:1rem;cursor:pointer">◀</button>
+  <span id="calMonth" style="font-weight:700;font-size:.9rem;color:var(--text)"></span>
+  <button onclick="calNext()" style="background:var(--card2);border:1px solid var(--border);color:var(--text);width:36px;height:36px;border-radius:10px;font-size:1rem;cursor:pointer">▶</button>
+</div>
+<div id="calGrid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center;font-size:.75rem"></div>
+</div>
+
+<!-- Historique séances -->
+<div class="sts">
+<h3>📋 Historique</h3>
+<div id="historyList" style="font-size:.8rem;color:var(--sub)">Aucune séance enregistrée</div>
+</div>
+
+<!-- Actions -->
 <div class="acts">
-<button class="act act-r" onclick="resetAll()">🗑️ Reset</button>
-<button class="act act-e" onclick="exportData()">📤 Export</button>
+<button class="act" onclick="importData()" style="background:rgba(58,134,255,0.15);color:var(--blue);border:1px solid rgba(58,134,255,0.3)">📥 Restaurer une séance</button>
+<button class="act act-r" onclick="resetWeek()">🔄 Nouvelle semaine</button>
 </div>
+<div class="acts" style="margin-top:8px">
+<button class="act act-e" onclick="exportAllHistory()">💾 Sauvegarder tout (iCloud)</button>
+<button class="act act-r" onclick="resetAll()">🗑️ Tout supprimer</button>
 </div>
+<input type="file" id="importFile" accept=".json" style="display:none" onchange="handleImport(event)">
+</div>
+<!-- CONFIRM SESSION POPUP -->
+<div class="confirm-overlay" id="confirmPopup">
+  <div class="confirm-box">
+    <div class="confirm-emoji">🏆</div>
+    <div class="confirm-title" id="confirmTitle">Terminer la séance ?</div>
+    <div class="confirm-sub" id="confirmSub">Tes résultats seront sauvegardés dans iCloud.<br>Tu pourras les restaurer à tout moment.</div>
+    <div class="confirm-btns" id="confirmBtns">
+      <button class="confirm-btn confirm-cancel" onclick="closeConfirm()">Annuler</button>
+      <button class="confirm-btn confirm-go" onclick="confirmSession()">💾 Sauvegarder</button>
+    </div>
+    <div class="confirm-ok" id="confirmOk">✅ Séance sauvegardée avec succès !</div>
+  </div>
+</div>
+
 <!-- CHRONO -->
 <div class="chr" id="chr">
 <div class="chr-in">
@@ -1034,7 +1199,6 @@ function stats() {
     const r=parseFloat(ri?.value)||0;
     to += p*r;
   });
-  // Count active days
   let days=0;
   for(let j=1;j<=6;j++){
     const pg=document.getElementById('j'+j);
@@ -1044,21 +1208,370 @@ function stats() {
   document.getElementById('s-se').textContent=se;
   document.getElementById('s-to').textContent=Math.round(to).toLocaleString();
   document.getElementById('s-jr').textContent=days+'/6';
-  // Records
-  const gM=(pre)=>{
-    let m=0;
+  // Records from history + current
+  updateRecords();
+  // Calendar + history
+  renderCalendar();
+  renderHistory();
+}
+
+// === RECORDS (all time from history) ===
+function updateRecords() {
+  const history = getHistory();
+  const recMap = { j1e1:0, j4e1:0, j2e1:0, j3e1:0, j2e2:0, j2e3:0 };
+  // Current session
+  for(const pre in recMap) {
     document.querySelectorAll('[data-x^="'+pre+'"][data-x$="p"]').forEach(i=>{
       const v=parseFloat(i.value)||0;
-      if(v>m) m=v;
+      if(v>recMap[pre]) recMap[pre]=v;
     });
-    return m>0 ? m+' kg' : '—';
+  }
+  // All history
+  history.forEach(h => {
+    if(!h.data || !h.data.i) return;
+    for(const pre in recMap) {
+      for(const k in h.data.i) {
+        if(k.startsWith(pre) && k.endsWith('p')) {
+          const v=parseFloat(h.data.i[k])||0;
+          if(v>recMap[pre]) recMap[pre]=v;
+        }
+      }
+    }
+  });
+  const f = v => v > 0 ? v+' kg' : '—';
+  document.getElementById('r1').textContent=f(recMap.j1e1);
+  document.getElementById('r2').textContent=f(recMap.j4e1);
+  document.getElementById('r3').textContent=f(recMap.j2e1);
+  document.getElementById('r4').textContent=f(recMap.j3e1);
+  document.getElementById('r5').textContent=f(recMap.j2e2);
+  document.getElementById('r6').textContent=f(recMap.j2e3);
+}
+
+// === HISTORY SYSTEM ===
+function getHistory() {
+  try { return JSON.parse(localStorage.getItem('colosse_history') || '[]'); }
+  catch(e) { return []; }
+}
+function saveHistory(history) {
+  localStorage.setItem('colosse_history', JSON.stringify(history));
+}
+
+const dayNames = {
+  j1: 'J1 — Push A',
+  j2: 'J2 — Pull A',
+  j3: 'J3 — Legs A',
+  j4: 'J4 — Push B',
+  j5: 'J5 — Pull B',
+  j6: 'J6 — Legs B'
+};
+const dayTypes = { j1:'push', j2:'pull', j3:'legs', j4:'push', j5:'pull', j6:'legs' };
+const dayEmojis = { j1:'💪', j2:'🔥', j3:'🦵', j4:'💪', j5:'🔥', j6:'🦵' };
+
+// Collect data for a specific day
+function getDayData(dayId) {
+  const pg = document.getElementById(dayId);
+  if(!pg) return null;
+  const data = { i:{}, c:[], e:[] };
+  const allCks = document.querySelectorAll('.ck');
+  pg.querySelectorAll('input[data-x]').forEach(i=>{
+    if(i.value) data.i[i.dataset.x] = i.value;
+  });
+  pg.querySelectorAll('.ck.on').forEach(b => {
+    const idx = Array.from(allCks).indexOf(b);
+    if(idx>=0) data.c.push(idx);
+  });
+  pg.querySelectorAll('.exo.ok').forEach(e => {
+    const n=e.querySelector('.exo-n');
+    if(n) data.e.push(n.textContent);
+  });
+  // Calc tonnage for this day
+  let tonnage = 0;
+  pg.querySelectorAll('input[data-x$="p"]').forEach(i=>{
+    const p=parseFloat(i.value)||0;
+    const row=i.closest('tr');
+    const ri=row?.querySelector('input[data-x$="r"]');
+    const r=parseFloat(ri?.value)||0;
+    tonnage += p*r;
+  });
+  const exos = pg.querySelectorAll('.exo.ok').length;
+  const series = pg.querySelectorAll('.ck.on').length;
+  return { data, tonnage: Math.round(tonnage), exos, series };
+}
+
+// === END SESSION ===
+let pendingDay = null;
+
+function endSession(dayId) {
+  pendingDay = dayId;
+  const name = dayNames[dayId] || dayId;
+  const dayData = getDayData(dayId);
+  const exos = dayData ? dayData.exos : 0;
+  const totalExos = document.getElementById(dayId).querySelectorAll('.exo').length;
+
+  document.getElementById('confirmTitle').textContent = 'Terminer ' + name + ' ?';
+  document.getElementById('confirmSub').innerHTML =
+    exos + '/' + totalExos + ' exercices validés<br>' +
+    (dayData ? dayData.tonnage.toLocaleString() + ' kg de tonnage' : '') +
+    '<br><br>La séance sera sauvegardée dans iCloud.';
+  document.getElementById('confirmBtns').style.display = 'flex';
+  document.getElementById('confirmOk').style.display = 'none';
+  document.getElementById('confirmPopup').classList.add('show');
+  haptic();
+}
+
+function closeConfirm() {
+  document.getElementById('confirmPopup').classList.remove('show');
+  pendingDay = null;
+}
+
+function confirmSession() {
+  if(!pendingDay) return;
+  const dayId = pendingDay;
+  const dayData = getDayData(dayId);
+  if(!dayData) { closeConfirm(); return; }
+
+  const now = new Date();
+  const dateStr = now.toISOString().split('T')[0];
+  const timeStr = now.toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'});
+
+  // Build session record
+  const session = {
+    id: Date.now(),
+    date: dateStr,
+    time: timeStr,
+    day: dayId,
+    dayName: dayNames[dayId],
+    type: dayTypes[dayId],
+    programme: 'Colosse v1',
+    tonnage: dayData.tonnage,
+    exos: dayData.exos,
+    series: dayData.series,
+    data: dayData.data
   };
-  document.getElementById('r1').textContent=gM('j1e1');
-  document.getElementById('r2').textContent=gM('j4e1');
-  document.getElementById('r3').textContent=gM('j2e1');
-  document.getElementById('r4').textContent=gM('j3e1');
-  document.getElementById('r5').textContent=gM('j2e2');
-  document.getElementById('r6').textContent=gM('j2e3');
+
+  // Save to history in localStorage
+  const history = getHistory();
+  history.push(session);
+  saveHistory(history);
+
+  // Share file to iCloud
+  const json = JSON.stringify(session, null, 2);
+  const fileName = 'Colosse-' + dayNames[dayId].replace(/ /g,'-') + '-' + dateStr + '.json';
+  const blob = new Blob([json], {type:'application/json'});
+  const file = new File([blob], fileName, {type:'application/json'});
+
+  document.getElementById('confirmBtns').style.display = 'none';
+  document.getElementById('confirmOk').style.display = 'block';
+  document.getElementById('confirmOk').textContent = '✅ Séance enregistrée !';
+  haptic('heavy');
+
+  // Share to iCloud
+  if(navigator.canShare && navigator.canShare({files:[file]})) {
+    navigator.share({ title: 'Séance Colosse', files: [file] })
+    .then(() => {
+      document.getElementById('confirmOk').textContent = '✅ Sauvegardé dans iCloud !';
+    })
+    .catch(() => {
+      // User cancelled share but session is still saved locally
+      document.getElementById('confirmOk').textContent = '✅ Séance enregistrée localement';
+    });
+  } else {
+    // Fallback download
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+
+  setTimeout(()=> {
+    closeConfirm();
+    msg('🏆 Séance validée !');
+  }, 2000);
+}
+
+// === CALENDAR ===
+let calYear, calMonth;
+(function initCal() {
+  const now = new Date();
+  calYear = now.getFullYear();
+  calMonth = now.getMonth();
+})();
+
+function calPrev() { calMonth--; if(calMonth<0){calMonth=11;calYear--;} renderCalendar(); haptic(); }
+function calNext() { calMonth++; if(calMonth>11){calMonth=0;calYear++;} renderCalendar(); haptic(); }
+
+function renderCalendar() {
+  const months = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+  document.getElementById('calMonth').textContent = months[calMonth] + ' ' + calYear;
+
+  const history = getHistory();
+  // Map dates to sessions
+  const dateMap = {};
+  history.forEach(h => {
+    if(!dateMap[h.date]) dateMap[h.date] = [];
+    dateMap[h.date].push(h);
+  });
+
+  const grid = document.getElementById('calGrid');
+  grid.innerHTML = '';
+
+  // Day headers
+  ['Lu','Ma','Me','Je','Ve','Sa','Di'].forEach(d => {
+    grid.innerHTML += '<div class="cal-day-name">'+d+'</div>';
+  });
+
+  const firstDay = new Date(calYear, calMonth, 1);
+  let startDay = firstDay.getDay(); // 0=Sun
+  startDay = startDay === 0 ? 6 : startDay - 1; // Convert to Mon=0
+
+  const daysInMonth = new Date(calYear, calMonth+1, 0).getDate();
+  const today = new Date();
+  const todayStr = today.toISOString().split('T')[0];
+
+  // Empty cells
+  for(let i=0; i<startDay; i++) {
+    grid.innerHTML += '<div class="cal-day"></div>';
+  }
+
+  for(let d=1; d<=daysInMonth; d++) {
+    const dateStr = calYear + '-' + String(calMonth+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+    const sessions = dateMap[dateStr] || [];
+    const isToday = dateStr === todayStr;
+    const cls = 'cal-day' + (isToday ? ' today' : '') + (sessions.length ? ' has-session' : '');
+
+    let dots = '';
+    if(sessions.length) {
+      dots = '<div class="cal-dots">';
+      sessions.forEach(s => {
+        dots += '<div class="cal-dot '+( s.type || 'push')+'"></div>';
+      });
+      dots += '</div>';
+    }
+
+    const onclick = sessions.length ? ' onclick="showDaySessions(\''+dateStr+'\')"' : '';
+    grid.innerHTML += '<div class="'+cls+'"'+onclick+'>'+d+dots+'</div>';
+  }
+}
+
+function showDaySessions(dateStr) {
+  const history = getHistory();
+  const sessions = history.filter(h => h.date === dateStr);
+  if(!sessions.length) return;
+
+  const parts = dateStr.split('-');
+  const dateLabel = parts[2]+'/'+parts[1]+'/'+parts[0];
+
+  let html = '<div style="margin-bottom:12px;font-weight:700;color:var(--text)">📅 ' + dateLabel + '</div>';
+  sessions.forEach(s => {
+    html += '<div style="padding:10px;background:var(--bg);border-radius:10px;margin-bottom:8px;font-size:.8rem">';
+    html += '<div style="font-weight:700;color:var(--text);margin-bottom:4px">' + (dayEmojis[s.day]||'') + ' ' + (s.dayName||s.day) + '</div>';
+    html += '<div style="color:var(--sub)">⏰ ' + (s.time||'') + ' • 🏋️ ' + (s.exos||0) + ' exos • ⚡ ' + (s.tonnage||0).toLocaleString() + ' kg</div>';
+    html += '</div>';
+  });
+
+  document.getElementById('historyList').innerHTML = html;
+  haptic();
+}
+
+// === HISTORY LIST ===
+function renderHistory() {
+  const history = getHistory();
+  const el = document.getElementById('historyList');
+
+  if(!history.length) {
+    el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--sub)">Aucune séance enregistrée<br><span style="font-size:.7rem">Termine une séance pour la voir ici</span></div>';
+    return;
+  }
+
+  // Show last 10 sessions
+  const recent = history.slice(-10).reverse();
+  let html = '';
+  recent.forEach(s => {
+    const parts = (s.date||'').split('-');
+    const dateLabel = parts[2]+'/'+parts[1];
+    const type = s.type || 'push';
+    html += '<div class="hist-item" onclick="showSessionDetail('+s.id+')">';
+    html += '<div class="hist-left">';
+    html += '<div class="hist-type '+type+'">'+(dayEmojis[s.day]||'💪')+'</div>';
+    html += '<div class="hist-info"><div class="hist-day">'+(s.dayName||s.day)+'</div>';
+    html += '<div class="hist-date">'+dateLabel+' à '+(s.time||'')+'</div></div></div>';
+    html += '<div class="hist-stats"><div class="hist-tonnage">'+(s.tonnage||0).toLocaleString()+' kg</div>';
+    html += '<div class="hist-exos">'+(s.exos||0)+' exos • '+(s.series||0)+' séries</div></div>';
+    html += '</div>';
+  });
+
+  if(history.length > 10) {
+    html += '<div style="text-align:center;padding:10px;color:var(--sub);font-size:.75rem">+ '+(history.length-10)+' séances plus anciennes</div>';
+  }
+
+  el.innerHTML = html;
+}
+
+function showSessionDetail(id) {
+  const history = getHistory();
+  const s = history.find(h => h.id === id);
+  if(!s) return;
+
+  const parts = (s.date||'').split('-');
+  const dateLabel = parts[2]+'/'+parts[1]+'/'+parts[0];
+
+  let html = '<div style="margin-bottom:12px">';
+  html += '<div style="font-weight:700;color:var(--text);font-size:.95rem">'+(dayEmojis[s.day]||'')+' '+(s.dayName||s.day)+'</div>';
+  html += '<div style="color:var(--sub);font-size:.75rem;margin-top:2px">'+dateLabel+' à '+(s.time||'')+' • Programme: '+(s.programme||'Colosse')+'</div>';
+  html += '</div>';
+
+  html += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">';
+  html += '<div style="background:var(--bg);border-radius:10px;padding:10px;text-align:center"><div style="font-weight:700;color:var(--accent)">'+(s.exos||0)+'</div><div style="font-size:.65rem;color:var(--sub)">Exercices</div></div>';
+  html += '<div style="background:var(--bg);border-radius:10px;padding:10px;text-align:center"><div style="font-weight:700;color:var(--accent)">'+(s.series||0)+'</div><div style="font-size:.65rem;color:var(--sub)">Séries</div></div>';
+  html += '<div style="background:var(--bg);border-radius:10px;padding:10px;text-align:center"><div style="font-weight:700;color:var(--accent)">'+(s.tonnage||0).toLocaleString()+'</div><div style="font-size:.65rem;color:var(--sub)">Tonnage kg</div></div>';
+  html += '</div>';
+
+  // Show exercise data if available
+  if(s.data && s.data.i) {
+    const exoKeys = {};
+    for(const k in s.data.i) {
+      const match = k.match(/^(j\de+\d+)/);
+      if(match) {
+        if(!exoKeys[match[1]]) exoKeys[match[1]] = {};
+        exoKeys[match[1]][k] = s.data.i[k];
+      }
+    }
+    for(const prefix in exoKeys) {
+      const weights = [];
+      for(const k in exoKeys[prefix]) {
+        if(k.endsWith('p')) {
+          const v = parseFloat(exoKeys[prefix][k]);
+          if(v>0) weights.push(v);
+        }
+      }
+      if(weights.length) {
+        const maxW = Math.max(...weights);
+        html += '<div style="font-size:.7rem;color:var(--sub);padding:3px 0">• '+prefix+': max '+maxW+'kg</div>';
+      }
+    }
+  }
+
+  html += '<div style="margin-top:12px"><button onclick="restoreSession('+s.id+')" style="width:100%;padding:12px;background:rgba(58,134,255,0.15);color:var(--blue);border:1px solid rgba(58,134,255,0.3);border-radius:12px;font-weight:700;font-size:.85rem;cursor:pointer">📥 Charger cette séance</button></div>';
+
+  document.getElementById('historyList').innerHTML = html;
+  haptic();
+}
+
+function restoreSession(id) {
+  const history = getHistory();
+  const s = history.find(h => h.id === id);
+  if(!s || !s.data) { msg('❌ Données introuvables'); return; }
+
+  // Merge session data into current localStorage
+  const current = JSON.parse(localStorage.getItem('colosse') || '{"i":{},"c":[],"e":[]}');
+  for(const k in s.data.i) {
+    current.i[k] = s.data.i[k];
+  }
+  localStorage.setItem('colosse', JSON.stringify(current));
+  msg('✅ Données chargées !');
+  setTimeout(() => location.reload(), 800);
 }
 
 // === TOAST ===
@@ -1070,22 +1583,119 @@ function msg(t) {
 }
 
 // === ACTIONS ===
-function resetAll() {
-  if(confirm('⚠️ Supprimer toutes les données ?')) {
+function resetWeek() {
+  if(confirm('🔄 Remettre les séries à zéro pour la nouvelle semaine ?\n\nL\'historique des séances validées sera conservé.')) {
     localStorage.removeItem('colosse');
     location.reload();
   }
 }
 
-function exportData() {
-  const d=localStorage.getItem('colosse');
-  if(!d) { msg('❌ Aucune donnée'); return; }
-  const b=new Blob([d], {type:'application/json'});
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(b);
-  a.download='colosse-'+new Date().toISOString().split('T')[0]+'.json';
-  a.click();
-  msg('📤 Données exportées !');
+function resetAll() {
+  if(confirm('⚠️ TOUT supprimer ?\n\nCela effacera la semaine en cours ET tout l\'historique.\n\nCette action est irréversible.')) {
+    if(confirm('Vraiment tout supprimer ? Dernier avertissement.')) {
+      localStorage.removeItem('colosse');
+      localStorage.removeItem('colosse_history');
+      location.reload();
+    }
+  }
+}
+
+function exportAllHistory() {
+  const history = getHistory();
+  const current = localStorage.getItem('colosse');
+  const exportData = {
+    _type: 'colosse_full_backup',
+    _date: new Date().toISOString(),
+    _version: 'Colosse v2',
+    _totalSessions: history.length,
+    current: current ? JSON.parse(current) : null,
+    history: history
+  };
+  const json = JSON.stringify(exportData, null, 2);
+  const fileName = 'Colosse-Backup-Complet-' + new Date().toISOString().split('T')[0] + '.json';
+  const blob = new Blob([json], {type:'application/json'});
+  const file = new File([blob], fileName, {type:'application/json'});
+
+  if(navigator.canShare && navigator.canShare({files:[file]})) {
+    navigator.share({ title: 'Backup Colosse complet', files: [file] })
+    .then(() => msg('✅ Tout sauvegardé !'))
+    .catch(() => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      msg('💾 Fichier téléchargé');
+    });
+  } else {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    msg('💾 Fichier téléchargé');
+  }
+}
+
+function importData() {
+  document.getElementById('importFile').click();
+}
+
+function handleImport(event) {
+  const file = event.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = JSON.parse(e.target.result);
+
+      // Full backup restore
+      if(data._type === 'colosse_full_backup') {
+        if(data.current) localStorage.setItem('colosse', JSON.stringify(data.current));
+        if(data.history) saveHistory(data.history);
+        msg('✅ Backup complet restauré ! (' + (data.history?.length||0) + ' séances)');
+        setTimeout(() => location.reload(), 1000);
+        return;
+      }
+
+      // Single session restore
+      if(data.day && data.data) {
+        const history = getHistory();
+        // Check if already exists
+        if(!history.find(h => h.id === data.id)) {
+          history.push(data);
+          saveHistory(history);
+        }
+        // Also load into current
+        const current = JSON.parse(localStorage.getItem('colosse') || '{"i":{},"c":[],"e":[]}');
+        for(const k in data.data.i) {
+          current.i[k] = data.data.i[k];
+        }
+        localStorage.setItem('colosse', JSON.stringify(current));
+        msg('✅ Séance restaurée !');
+        setTimeout(() => location.reload(), 1000);
+        return;
+      }
+
+      // Legacy format (old colosse backup)
+      if(data.i) {
+        delete data._savedAt;
+        delete data._version;
+        localStorage.setItem('colosse', JSON.stringify(data));
+        msg('✅ Données restaurées !');
+        setTimeout(() => location.reload(), 1000);
+        return;
+      }
+
+      msg('❌ Format non reconnu');
+    } catch(err) {
+      msg('❌ Erreur de lecture');
+    }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
 }
 
 // === INIT ===
@@ -1101,6 +1711,18 @@ document.querySelectorAll('.hdr').forEach(hdr => {
     hdr.appendChild(bar);
   }
 });
+
+// Add "End Session" buttons to each day (J1-J6)
+for(let j=1; j<=6; j++) {
+  const pg = document.getElementById('j'+j);
+  if(pg) {
+    const btn = document.createElement('button');
+    btn.className = 'end-session';
+    btn.innerHTML = '<span class="es-icon">🏆</span> Terminer la séance';
+    btn.onclick = function(){ endSession('j'+j); };
+    pg.appendChild(btn);
+  }
+}
 
 // Add video buttons to every exercise
 document.querySelectorAll('.bdg').forEach(bdg => {
