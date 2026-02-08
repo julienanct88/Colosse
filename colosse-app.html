@@ -1,20 +1,21 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <title>Colosse — Évolution & Suivi</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <title>Colosse — Coach PPL</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet"/>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-    body { background: #08080d; overflow-x: hidden; }
-    #root { min-height: 100vh; }
-    input, textarea, button { font-family: inherit; }
-    @keyframes slideUp { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+    *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    body{background:#08080d;overflow-x:hidden;font-family:'DM Sans',sans-serif}
+    #root{min-height:100vh}
+    input,textarea,button{font-family:inherit}
+    @keyframes slideUp{from{transform:translateY(100%);opacity:0}to{transform:translateY(0);opacity:1}}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+    ::-webkit-scrollbar{display:none}
   </style>
   <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
@@ -23,1100 +24,411 @@
 <body>
 <div id="root"></div>
 <script type="text/babel">
-const { useState, useEffect, useCallback, useRef } = React;
+const{useState,useEffect,useRef,useCallback}=React;
 
-// ─── WAKE LOCK (screen stays on) ────────────────────────────────
-function useWakeLock(enabled) {
-  const wakeLockRef = useRef(null);
-  useEffect(() => {
-    if (!enabled || !("wakeLock" in navigator)) return;
-    let active = true;
-    const request = async () => {
-      try {
-        wakeLockRef.current = await navigator.wakeLock.request("screen");
-        wakeLockRef.current.addEventListener("release", () => {
-          if (active) request();
-        });
-      } catch (e) {}
-    };
-    request();
-    const onVisibility = () => {
-      if (document.visibilityState === "visible" && active) request();
-    };
-    document.addEventListener("visibilitychange", onVisibility);
-    return () => {
-      active = false;
-      document.removeEventListener("visibilitychange", onVisibility);
-      if (wakeLockRef.current) {
-        wakeLockRef.current.release().catch(() => {});
-      }
-    };
-  }, [enabled]);
-}
+/* ═══ WAKE LOCK ═══ */
+function useWakeLock(on){const r=useRef(null);useEffect(()=>{if(!on||!("wakeLock"in navigator))return;let ok=true;const q=async()=>{try{r.current=await navigator.wakeLock.request("screen");r.current.addEventListener("release",()=>{if(ok)q()})}catch(e){}};q();const v=()=>{if(document.visibilityState==="visible"&&ok)q()};document.addEventListener("visibilitychange",v);return()=>{ok=false;document.removeEventListener("visibilitychange",v);if(r.current)r.current.release().catch(()=>{})};},[on]);}
 
-// ─── REST TIMER DEFAULTS ────────────────────────────────────────
-const REST_PRESETS = [60, 90, 120, 150, 180];
-
-// ─── PHASE DATA ─────────────────────────────────────────────────
-const phases = [
-  { week: 1, phase: "Réactivation", color: "#F59E0B", date: "29 jan" },
-  { week: 2, phase: "Réactivation", color: "#F59E0B", date: "5 fév" },
-  { week: 3, phase: "Réactivation", color: "#F59E0B", date: "12 fév" },
-  { week: 4, phase: "Hypertrophie", color: "#EF4444", date: "19 fév" },
-  { week: 5, phase: "Hypertrophie", color: "#EF4444", date: "26 fév" },
-  { week: 6, phase: "Hypertrophie", color: "#EF4444", date: "5 mars" },
-  { week: 7, phase: "Consolidation", color: "#8B5CF6", date: "12 mars" },
-  { week: 8, phase: "Consolidation", color: "#8B5CF6", date: "19 mars" },
-  { week: 9, phase: "Maturation", color: "#10B981", date: "26 mars" },
-  { week: 10, phase: "Maturation", color: "#10B981", date: "2 avr" },
-  { week: 11, phase: "Maturation", color: "#10B981", date: "9 avr" },
-  { week: 12, phase: "Résultat", color: "#3B82F6", date: "16 avr" },
+/* ═══ PROGRAMME VALIDÉ ═══ */
+const DAYS=[
+  {id:0,key:"pushA",name:"Push A",label:"Pecs focus",day:"Lundi",color:"#EF4444",icon:"🔴",exs:[
+    {id:"pa1",name:"Développé couché barre",tp:"barbell",sets:4,rLo:8,rHi:10},
+    {id:"pa2",name:"Développé incliné haltères",tp:"dumbbell",sets:4,rLo:10,rHi:12},
+    {id:"pa3",name:"Dips lestés",tp:"barbell",sets:3,rLo:8,rHi:10},
+    {id:"pa4",name:"Écartés poulie haute",tp:"cable",sets:3,rLo:12,rHi:15},
+    {id:"pa5",name:"Barre au front (skullcrusher)",tp:"barbell",sets:3,rLo:10,rHi:12},
+    {id:"pa6",name:"Extensions triceps poulie",tp:"cable",sets:3,rLo:12,rHi:15},
+  ]},
+  {id:1,key:"pullA",name:"Pull A",label:"Dos épaisseur",day:"Mardi",color:"#3B82F6",icon:"🔵",exs:[
+    {id:"la1",name:"Soulevé de terre",tp:"barbell",sets:4,rLo:5,rHi:8},
+    {id:"la2",name:"Rowing barre pronation",tp:"barbell",sets:4,rLo:8,rHi:10},
+    {id:"la3",name:"Rowing 1 bras haltère",tp:"dumbbell",sets:3,rLo:10,rHi:12},
+    {id:"la4",name:"Curl barre EZ",tp:"barbell",sets:3,rLo:10,rHi:12},
+    {id:"la5",name:"Curl marteau",tp:"dumbbell",sets:3,rLo:10,rHi:12},
+    {id:"la6",name:"Curl inversé EZ",tp:"barbell",sets:3,rLo:12,rHi:15},
+  ]},
+  {id:2,key:"legsA",name:"Legs A",label:"Quads focus",day:"Mercredi",color:"#10B981",icon:"🟢",exs:[
+    {id:"qa1",name:"Back squat",tp:"barbell",sets:4,rLo:6,rHi:8},
+    {id:"qa2",name:"Presse jambes",tp:"machine",sets:4,rLo:10,rHi:12},
+    {id:"qa3",name:"Leg extension",tp:"machine",sets:3,rLo:12,rHi:15},
+    {id:"qa4",name:"RDL (Romanian DL)",tp:"barbell",sets:3,rLo:10,rHi:12},
+    {id:"qa5",name:"Mollets debout",tp:"machine",sets:4,rLo:12,rHi:15},
+    {id:"qa6",name:"Crunch poulie haute",tp:"cable",sets:3,rLo:12,rHi:15},
+    {id:"qa7",name:"Relevés jambes suspendus",tp:"barbell",sets:3,rLo:10,rHi:12},
+  ]},
+  {id:3,key:"pushB",name:"Push B",label:"Épaules focus",day:"Jeudi",color:"#EF4444",icon:"🔴",exs:[
+    {id:"pb1",name:"Développé militaire barre",tp:"barbell",sets:4,rLo:8,rHi:10},
+    {id:"pb2",name:"Développé couché haltères",tp:"dumbbell",sets:4,rLo:10,rHi:12},
+    {id:"pb3",name:"Élévations latérales",tp:"dumbbell",sets:4,rLo:12,rHi:15},
+    {id:"pb4",name:"Push press",tp:"barbell",sets:3,rLo:6,rHi:8},
+    {id:"pb5",name:"Ext. triceps overhead",tp:"cable",sets:3,rLo:10,rHi:12},
+    {id:"pb6",name:"Kickbacks câble",tp:"cable",sets:3,rLo:12,rHi:15},
+  ]},
+  {id:4,key:"pullB",name:"Pull B",label:"Dos largeur",day:"Vendredi",color:"#3B82F6",icon:"🔵",exs:[
+    {id:"lb1",name:"Tractions lestées",tp:"barbell",sets:4,rLo:6,rHi:10},
+    {id:"lb2",name:"Tirage vertical large",tp:"cable",sets:4,rLo:10,rHi:12},
+    {id:"lb3",name:"Rowing T-bar",tp:"machine",sets:4,rLo:8,rHi:10},
+    {id:"lb4",name:"Curl incliné 45°",tp:"dumbbell",sets:3,rLo:10,rHi:12},
+    {id:"lb5",name:"Curl concentré",tp:"dumbbell",sets:3,rLo:10,rHi:12},
+    {id:"lb6",name:"Wrist curls",tp:"barbell",sets:3,rLo:15,rHi:20},
+  ]},
+  {id:5,key:"legsB",name:"Legs B",label:"Ischios/fessiers",day:"Samedi",color:"#10B981",icon:"🟢",exs:[
+    {id:"qb1",name:"Front squat",tp:"barbell",sets:4,rLo:8,rHi:10},
+    {id:"qb2",name:"Hip thrust barre",tp:"barbell",sets:4,rLo:10,rHi:12},
+    {id:"qb3",name:"Leg curl allongé",tp:"machine",sets:3,rLo:10,rHi:12},
+    {id:"qb4",name:"Split squat bulgare",tp:"dumbbell",sets:3,rLo:10,rHi:12},
+    {id:"qb5",name:"Mollets assis",tp:"machine",sets:4,rLo:15,rHi:20},
+    {id:"qb6",name:"Planche lestée",tp:"barbell",sets:3,rLo:1,rHi:1},
+    {id:"qb7",name:"Ab wheel rollout",tp:"barbell",sets:3,rLo:10,rHi:12},
+  ]},
 ];
 
-// ─── BICEPS PROJECTION ─────────────────────────────────────────
-const bicepsProjection = [
-  { contracte: 39, repos: 35 },
-  { contracte: 39.2, repos: 35.2 },
-  { contracte: 39.5, repos: 35.4 },
-  { contracte: 39.8, repos: 35.7 },
-  { contracte: 40.1, repos: 35.9 },
-  { contracte: 40.5, repos: 36.1 },
-  { contracte: 40.7, repos: 36.3 },
-  { contracte: 41, repos: 36.5 },
-  { contracte: 41.2, repos: 36.7 },
-  { contracte: 41.3, repos: 36.8 },
-  { contracte: 41.5, repos: 37 },
-  { contracte: 41.75, repos: 37.1 },
+const PHASES=[
+  {w:1,p:"Réactivation",c:"#F59E0B",d:"29 jan"},{w:2,p:"Réactivation",c:"#F59E0B",d:"5 fév"},
+  {w:3,p:"Réactivation",c:"#F59E0B",d:"12 fév"},{w:4,p:"Hypertrophie",c:"#EF4444",d:"19 fév"},
+  {w:5,p:"Hypertrophie",c:"#EF4444",d:"26 fév"},{w:6,p:"Hypertrophie",c:"#EF4444",d:"5 mars"},
+  {w:7,p:"Consolidation",c:"#8B5CF6",d:"12 mars"},{w:8,p:"Consolidation",c:"#8B5CF6",d:"19 mars"},
+  {w:9,p:"Maturation",c:"#10B981",d:"26 mars"},{w:10,p:"Maturation",c:"#10B981",d:"2 avr"},
+  {w:11,p:"Maturation",c:"#10B981",d:"9 avr"},{w:12,p:"Résultat",c:"#3B82F6",d:"16 avr"},
 ];
 
-// ─── DEFAULT EXERCISES ──────────────────────────────────────────
-const defaultExercises = [
-  { id: "curl_barre", name: "Curl barre EZ", icon: "🏋️", day: "Pull A", type: "barbell" },
-  { id: "curl_marteau", name: "Curl marteau haltères", icon: "🔨", day: "Pull A", type: "dumbbell" },
-  { id: "curl_incline", name: "Curl incliné 45°", icon: "💪", day: "Pull B", type: "dumbbell" },
-  { id: "curl_concentre", name: "Curl concentré", icon: "🎯", day: "Pull B", type: "dumbbell" },
-  { id: "reverse_curl", name: "Reverse curl barre EZ", icon: "🔗", day: "Pull B", type: "barbell" },
+const MEAS=[
+  {id:"poids",nm:"Poids corps",u:"kg",ic:"⚖️"},
+  {id:"bras_c",nm:"Bras contracté",u:"cm",ic:"💪"},
+  {id:"bras_r",nm:"Bras repos",u:"cm",ic:"💪"},
+  {id:"poitrine",nm:"Poitrine",u:"cm",ic:"🫁"},
+  {id:"taille",nm:"Taille",u:"cm",ic:"📏"},
+  {id:"cuisse",nm:"Cuisse",u:"cm",ic:"🦵"},
 ];
 
-// ─── DOUBLE PROGRESSION ALGORITHM ──────────────────────────────
-// Rep range: 10 → 12
-// All sets hit 12 reps → +2.5kg barbell / +1kg dumbbell, reset to 10 reps
-// Didn't hit target reps → same weight, +1 rep target (max 12)
-const REP_MIN = 10;
-const REP_MAX = 12;
-const BARBELL_INCREMENT = 2.5;
-const DUMBBELL_INCREMENT = 1;
+const INC={barbell:2.5,dumbbell:1,machine:2.5,cable:1.25};
+const REST_P=[60,90,120,150,180];
 
-function computeNextWeekObjective(exerciseDef, prevExData) {
-  if (!prevExData) return { weight: "", reps: "" };
-
-  const doneSets = prevExData.sets.filter(function(s) { return s.done && s.weight; });
-  if (doneSets.length === 0) return { weight: "", reps: "" };
-
-  // Best weight used this week
-  const bestWeight = Math.max.apply(null, doneSets.map(function(s) { return parseFloat(s.weight) || 0; }).concat([0]));
-  if (bestWeight === 0) return { weight: "", reps: "" };
-
-  // Check reps on sets at best weight
-  const setsAtBestWeight = doneSets.filter(function(s) { return (parseFloat(s.weight) || 0) === bestWeight; });
-  const minRepsAtWeight = Math.min.apply(null, setsAtBestWeight.map(function(s) { return parseInt(s.reps) || 0; }));
-  const allHitMax = minRepsAtWeight >= REP_MAX;
-
-  if (allHitMax) {
-    // All sets hit 12 reps → increase weight, reset reps to 10
-    var increment = exerciseDef.type === "barbell" ? BARBELL_INCREMENT : DUMBBELL_INCREMENT;
-    return {
-      weight: String(bestWeight + increment),
-      reps: String(REP_MIN)
-    };
-  } else {
-    // Didn't hit max → same weight, target = min reps achieved + 1 (capped at 12)
-    var targetReps = Math.min(minRepsAtWeight + 1, REP_MAX);
-    return {
-      weight: String(bestWeight),
-      reps: String(targetReps)
-    };
-  }
-}
-
-// ─── S1 ACTUAL RESULTS (semaine du 29 janvier) ─────────────────
-const S1_DATA = {
-  exercises: {
-    curl_barre: {
-      sets: [
-        { weight: "15", reps: "10", done: true },
-        { weight: "15", reps: "10", done: true },
-        { weight: "15", reps: "10", done: true },
-        { weight: "", reps: "", done: false },
-      ],
-      targetWeight: "",
-      targetReps: "",
-    },
-    curl_marteau: {
-      sets: [
-        { weight: "18", reps: "12", done: true },
-        { weight: "18", reps: "12", done: true },
-        { weight: "18", reps: "12", done: true },
-        { weight: "", reps: "", done: false },
-      ],
-      targetWeight: "",
-      targetReps: "",
-    },
-    curl_incline: {
-      sets: [
-        { weight: "12", reps: "10", done: true },
-        { weight: "12", reps: "10", done: true },
-        { weight: "12", reps: "10", done: true },
-        { weight: "", reps: "", done: false },
-      ],
-      targetWeight: "",
-      targetReps: "",
-    },
-    curl_concentre: {
-      sets: [
-        { weight: "17.5", reps: "12", done: true },
-        { weight: "17.5", reps: "12", done: true },
-        { weight: "", reps: "", done: false },
-        { weight: "", reps: "", done: false },
-      ],
-      targetWeight: "",
-      targetReps: "",
-    },
-    reverse_curl: {
-      sets: [
-        { weight: "12.5", reps: "12", done: true },
-        { weight: "12.5", reps: "12", done: true },
-        { weight: "12.5", reps: "12", done: true },
-        { weight: "", reps: "", done: false },
-      ],
-      targetWeight: "",
-      targetReps: "",
-    },
-  },
-  bicepsContracte: "39",
-  bicepsRepos: "35",
-  notes: "S1 — Réactivation. Pull A + Pull B complétés. Bonnes sensations curl marteau 18kg.",
-  bodyweight: "95",
+/* ═══ S1 DATA (mapped to new program) ═══ */
+const S1={
+  pa1:[[70,6],[70,5],[60,5],[40,10]], // DC barre from old J4
+  la1:[[45,8],[45,8],[45,10],[45,4]], // SDT from old J2
+  la2:[[45,6],[46,6],[45,8],[45,6]], // Rowing pronation
+  la3:[[20,10],[20,10],[20,10]], // Rowing 1 bras
+  la4:[[15,10],[15,10],[15,10]], // Curl EZ
+  la5:[[18,12],[18,12],[18,12]], // Curl marteau
+  la6:[[12.5,12],[12.5,12],[12.5,12]], // Curl inversé (from reverse curl)
+  qa1:[[120,5],[120,5],[120,5],[80,10]], // Back squat
+  qa2:[[180,12],[180,12],[180,12],[180,5]], // Presse
+  qa3:[[35,12],[35,12],[35,12]], // Leg ext
+  qa4:[[35,8],[35,8],[36,8]], // RDL
+  qa5:[[180,15],[180,15],[180,15],[180,15]], // Mollets debout
+  pb4:[[20,12],[20,12],[20,10]], // Push press
+  pb5:[[17.5,12],[17.5,12],[17.5,10]], // Ext overhead
+  lb1:[[0,6],[0,6],[0,6],[0,6]], // Tractions (PDC)
+  lb2:[[100,10],[100,8],[100,6],[90,10]], // Tirage vertical
+  lb3:[[80,10],[80,8],[40,10],[40,10]], // T-bar
+  lb4:[[12,10],[12,10],[12,10]], // Curl incliné
+  lb5:[[17.5,12],[17.5,12]], // Curl concentré
+  qb1:[[30,5],[30,5],[20,6],[20,10]], // Front squat
+  qb2:[[80,12],[80,12],[80,12]], // Hip thrust (from old data)
+  qb3:[[35,12],[35,10],[35,8]], // Leg curl
+  qb4:[[12,10],[12,10],[12,8]], // Split squat
+  qb5:[[110,20],[110,20],[110,20],[90,20]], // Mollets assis
 };
+const S1M={poids:"95",bras_c:"39",bras_r:"35",poitrine:"",taille:"",cuisse:""};
 
-// ─── STORAGE (localStorage for GitHub Pages) ────────────────────
-const STORAGE_KEY = "colosse-tracker-v3";
+/* ═══ STORAGE ═══ */
+const SK="colosse-coach-v2";
+function load(){try{var r=localStorage.getItem(SK);return r?JSON.parse(r):null}catch(e){return null}}
+function save(d){try{localStorage.setItem(SK,JSON.stringify(d))}catch(e){}}
 
-function loadData() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch (e) {
-    return null;
-  }
+function mkS(n){var a=[];for(var i=0;i<n;i++)a.push({w:"",r:"",d:false});return a}
+
+function emptyW(){
+  var ds={};
+  DAYS.forEach(function(day){var o={};day.exs.forEach(function(ex){o[ex.id]={s:mkS(ex.sets),tw:"",tr:""}});ds[day.key]=o});
+  var ms={};MEAS.forEach(function(m){ms[m.id]=""});
+  return{ds:ds,ms:ms,nt:""};
 }
 
-function saveData(data) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  } catch (e) {
-    console.error("Save failed:", e);
-  }
-}
-
-function getEmptyWeekData() {
-  const exercises = {};
-  defaultExercises.forEach((ex) => {
-    exercises[ex.id] = {
-      sets: [
-        { weight: "", reps: "", done: false },
-        { weight: "", reps: "", done: false },
-        { weight: "", reps: "", done: false },
-        { weight: "", reps: "", done: false },
-      ],
-      targetWeight: "",
-      targetReps: "",
-    };
+function buildS1(){
+  var w=emptyW();
+  Object.keys(S1).forEach(function(eid){
+    DAYS.forEach(function(day){
+      if(!w.ds[day.key][eid])return;
+      var raw=S1[eid],sets=[];
+      raw.forEach(function(s){sets.push({w:s[0]>0?String(s[0]):"",r:String(s[1]),d:true})});
+      var tgt=4;day.exs.forEach(function(e){if(e.id===eid)tgt=e.sets});
+      while(sets.length<tgt)sets.push({w:"",r:"",d:false});
+      w.ds[day.key][eid]={s:sets,tw:"",tr:""};
+    });
   });
-  return {
-    exercises,
-    bicepsContracte: "",
-    bicepsRepos: "",
-    notes: "",
-    bodyweight: "",
-  };
+  Object.keys(S1M).forEach(function(k){w.ms[k]=S1M[k]});
+  w.nt="S1 Réactivation — Reprise en douceur, mémoire musculaire active.";
+  return w;
 }
 
-function getDefaultState() {
-  const weekData = {};
-  for (let i = 1; i <= 12; i++) {
-    weekData[i] = getEmptyWeekData();
-  }
-  // Pre-fill S1 with actual results
-  weekData[1] = S1_DATA;
-  return { weekData, currentWeek: 2 };
+function init(){var wk={};for(var i=1;i<=12;i++)wk[i]=emptyW();wk[1]=buildS1();return{wk:wk,cw:2}}
+
+/* ═══ PROGRESSION ═══ */
+function compObj(exDef,prev){
+  if(!prev)return null;
+  var dn=prev.s.filter(function(s){return s.d&&s.w&&parseFloat(s.w)>0});
+  if(dn.length===0)return null;
+  var best=0;dn.forEach(function(s){var v=parseFloat(s.w)||0;if(v>best)best=v});
+  if(best===0)return null;
+  var atB=dn.filter(function(s){return(parseFloat(s.w)||0)===best});
+  var minR=9999;atB.forEach(function(s){var v=parseInt(s.r)||0;if(v<minR)minR=v});
+  var inc=INC[exDef.tp]||2.5;
+  if(minR>=exDef.rHi)return{w:String(best+inc),r:String(exDef.rLo)};
+  return{w:String(best),r:String(Math.min(minR+1,exDef.rHi))};
 }
 
-// ─── MICRO COMPONENTS ───────────────────────────────────────────
-function Pill({ children, color, active, onClick }) {
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        padding: "7px 14px",
-        borderRadius: 20,
-        border: active ? `2px solid ${color}` : "2px solid rgba(255,255,255,0.08)",
-        background: active ? `${color}18` : "rgba(255,255,255,0.03)",
-        color: active ? color : "rgba(255,255,255,0.45)",
-        fontSize: 12,
-        fontWeight: 600,
-        cursor: "pointer",
-        transition: "all 0.2s",
-        fontFamily: "inherit",
-        letterSpacing: 0.3,
-      }}
-    >
-      {children}
-    </button>
-  );
+/* ═══ COMPONENTS ═══ */
+function MBar({v,mx,c}){var p=mx>0?Math.min(v/mx*100,100):0;return<div style={{height:4,background:"rgba(255,255,255,.06)",borderRadius:2,flex:1}}><div style={{height:"100%",width:p+"%",background:c,borderRadius:2,transition:"width .4s"}}/></div>}
+
+function Inp({value,onChange,ph,width}){
+  return<input type="text" inputMode="decimal" value={value} onChange={function(e){onChange(e.target.value)}} placeholder={ph||""} style={{width:width||54,padding:"7px 4px",borderRadius:8,border:"1px solid rgba(255,255,255,.1)",background:"rgba(255,255,255,.04)",color:"#fff",fontSize:14,fontFamily:"'JetBrains Mono',monospace",fontWeight:600,textAlign:"center",outline:"none"}} onFocus={function(e){e.target.style.borderColor="rgba(255,255,255,.3)"}} onBlur={function(e){e.target.style.borderColor="rgba(255,255,255,.1)"}}/>;
 }
 
-function StatBox({ label, value, sub, color, small }) {
-  return (
-    <div
-      style={{
-        flex: small ? "0 0 auto" : 1,
-        padding: small ? "10px 14px" : "14px 18px",
-        borderRadius: 12,
-        background: "rgba(255,255,255,0.03)",
-        border: "1px solid rgba(255,255,255,0.06)",
-      }}
-    >
-      <div style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", fontWeight: 600, textTransform: "uppercase", letterSpacing: 1 }}>
-        {label}
-      </div>
-      <div style={{ fontSize: small ? 18 : 22, fontWeight: 700, marginTop: 4, fontFamily: "'JetBrains Mono', monospace", color: color || "#fff" }}>
-        {value}
-      </div>
-      {sub && <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", marginTop: 2 }}>{sub}</div>}
-    </div>
-  );
+function Chk({on,toggle,c}){
+  return<button onClick={toggle} style={{width:26,height:26,borderRadius:"50%",border:"2px solid "+(on?c:"rgba(255,255,255,.12)"),background:on?c:"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0,flexShrink:0}}>
+    {on&&<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6L5 9L10 3" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+  </button>;
 }
 
-function Delta({ current, previous, unit, better }) {
-  unit = unit || "kg";
-  better = better || "higher";
-  if (!current || !previous) return null;
-  const diff = parseFloat(current) - parseFloat(previous);
-  if (isNaN(diff) || diff === 0) return null;
-  const isGood = better === "higher" ? diff > 0 : diff < 0;
-  return (
-    <span style={{ fontSize: 11, fontWeight: 700, color: isGood ? "#10B981" : "#EF4444", marginLeft: 6 }}>
-      {diff > 0 ? "▲" : "▼"} {Math.abs(diff).toFixed(1)}{unit}
-    </span>
-  );
-}
-
-function MiniBar({ value, max, color }) {
-  const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0;
-  return (
-    <div style={{ height: 4, background: "rgba(255,255,255,0.06)", borderRadius: 2, flex: 1 }}>
-      <div style={{ height: "100%", width: pct + "%", background: color, borderRadius: 2, transition: "width 0.4s ease" }} />
-    </div>
-  );
-}
-
-function InputField({ value, onChange, placeholder, width, align }) {
-  width = width || 60;
-  align = align || "center";
-  return (
-    <input
-      type="text"
-      inputMode="decimal"
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder={placeholder}
-      style={{
-        width: width,
-        padding: "8px 8px",
-        borderRadius: 8,
-        border: "1px solid rgba(255,255,255,0.1)",
-        background: "rgba(255,255,255,0.04)",
-        color: "#fff",
-        fontSize: 14,
-        fontFamily: "'JetBrains Mono', monospace",
-        fontWeight: 600,
-        textAlign: align,
-        outline: "none",
-        transition: "border 0.2s",
-      }}
-      onFocus={(e) => { e.target.style.borderColor = "rgba(255,255,255,0.3)"; }}
-      onBlur={(e) => { e.target.style.borderColor = "rgba(255,255,255,0.1)"; }}
-    />
-  );
-}
-
-function CheckDot({ checked, onToggle, color }) {
-  return (
-    <button
-      onClick={onToggle}
-      style={{
-        width: 24,
-        height: 24,
-        borderRadius: "50%",
-        border: "2px solid " + (checked ? color : "rgba(255,255,255,0.15)"),
-        background: checked ? color : "transparent",
-        cursor: "pointer",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        transition: "all 0.2s",
-        padding: 0,
-        flexShrink: 0,
-      }}
-    >
-      {checked && (
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-          <path d="M2 6L5 9L10 3" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      )}
-    </button>
-  );
-}
-
-// ─── REST TIMER ─────────────────────────────────────────────────
-function RestTimer({ seconds, color, onDone, onCancel, onDurationChange }) {
-  const [remaining, setRemaining] = useState(seconds);
-  const [paused, setPaused] = useState(false);
-  const total = useRef(seconds);
-  const audioCtx = useRef(null);
-
-  useEffect(() => {
-    setRemaining(seconds);
-    total.current = seconds;
-  }, [seconds]);
-
-  useEffect(() => {
-    if (paused) return;
-    if (remaining <= 0) {
-      try {
-        if (!audioCtx.current) audioCtx.current = new (window.AudioContext || window.webkitAudioContext)();
-        const ctx = audioCtx.current;
-        const playBeep = (delay) => {
-          const osc = ctx.createOscillator();
-          const gain = ctx.createGain();
-          osc.connect(gain);
-          gain.connect(ctx.destination);
-          osc.frequency.value = 880;
-          osc.type = "sine";
-          gain.gain.value = 0.3;
-          osc.start(ctx.currentTime + delay);
-          osc.stop(ctx.currentTime + delay + 0.12);
-        };
-        playBeep(0);
-        playBeep(0.2);
-        playBeep(0.4);
-      } catch (e) {}
-      try { navigator.vibrate && navigator.vibrate([200, 100, 200, 100, 200]); } catch (e) {}
-      onDone();
-      return;
+/* ═══ TIMER ═══ */
+function Timer({sec,c,onEnd,onSkip,onDC}){
+  const[rem,setRem]=useState(sec);
+  const[pau,setPau]=useState(false);
+  const tot=useRef(sec);
+  const au=useRef(null);
+  useEffect(()=>{setRem(sec);tot.current=sec},[sec]);
+  const cbEnd=useCallback(onEnd,[]);
+  useEffect(()=>{
+    if(pau)return;
+    if(rem<=0){
+      try{if(!au.current)au.current=new(window.AudioContext||window.webkitAudioContext)();var x=au.current;[0,.2,.4].forEach(function(d){var o=x.createOscillator(),g=x.createGain();o.connect(g);g.connect(x.destination);o.frequency.value=880;g.gain.value=.3;o.start(x.currentTime+d);o.stop(x.currentTime+d+.12)})}catch(e){}
+      try{navigator.vibrate&&navigator.vibrate([200,100,200])}catch(e){}
+      cbEnd();return;
     }
-    const t = setTimeout(() => setRemaining((r) => r - 1), 1000);
-    return () => clearTimeout(t);
-  }, [remaining, paused, onDone]);
-
-  const pct = total.current > 0 ? remaining / total.current : 0;
-  const radius = 54;
-  const circumference = 2 * Math.PI * radius;
-  const offset = circumference * (1 - pct);
-  const mins = Math.floor(remaining / 60);
-  const secs = remaining % 60;
-  const isLow = remaining <= 5 && remaining > 0;
-
-  function formatPreset(p) {
-    const m = Math.floor(p / 60);
-    const s = p % 60;
-    return m + ":" + (s < 10 ? "0" + s : s);
-  }
-
-  return (
-    <div
-      style={{
-        position: "fixed",
-        bottom: 0,
-        left: 0,
-        right: 0,
-        zIndex: 9999,
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        padding: "20px 16px 28px",
-        background: "linear-gradient(to top, rgba(8,8,13,0.98) 0%, rgba(8,8,13,0.92) 100%)",
-        backdropFilter: "blur(20px)",
-        WebkitBackdropFilter: "blur(20px)",
-        borderTop: "1px solid " + color + "30",
-        animation: "slideUp 0.3s ease-out",
-      }}
-    >
-      <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 2, color: "rgba(255,255,255,0.35)", marginBottom: 14 }}>
-        ⏱ Temps de repos
-      </div>
-
-      <div style={{ position: "relative", width: 130, height: 130, marginBottom: 16 }}>
-        <svg width="130" height="130" viewBox="0 0 130 130" style={{ transform: "rotate(-90deg)" }}>
-          <circle cx="65" cy="65" r={radius} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="6" />
-          <circle
-            cx="65" cy="65" r={radius} fill="none"
-            stroke={isLow ? "#EF4444" : color}
-            strokeWidth="6"
-            strokeLinecap="round"
-            strokeDasharray={circumference}
-            strokeDashoffset={offset}
-            style={{ transition: "stroke-dashoffset 1s linear, stroke 0.3s" }}
-          />
-        </svg>
-        <div style={{
-          position: "absolute", top: 0, left: 0, right: 0, bottom: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-          animation: isLow ? "pulse 0.5s ease-in-out infinite" : "none",
-        }}>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 36, fontWeight: 700, color: isLow ? "#EF4444" : "#fff", letterSpacing: -1 }}>
-            {mins}:{secs.toString().padStart(2, "0")}
-          </div>
-        </div>
-      </div>
-
-      <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
-        {REST_PRESETS.map((p) => (
-          <button
-            key={p}
-            onClick={() => { setRemaining(p); total.current = p; if (onDurationChange) onDurationChange(p); }}
-            style={{
-              padding: "6px 10px",
-              borderRadius: 8,
-              border: total.current === p ? "1px solid " + color + "60" : "1px solid rgba(255,255,255,0.08)",
-              background: total.current === p ? color + "15" : "rgba(255,255,255,0.03)",
-              color: total.current === p ? color : "rgba(255,255,255,0.4)",
-              fontSize: 12,
-              fontWeight: 600,
-              fontFamily: "'JetBrains Mono', monospace",
-              cursor: "pointer",
-            }}
-          >
-            {formatPreset(p)}
-          </button>
-        ))}
-      </div>
-
-      <div style={{ display: "flex", gap: 10 }}>
-        <button
-          onClick={() => setPaused((p) => !p)}
-          style={{
-            padding: "10px 24px",
-            borderRadius: 10,
-            border: "1px solid rgba(255,255,255,0.1)",
-            background: "rgba(255,255,255,0.05)",
-            color: "#fff",
-            fontSize: 13,
-            fontWeight: 600,
-            cursor: "pointer",
-            fontFamily: "inherit",
-          }}
-        >
-          {paused ? "▶ Reprendre" : "⏸ Pause"}
-        </button>
-        <button
-          onClick={onCancel}
-          style={{
-            padding: "10px 24px",
-            borderRadius: 10,
-            border: "1px solid rgba(255,255,255,0.06)",
-            background: "rgba(255,255,255,0.02)",
-            color: "rgba(255,255,255,0.4)",
-            fontSize: 13,
-            fontWeight: 600,
-            cursor: "pointer",
-            fontFamily: "inherit",
-          }}
-        >
-          ✕ Passer
-        </button>
-      </div>
+    var t=setTimeout(function(){setRem(function(r){return r-1})},1000);
+    return function(){clearTimeout(t)};
+  },[rem,pau,cbEnd]);
+  var pct=tot.current>0?rem/tot.current:0,R=52,ci=2*Math.PI*R,of=ci*(1-pct);
+  var m=Math.floor(rem/60),s=rem%60,lo=rem<=5&&rem>0;
+  return<div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:9999,display:"flex",flexDirection:"column",alignItems:"center",padding:"16px 16px 24px",background:"linear-gradient(to top,rgba(8,8,13,.98),rgba(8,8,13,.9))",backdropFilter:"blur(20px)",borderTop:"1px solid "+c+"30",animation:"slideUp .3s ease-out"}}>
+    <div style={{fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:2,color:"rgba(255,255,255,.3)",marginBottom:10}}>⏱ REPOS</div>
+    <div style={{position:"relative",width:115,height:115,marginBottom:12}}>
+      <svg width="115" height="115" viewBox="0 0 120 120" style={{transform:"rotate(-90deg)"}}><circle cx="60" cy="60" r={R} fill="none" stroke="rgba(255,255,255,.06)" strokeWidth="5"/><circle cx="60" cy="60" r={R} fill="none" stroke={lo?"#EF4444":c} strokeWidth="5" strokeLinecap="round" strokeDasharray={ci} strokeDashoffset={of} style={{transition:"stroke-dashoffset 1s linear"}}/></svg>
+      <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",animation:lo?"pulse .5s infinite":"none"}}><span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:30,fontWeight:700,color:lo?"#EF4444":"#fff"}}>{m}:{s.toString().padStart(2,"0")}</span></div>
     </div>
-  );
+    <div style={{display:"flex",gap:4,marginBottom:10}}>{REST_P.map(function(p){return<button key={p} onClick={function(){setRem(p);tot.current=p;if(onDC)onDC(p)}} style={{padding:"4px 8px",borderRadius:6,border:tot.current===p?"1px solid "+c+"60":"1px solid rgba(255,255,255,.06)",background:tot.current===p?c+"15":"transparent",color:tot.current===p?c:"rgba(255,255,255,.3)",fontSize:10,fontWeight:600,fontFamily:"'JetBrains Mono',monospace",cursor:"pointer"}}>{Math.floor(p/60)+":"+(p%60).toString().padStart(2,"0")}</button>})}</div>
+    <div style={{display:"flex",gap:8}}>
+      <button onClick={function(){setPau(function(p){return!p})}} style={{padding:"8px 20px",borderRadius:10,border:"1px solid rgba(255,255,255,.1)",background:"rgba(255,255,255,.05)",color:"#fff",fontSize:12,fontWeight:600,cursor:"pointer"}}>{pau?"▶":"⏸"} {pau?"Go":"Pause"}</button>
+      <button onClick={onSkip} style={{padding:"8px 20px",borderRadius:10,border:"1px solid rgba(255,255,255,.05)",background:"rgba(255,255,255,.02)",color:"rgba(255,255,255,.3)",fontSize:12,fontWeight:600,cursor:"pointer"}}>Passer ✕</button>
+    </div>
+  </div>;
 }
 
-// ─── EXERCISE CARD ──────────────────────────────────────────────
-function ExerciseCard({ exercise, data, prevData, color, onChange, onSetDone, autoObjective }) {
-  const prevBestWeight = prevData
-    ? Math.max.apply(null, prevData.sets.filter((s) => s.weight && s.done).map((s) => parseFloat(s.weight) || 0).concat([0]))
-    : 0;
-  const prevBestReps = prevData
-    ? (() => { const doneSets = prevData.sets.filter((s) => s.done && (parseFloat(s.weight) || 0) === prevBestWeight); return doneSets.length > 0 ? Math.min.apply(null, doneSets.map((s) => parseInt(s.reps) || 0)) : 0; })()
-    : 0;
-  const setsCompleted = data.sets.filter((s) => s.done).length;
+/* ═══ EXERCISE CARD ═══ */
+function ExCard({ex,data,prev,color,upd,onDone}){
+  var ao=prev?compObj(ex,prev):null;
+  var dW=data.tw||(ao?ao.w:""),dR=data.tr||(ao?ao.r:"");
+  var tW=parseFloat(dW)||0,tR=parseInt(dR)||0;
+  var isA=!data.tw&&!data.tr&&ao&&ao.w;
+  var dn=data.s.filter(function(s){return s.d}),dc=dn.length,tc=data.s.length;
+  var allH=tW>0&&tR>0&&dc>=Math.max(tc-1,1)&&dn.every(function(s){return(parseFloat(s.w)||0)>=tW&&(parseInt(s.r)||0)>=tR});
+  var inc=INC[ex.tp]||2.5;
+  var pB=0,pBR=0;
+  if(prev){prev.s.filter(function(s){return s.d&&s.w&&parseFloat(s.w)>0}).forEach(function(s){var w=parseFloat(s.w)||0;if(w>pB)pB=w});if(pB>0){var aW=prev.s.filter(function(s){return s.d&&(parseFloat(s.w)||0)===pB});pBR=999;aW.forEach(function(s){var r=parseInt(s.r)||0;if(r<pBR)pBR=r});if(pBR===999)pBR=0}}
 
-  // Use auto-computed objective if user hasn't overridden
-  const displayW = data.targetWeight || (autoObjective ? autoObjective.weight : "");
-  const displayR = data.targetReps || (autoObjective ? autoObjective.reps : "");
-  const targetW = parseFloat(displayW) || 0;
-  const targetR = parseInt(displayR) || 0;
-  const isAutoTarget = !data.targetWeight && !data.targetReps && autoObjective && autoObjective.weight;
+  return<div style={{borderRadius:14,background:"rgba(255,255,255,.025)",border:"1px solid rgba(255,255,255,.06)",overflow:"hidden",marginBottom:10}}>
+    {/* BANNER */}
+    <div style={{padding:"12px 14px",background:allH?"rgba(16,185,129,.1)":color+"08",borderBottom:"1px solid "+(allH?"rgba(16,185,129,.2)":color+"15"),display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,flexWrap:"wrap"}}>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontSize:14,fontWeight:700,color:"#fff"}}>{ex.name}</div>
+        <div style={{fontSize:10,color:"rgba(255,255,255,.3)",marginTop:2}}>
+          {ex.sets}×{ex.rLo===ex.rHi?ex.rLo:(ex.rLo+"-"+ex.rHi)} reps · {ex.tp}
+          {pB>0&&<span style={{marginLeft:6}}>| Préc: {pB}kg×{pBR}</span>}
+        </div>
+      </div>
+      <div style={{display:"flex",alignItems:"baseline",gap:3,flexShrink:0}}>
+        {tW>0?<React.Fragment>
+          <span style={{fontSize:9,fontWeight:700,color:allH?"#10B981":color,letterSpacing:1,marginRight:3}}>{allH?"✓ FAIT":"🎯 OBJ"}</span>
+          <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:22,fontWeight:800,color:allH?"#10B981":"#fff"}}>{dW}</span>
+          <span style={{fontSize:12,color:"rgba(255,255,255,.3)"}}>kg</span>
+          <span style={{fontSize:14,color:"rgba(255,255,255,.15)",margin:"0 2px"}}>×</span>
+          <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:22,fontWeight:800,color:allH?"#10B981":"#fff"}}>{dR}</span>
+        </React.Fragment>:<span style={{fontSize:11,color:"rgba(255,255,255,.2)"}}>Première séance</span>}
+      </div>
+    </div>
+    {isA&&<div style={{padding:"4px 14px",fontSize:9,color:"rgba(255,255,255,.2)"}}>⚡ Objectif auto-calculé{pB>0&&tW>pB&&<span style={{color:"#10B981",fontWeight:700}}> (+{(tW-pB).toFixed(1)}kg vs préc.)</span>}{pB>0&&tW===pB&&tR>pBR&&<span style={{color:color,fontWeight:700}}> (+{tR-pBR} rep vs préc.)</span>}</div>}
+    {/* PROGRESS */}
+    <div style={{padding:"6px 14px 2px",display:"flex",alignItems:"center",gap:6}}>
+      <MBar v={dc} mx={tc} c={allH?"#10B981":color}/><span style={{fontSize:9,color:"rgba(255,255,255,.3)",fontWeight:600}}>{dc}/{tc}</span>
+    </div>
+    {/* SETS */}
+    <div style={{padding:"8px 14px 14px"}}>
+      {data.s.map(function(set,i){
+        var w=parseFloat(set.w)||0,r=parseInt(set.r)||0;
+        var hit=tW>0&&tR>0&&w>=tW&&r>=tR&&set.d;
+        return<div key={i} style={{display:"flex",alignItems:"center",gap:6,marginBottom:5,opacity:set.d?1:.6}}>
+          <span style={{fontSize:10,color:"rgba(255,255,255,.2)",fontWeight:600,width:18,textAlign:"center"}}>{i+1}</span>
+          <Chk on={set.d} toggle={function(){upd("s_"+i+"_d",!set.d);if(!set.d)onDone()}} c={hit?"#10B981":color}/>
+          <Inp value={set.w} onChange={function(v){upd("s_"+i+"_w",v)}} ph={tW>0?String(tW):"kg"} width={56}/>
+          <span style={{fontSize:11,color:"rgba(255,255,255,.15)"}}>kg</span>
+          <span style={{fontSize:14,color:"rgba(255,255,255,.1)"}}>×</span>
+          <Inp value={set.r} onChange={function(v){upd("s_"+i+"_r",v)}} ph={tR>0?String(tR):""} width={42}/>
+          {set.d&&hit&&<span style={{fontSize:12,color:"#10B981",fontWeight:700}}>✓</span>}
+          {set.d&&w>0&&!hit&&tW>0&&<span style={{fontSize:9,color:"rgba(255,255,255,.18)"}}>{w<tW?"↗ "+((tW-w).toFixed(1))+"kg":r+"/"+tR+" reps"}</span>}
+        </div>
+      })}
+      {allH&&<div style={{marginTop:8,padding:"8px 12px",borderRadius:8,background:"rgba(16,185,129,.08)",border:"1px solid rgba(16,185,129,.12)",fontSize:11,color:"#10B981",fontWeight:600}}>🚀 Semaine prochaine → {(tW+inc).toFixed(1)}kg × {ex.rLo} reps</div>}
+    </div>
+  </div>;
+}
 
-  // Progression status
-  const allSetsHitTarget = targetW > 0 && targetR > 0 && setsCompleted >= 3 &&
-    data.sets.filter((s) => s.done).every((s) => (parseFloat(s.weight) || 0) >= targetW && (parseInt(s.reps) || 0) >= targetR);
-  const weightIncrement = exercise.type === "barbell" ? BARBELL_INCREMENT : DUMBBELL_INCREMENT;
+/* ═══ MAIN APP ═══ */
+function App(){
+  const[st,setSt]=useState(null);
+  const[wk,setWk]=useState(1);
+  const[dayI,setDayI]=useState(0);
+  const[sav,setSav]=useState(false);
+  const[tmr,setTmr]=useState(false);
+  const[rd,setRd]=useState(90);
+  useWakeLock(true);
 
-  return (
-    <div style={{ borderRadius: 16, background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.06)", overflow: "hidden", transition: "all 0.3s" }}>
+  // Auto-detect today
+  useEffect(function(){
+    var s=load();
+    if(s&&s.wk){setSt(s);setWk((s.cw||2)-1)}
+    else{var d=init();setSt(d);setWk(1)}
+    // Set today's day
+    var dow=new Date().getDay(); // 0=Sun,1=Mon...6=Sat
+    if(dow>=1&&dow<=6)setDayI(dow-1); // Mon=0...Sat=5
+    else setDayI(0); // Dimanche → montre lundi
+  },[]);
 
-      {/* ── OBJECTIVE BANNER (big, first thing you see) ── */}
-      <div style={{
-        padding: "12px 18px",
-        background: allSetsHitTarget ? "rgba(16,185,129,0.12)" : "linear-gradient(135deg, " + color + "12, " + color + "06)",
-        borderBottom: "1px solid " + (allSetsHitTarget ? "rgba(16,185,129,0.25)" : color + "20"),
-        display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8,
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ fontSize: 20 }}>{exercise.icon}</span>
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>
-              {exercise.name}
-              {exercise.day && <span style={{ fontSize: 9, fontWeight: 600, color: "rgba(255,255,255,0.3)", marginLeft: 6, padding: "2px 5px", borderRadius: 4, background: "rgba(255,255,255,0.06)" }}>{exercise.day}</span>}
+  useEffect(function(){
+    if(!st)return;
+    var t=setTimeout(function(){setSav(true);save(st);setTimeout(function(){setSav(false)},500)},500);
+    return function(){clearTimeout(t)};
+  },[st]);
+
+  if(!st)return<div style={{minHeight:"100vh",background:"#08080d",display:"flex",alignItems:"center",justifyContent:"center",color:"rgba(255,255,255,.4)"}}>Chargement...</div>;
+
+  var wN=wk+1,ph=PHASES[wk],day=DAYS[dayI],wd=st.wk[wN],pw=wN>1?st.wk[wN-1]:null;
+  var dData=wd.ds[day.key],pDData=pw?pw.ds[day.key]:null;
+
+  function upEx(eid,f,v){
+    setSt(function(p){
+      var n=JSON.parse(JSON.stringify(p));
+      var ex=n.wk[wN].ds[day.key][eid];
+      if(f==="tw"||f==="tr"){ex[f]=v}
+      else if(f.indexOf("s_")===0){var ps=f.split("_");ex.s[parseInt(ps[1])][ps[2]]=v}
+      return n;
+    });
+  }
+  function upM(k,v){setSt(function(p){var n=JSON.parse(JSON.stringify(p));n.wk[wN].ms[k]=v;return n})}
+  function upN(v){setSt(function(p){var n=JSON.parse(JSON.stringify(p));n.wk[wN].nt=v;return n})}
+
+  // Stats
+  var dDone=0,dTot=0;
+  day.exs.forEach(function(ex){var d=dData[ex.id];if(d){dTot+=d.s.length;dDone+=d.s.filter(function(s){return s.d}).length}});
+  var isToday=(function(){var dow=new Date().getDay();return dow>=1&&dow<=6&&dayI===dow-1})();
+
+  return<div style={{minHeight:"100vh",background:"#08080d",color:"#fff",fontFamily:"'DM Sans',sans-serif",padding:"14px 12px 40px",maxWidth:500,margin:"0 auto"}}>
+    {/* HEADER */}
+    <div style={{textAlign:"center",marginBottom:12,position:"relative"}}>
+      <div style={{fontSize:9,fontWeight:700,letterSpacing:2,textTransform:"uppercase",color:"rgba(255,255,255,.25)",marginBottom:4}}>COLOSSE · PPL · 4000 kcal/j</div>
+      {sav&&<div style={{position:"absolute",top:0,right:4,fontSize:9,color:"#10B981",fontWeight:600}}>● Sauvé</div>}
+    </div>
+
+    {/* WEEK PILLS */}
+    <div style={{display:"flex",gap:3,justifyContent:"center",marginBottom:10,flexWrap:"wrap"}}>
+      {PHASES.map(function(p,i){return<button key={i} onClick={function(){setWk(i)}} style={{width:32,height:32,borderRadius:8,border:wk===i?"2px solid "+p.c:"1px solid rgba(255,255,255,.05)",background:wk===i?p.c+"20":"transparent",color:wk===i?"#fff":"rgba(255,255,255,.25)",fontSize:10,fontWeight:700,fontFamily:"'JetBrains Mono',monospace",cursor:"pointer"}}>S{p.w}</button>})}
+    </div>
+
+    {/* PHASE */}
+    <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginBottom:12}}>
+      <span style={{padding:"3px 10px",borderRadius:6,background:ph.c,fontSize:10,fontWeight:700}}>SEM {wN}</span>
+      <span style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,.4)"}}>{ph.p}</span>
+      <span style={{fontSize:10,color:"rgba(255,255,255,.18)"}}>{ph.d}</span>
+    </div>
+
+    {/* DAY SELECTOR */}
+    <div style={{display:"flex",gap:3,marginBottom:14,overflowX:"auto"}}>
+      {DAYS.map(function(d,i){
+        var active=dayI===i;
+        return<button key={i} onClick={function(){setDayI(i)}} style={{flex:"1 1 0",padding:"8px 2px 6px",borderRadius:10,border:active?"2px solid "+d.color:"1px solid rgba(255,255,255,.04)",background:active?d.color+"15":"transparent",cursor:"pointer",textAlign:"center",minWidth:48,position:"relative"}}>
+          <div style={{fontSize:9,color:active?d.color:"rgba(255,255,255,.2)",fontWeight:700}}>{d.day.substring(0,3).toUpperCase()}</div>
+          <div style={{fontSize:10,color:active?"#fff":"rgba(255,255,255,.3)",fontWeight:700,marginTop:2}}>{d.name}</div>
+        </button>
+      })}
+    </div>
+
+    {/* TODAY BADGE */}
+    {isToday&&<div style={{textAlign:"center",marginBottom:10}}>
+      <span style={{display:"inline-block",padding:"4px 14px",borderRadius:20,background:day.color+"20",border:"1px solid "+day.color+"40",fontSize:11,fontWeight:700,color:day.color}}>📍 SÉANCE DU JOUR</span>
+    </div>}
+
+    {/* SESSION HEADER */}
+    <div style={{marginBottom:10,padding:"14px 16px",borderRadius:14,background:"linear-gradient(135deg,"+day.color+"12,"+day.color+"05)",border:"1px solid "+day.color+"20"}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <div>
+          <div style={{fontSize:20,fontWeight:800,color:day.color}}>{day.name}</div>
+          <div style={{fontSize:12,color:"rgba(255,255,255,.35)",marginTop:2}}>{day.label} · {day.exs.length} exercices</div>
+        </div>
+        <div style={{textAlign:"right"}}>
+          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:24,fontWeight:800,color:"#fff"}}>{dTot>0?Math.round(dDone/dTot*100):0}%</div>
+          <div style={{fontSize:10,color:"rgba(255,255,255,.25)"}}>{dDone}/{dTot} séries</div>
+        </div>
+      </div>
+      <div style={{marginTop:8}}><MBar v={dDone} mx={dTot} c={day.color}/></div>
+    </div>
+
+    {/* REST TIMER SETTING */}
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10,padding:"6px 12px",borderRadius:10,background:"rgba(255,255,255,.015)"}}>
+      <span style={{fontSize:10,color:"rgba(255,255,255,.3)",fontWeight:600}}>⏱ Repos entre séries</span>
+      <div style={{display:"flex",gap:3}}>{REST_P.map(function(p){return<button key={p} onClick={function(){setRd(p)}} style={{padding:"3px 6px",borderRadius:5,border:rd===p?"1px solid "+day.color+"50":"1px solid rgba(255,255,255,.04)",background:rd===p?day.color+"12":"transparent",color:rd===p?day.color:"rgba(255,255,255,.2)",fontSize:9,fontWeight:600,fontFamily:"'JetBrains Mono',monospace",cursor:"pointer"}}>{p>=60?Math.floor(p/60)+"m":""}:{(p%60).toString().padStart(2,"0")}</button>})}</div>
+    </div>
+
+    {/* EXERCISES */}
+    <div style={{paddingBottom:tmr?240:0}}>
+      {day.exs.map(function(ex){
+        return<ExCard key={ex.id} ex={ex} data={dData[ex.id]} prev={pDData?pDData[ex.id]:null} color={day.color} upd={function(f,v){upEx(ex.id,f,v)}} onDone={function(){setTmr(true)}}/>;
+      })}
+    </div>
+
+    {/* MEASUREMENTS */}
+    <div style={{borderRadius:14,background:"rgba(255,255,255,.025)",border:"1px solid rgba(255,255,255,.06)",padding:"14px 16px",marginTop:14,marginBottom:12}}>
+      <div style={{fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:1.2,color:"rgba(255,255,255,.35)",marginBottom:10}}>📐 Mensurations — chaque Jeudi</div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:10}}>
+        {MEAS.map(function(m){
+          var pv=pw?pw.ms[m.id]:"",cv=wd.ms[m.id];
+          var df=cv&&pv?(parseFloat(cv)-parseFloat(pv)):null;
+          return<div key={m.id}>
+            <div style={{fontSize:9,color:"rgba(255,255,255,.25)",fontWeight:600,marginBottom:3}}>{m.ic} {m.nm}</div>
+            <div style={{display:"flex",alignItems:"center",gap:5}}>
+              <Inp value={wd.ms[m.id]} onChange={function(v){upM(m.id,v)}} ph={pv||"—"} width={60}/>
+              <span style={{fontSize:10,color:"rgba(255,255,255,.2)"}}>{m.u}</span>
+              {df!==null&&df!==0&&!isNaN(df)&&<span style={{fontSize:9,fontWeight:700,color:(m.id==="taille"?(df<0?"#10B981":"#EF4444"):(df>0?"#10B981":"#EF4444"))}}>{df>0?"▲":"▼"}{Math.abs(df).toFixed(1)}</span>}
             </div>
-            {prevBestWeight > 0 && (
-              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", marginTop: 2 }}>
-                S. préc: {prevBestWeight}kg × {prevBestReps}
-                {targetW > prevBestWeight && <span style={{ color: "#10B981", fontWeight: 700 }}> → +{(targetW - prevBestWeight).toFixed(1)}kg</span>}
-                {targetW === prevBestWeight && targetR > prevBestReps && <span style={{ color: color, fontWeight: 700 }}> → +{targetR - prevBestReps} rep{targetR - prevBestReps > 1 ? "s" : ""}</span>}
-              </div>
-            )}
           </div>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          {targetW > 0 ? (
-            <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
-              <span style={{ fontSize: 10, fontWeight: 700, color: allSetsHitTarget ? "#10B981" : color, textTransform: "uppercase", letterSpacing: 1 }}>
-                {allSetsHitTarget ? "✓ VALIDÉ" : "🎯 OBJ"}
-              </span>
-              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 22, fontWeight: 800, color: allSetsHitTarget ? "#10B981" : "#fff" }}>
-                {targetW}<span style={{ fontSize: 12, fontWeight: 500, color: "rgba(255,255,255,0.4)" }}>kg</span>
-              </span>
-              <span style={{ fontSize: 14, color: "rgba(255,255,255,0.2)" }}>×</span>
-              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 22, fontWeight: 800, color: allSetsHitTarget ? "#10B981" : "#fff" }}>
-                {targetR}<span style={{ fontSize: 12, fontWeight: 500, color: "rgba(255,255,255,0.4)" }}>reps</span>
-              </span>
-            </div>
-          ) : (
-            <span style={{ fontSize: 11, color: "rgba(255,255,255,0.25)", fontStyle: "italic" }}>Pas d'objectif</span>
-          )}
-        </div>
-      </div>
-
-      {/* Override target manually */}
-      {isAutoTarget && (
-        <div style={{ padding: "6px 18px", background: "rgba(255,255,255,0.015)", display: "flex", alignItems: "center", gap: 8, fontSize: 10, color: "rgba(255,255,255,0.25)" }}>
-          ⚡ Auto-calculé (double progression) · <button onClick={() => { onChange("targetWeight", autoObjective.weight); onChange("targetReps", autoObjective.reps); }} style={{ background: "none", border: "none", color: color, fontSize: 10, fontWeight: 600, cursor: "pointer", padding: 0, textDecoration: "underline" }}>Modifier</button>
-        </div>
-      )}
-
-      {/* Progress bar */}
-      <div style={{ padding: "8px 18px 4px", display: "flex", alignItems: "center", gap: 8 }}>
-        <MiniBar value={setsCompleted} max={4} color={allSetsHitTarget ? "#10B981" : color} />
-        <span style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontWeight: 600, minWidth: 30 }}>{setsCompleted}/4</span>
-      </div>
-
-      {/* Sets */}
-      <div style={{ padding: "8px 18px 14px" }}>
-        <div style={{ display: "flex", gap: 8, marginBottom: 6, paddingLeft: 34 }}>
-          <span style={{ width: 60, fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.8, color: "rgba(255,255,255,0.25)", textAlign: "center" }}>Poids</span>
-          <span style={{ width: 46, fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.8, color: "rgba(255,255,255,0.25)", textAlign: "center" }}>Reps</span>
-        </div>
-        {data.sets.map((set, si) => {
-          const w = parseFloat(set.weight) || 0;
-          const r = parseInt(set.reps) || 0;
-          const hitTarget = targetW > 0 && targetR > 0 && w >= targetW && r >= targetR && set.done;
-          return (
-            <div key={si} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, padding: "4px 0", opacity: set.done ? 1 : 0.7 }}>
-              <CheckDot
-                checked={set.done}
-                onToggle={() => { onChange("set_" + si + "_done", !set.done); if (!set.done) onSetDone(); }}
-                color={hitTarget ? "#10B981" : color}
-              />
-              <InputField value={set.weight} onChange={(v) => onChange("set_" + si + "_weight", v)} placeholder={targetW > 0 ? String(targetW) : "—"} width={60} />
-              <InputField value={set.reps} onChange={(v) => onChange("set_" + si + "_reps", v)} placeholder={targetR > 0 ? String(targetR) : "—"} width={46} />
-              {set.done && hitTarget && <span style={{ fontSize: 12, color: "#10B981", fontWeight: 700 }}>✓</span>}
-              {set.done && w > 0 && !hitTarget && targetW > 0 && (
-                <span style={{ fontSize: 11, color: "rgba(255,255,255,0.25)" }}>
-                  {w < targetW ? (targetW - w).toFixed(1) + "kg ↗" : r + "/" + targetR}
-                </span>
-              )}
-            </div>
-          );
         })}
-        {allSetsHitTarget && (
-          <div style={{ marginTop: 8, padding: "8px 12px", borderRadius: 8, background: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.15)", fontSize: 11, color: "#10B981", fontWeight: 600 }}>
-            🚀 Semaine prochaine → {targetW + weightIncrement}kg × {REP_MIN} reps
-          </div>
-        )}
       </div>
     </div>
-  );
-}
 
-// ─── PREVIOUS WEEK RECAP ────────────────────────────────────────
-function PrevWeekRecap({ prevWeekData, color }) {
-  if (!prevWeekData) return null;
-  const exerciseResults = defaultExercises.map((ex) => {
-    const d = prevWeekData.exercises[ex.id];
-    const doneSets = d.sets.filter((s) => s.done);
-    const bestWeight = Math.max.apply(null, doneSets.map((s) => parseFloat(s.weight) || 0).concat([0]));
-    const bestReps = Math.max.apply(null, doneSets.filter((s) => parseFloat(s.weight) === bestWeight).map((s) => parseInt(s.reps) || 0).concat([0]));
-    return { id: ex.id, icon: ex.icon, name: ex.name, bestWeight: bestWeight, bestReps: bestReps, setsCompleted: doneSets.length, total: d.sets.length };
-  }).filter((r) => r.setsCompleted > 0);
-
-  if (exerciseResults.length === 0) return null;
-
-  return (
-    <div style={{ borderRadius: 14, background: "linear-gradient(135deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015))", border: "1px solid rgba(255,255,255,0.08)", padding: "16px 18px", marginBottom: 16 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
-        <span style={{ fontSize: 16 }}>📊</span>
-        <span style={{ fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: "rgba(255,255,255,0.5)" }}>Résultats semaine précédente</span>
-      </div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-        {exerciseResults.map((r) => (
-          <div key={r.id} style={{ padding: "10px 14px", borderRadius: 10, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", minWidth: 140, flex: "1 1 140px" }}>
-            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", fontWeight: 600, marginBottom: 4 }}>{r.icon} {r.name}</div>
-            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 16, fontWeight: 700 }}>
-              {r.bestWeight}<span style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", fontWeight: 500 }}>kg</span>
-              <span style={{ color: "rgba(255,255,255,0.2)", margin: "0 4px" }}>×</span>
-              {r.bestReps}<span style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", fontWeight: 500 }}>reps</span>
-            </div>
-            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.25)", marginTop: 3 }}>{r.setsCompleted}/{r.total} séries complétées</div>
-          </div>
-        ))}
-      </div>
-      {prevWeekData.bicepsContracte && (
-        <div style={{ marginTop: 12, display: "flex", gap: 12 }}>
-          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)" }}>Biceps contracté: <span style={{ color: color, fontWeight: 700 }}>{prevWeekData.bicepsContracte} cm</span></div>
-          {prevWeekData.bicepsRepos && <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)" }}>Repos: <span style={{ color: "rgba(255,255,255,0.6)", fontWeight: 700 }}>{prevWeekData.bicepsRepos} cm</span></div>}
-        </div>
-      )}
+    {/* NOTES */}
+    <div style={{borderRadius:14,background:"rgba(255,255,255,.025)",border:"1px solid rgba(255,255,255,.06)",padding:"14px 16px"}}>
+      <div style={{fontSize:9,fontWeight:700,color:"rgba(255,255,255,.25)",textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>📝 Notes</div>
+      <textarea value={wd.nt} onChange={function(e){upN(e.target.value)}} placeholder="Sommeil, énergie, pump..." rows={2} style={{width:"100%",padding:"8px 10px",borderRadius:8,border:"1px solid rgba(255,255,255,.06)",background:"rgba(255,255,255,.03)",color:"#fff",fontSize:12,lineHeight:1.5,resize:"vertical",outline:"none",boxSizing:"border-box"}}/>
     </div>
-  );
+
+    <div style={{textAlign:"center",marginTop:20,fontSize:8,color:"rgba(255,255,255,.1)"}}>Colosse Coach · Sauvegarde locale · Double progression</div>
+
+    {tmr&&<Timer sec={rd} c={day.color} onEnd={function(){setTmr(false)}} onSkip={function(){setTmr(false)}} onDC={function(d){setRd(d)}}/>}
+  </div>;
 }
 
-// ─── WEEK PROGRESS SUMMARY ──────────────────────────────────────
-function WeekProgress({ weekData, color }) {
-  const totalSets = defaultExercises.length * 4;
-  const doneSets = defaultExercises.reduce((acc, ex) => acc + weekData.exercises[ex.id].sets.filter((s) => s.done).length, 0);
-  const targetsHit = defaultExercises.reduce((acc, ex) => {
-    const d = weekData.exercises[ex.id];
-    const tw = parseFloat(d.targetWeight) || 0;
-    const tr = parseInt(d.targetReps) || 0;
-    if (tw === 0 || tr === 0) return acc;
-    const hits = d.sets.filter((s) => s.done && (parseFloat(s.weight) || 0) >= tw && (parseInt(s.reps) || 0) >= tr).length;
-    return acc + (hits > 0 ? 1 : 0);
-  }, 0);
-  const targetsSet = defaultExercises.filter((ex) => {
-    const d = weekData.exercises[ex.id];
-    return (parseFloat(d.targetWeight) || 0) > 0 && (parseInt(d.targetReps) || 0) > 0;
-  }).length;
-
-  return (
-    <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
-      <StatBox label="Séries complétées" value={doneSets + "/" + totalSets} color={doneSets === totalSets ? "#10B981" : "#fff"} />
-      <StatBox label="Objectifs atteints" value={targetsSet > 0 ? targetsHit + "/" + targetsSet : "—"} color={targetsHit === targetsSet && targetsSet > 0 ? "#10B981" : "#fff"} />
-      <StatBox label="Complétion" value={Math.round((doneSets / totalSets) * 100) + "%"} color={color} />
-    </div>
-  );
-}
-
-// ─── BICEPS SPARKLINE ───────────────────────────────────────────
-function BicepsSparkline({ allWeekData, currentWeek }) {
-  const w = 320, h = 80;
-  const pad = { l: 30, r: 10, t: 10, b: 20 };
-  const iw = w - pad.l - pad.r;
-  const ih = h - pad.t - pad.b;
-
-  const projPoints = bicepsProjection.map((p, i) => ({
-    x: pad.l + (i / 11) * iw,
-    y: pad.t + ih - ((p.contracte - 38.5) / 4) * ih,
-  }));
-
-  const realPoints = [];
-  for (let i = 0; i < 12; i++) {
-    const wd = allWeekData[i + 1];
-    if (wd && wd.bicepsContracte) {
-      const v = parseFloat(wd.bicepsContracte);
-      if (!isNaN(v)) {
-        realPoints.push({ x: pad.l + (i / 11) * iw, y: pad.t + ih - ((v - 38.5) / 4) * ih, v: v });
-      }
-    }
-  }
-
-  const projPath = projPoints.map((p, i) => (i === 0 ? "M" : "L") + p.x + "," + p.y).join(" ");
-  const realPath = realPoints.length > 1 ? realPoints.map((p, i) => (i === 0 ? "M" : "L") + p.x + "," + p.y).join(" ") : null;
-
-  return (
-    <svg width={w} height={h} style={{ display: "block" }}>
-      {[39, 40, 41, 42].map((v) => {
-        const y = pad.t + ih - ((v - 38.5) / 4) * ih;
-        return (
-          <g key={v}>
-            <line x1={pad.l} x2={w - pad.r} y1={y} y2={y} stroke="rgba(255,255,255,0.06)" strokeDasharray="2,4" />
-            <text x={pad.l - 4} y={y + 3} fill="rgba(255,255,255,0.2)" fontSize="8" textAnchor="end" fontFamily="monospace">{v}</text>
-          </g>
-        );
-      })}
-      {[1, 4, 8, 12].map((wk) => {
-        const x = pad.l + ((wk - 1) / 11) * iw;
-        return <text key={wk} x={x} y={h - 4} fill="rgba(255,255,255,0.2)" fontSize="8" textAnchor="middle" fontFamily="monospace">S{wk}</text>;
-      })}
-      <path d={projPath} fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="1.5" strokeDasharray="4,3" />
-      {realPath && <path d={realPath} fill="none" stroke="#10B981" strokeWidth="2" />}
-      {realPoints.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r={3} fill="#10B981" />)}
-      <line x1={pad.l + ((currentWeek - 1) / 11) * iw} x2={pad.l + ((currentWeek - 1) / 11) * iw} y1={pad.t} y2={pad.t + ih} stroke="rgba(255,255,255,0.1)" strokeWidth="1" />
-    </svg>
-  );
-}
-
-// ─── EVOLUTION DATA ─────────────────────────────────────────────
-const evolutionData = [
-  { keyMoment: "Premier vrai pump satisfaisant", silhouette: "Quasi identique — le changement est interne. Tes séances vont devenir plus fluides.", changes: ["Pump post-séance plus prononcé", "Muscles plus gonflés au réveil", "Veines des avant-bras plus apparentes"], zones: { epaules: 1, dos: 1, bras: 1, abdos: 0, jambes: 1 } },
-  { keyMoment: "Premier compliment 'tu fais de la muscu ?'", silhouette: "Les gens proches peuvent remarquer que tu as l'air plus large.", changes: ["Deltoïdes légèrement plus ronds", "Haut du dos plus plein en T-shirt", "Rétention d'eau musculaire visible"], zones: { epaules: 2, dos: 2, bras: 1, abdos: 0, jambes: 1 } },
-  { keyMoment: "Tes anciens T-shirts serrent aux épaules", silhouette: "De face, tes épaules commencent à déborder. L'ébauche du V-taper se devine.", changes: ["Trapèzes visiblement plus épais", "Bras plus tendus dans les manches", "Début de tonus pectoral"], zones: { epaules: 2, dos: 2, bras: 2, abdos: 0, jambes: 1 } },
-  { keyMoment: "📸 Premier avant/après convaincant", silhouette: "Premier vrai changement visible sur photos. Le haut du corps a clairement changé.", changes: ["V-taper perceptible de face", "Deltoïdes commencent à capper", "Dorsaux plus larges", "Veines permanentes avant-bras"], zones: { epaules: 3, dos: 3, bras: 2, abdos: 0, jambes: 2 } },
-  { keyMoment: "La séparation deltoïde/biceps apparaît", silhouette: "Même sans pump, tu parais athlétique. Le ratio épaules/taille s'améliore.", changes: ["Séparation deltoïde/bras visible", "Pectoraux prennent du volume", "Quadriceps plus dessinés", "Cou plus épais"], zones: { epaules: 3, dos: 3, bras: 3, abdos: 1, jambes: 2 } },
-  { keyMoment: "Les inconnus te demandent ton programme", silhouette: "Tu as l'air d'un gars qui s'entraîne sérieusement, pas juste en forme.", changes: ["V-taper net même en T-shirt ample", "Triceps plus découpés", "Ligne médiane abdominale", "Avant-bras vasculaires"], zones: { epaules: 4, dos: 4, bras: 3, abdos: 1, jambes: 2 } },
-  { keyMoment: "Le dos commence à parler en photo", silhouette: "Phase de remplissage — les muscles prennent de la densité et de la qualité.", changes: ["Dorsaux créent un vrai flare", "Pectoraux se séparent du deltoïde", "Fessiers plus proéminents", "Avant-bras rattrapent"], zones: { epaules: 4, dos: 4, bras: 3, abdos: 1, jambes: 3 } },
-  { keyMoment: "📸 Transformation claire sur photos", silhouette: "Le physique a une vraie présence. À 1m96, tu remplis une pièce.", changes: ["Séparation épaule/bras au repos", "Stries pectorales visibles", "Tour de cou +1.5 cm", "Mollets proportionnels"], zones: { epaules: 4, dos: 4, bras: 4, abdos: 1, jambes: 3 } },
-  { keyMoment: "Les abdos supérieurs pointent", silhouette: "En T-shirt ajusté, physique clairement musclé et athlétique.", changes: ["V-taper prononcé", "Biceps peak en flexion", "Abdos supérieurs se dessinent", "Trapèzes imposants"], zones: { epaules: 5, dos: 5, bras: 4, abdos: 2, jambes: 3 } },
-  { keyMoment: "Les veines des bras sont permanentes", silhouette: "La définition se superpose au volume. Phase la plus gratifiante.", changes: ["Séparation triceps 3 chefs", "Christmas tree bas du dos", "Veines bicipitales permanentes", "Quadriceps sweep visible"], zones: { epaules: 5, dos: 5, bras: 4, abdos: 2, jambes: 4 } },
-  { keyMoment: "Le physique tourne les têtes à la salle", silhouette: "Physique d'athlète qui force le respect.", changes: ["Stries deltoïdes visibles", "Ligne abdominale nette", "Avant-bras épaissis par farmer's walk", "Obliques découpés"], zones: { epaules: 5, dos: 5, bras: 5, abdos: 2, jambes: 4 } },
-  { keyMoment: "🏆 Photo finale — méconnaissable", silhouette: "Transformation complète. À 1m96, physique qui impressionne même habillé.", changes: ["V-taper imposant", "Séparation musculaire haut du corps", "4 abdos supérieurs visibles", "Look de puissance installé"], zones: { epaules: 5, dos: 5, bras: 5, abdos: 3, jambes: 4 } },
-];
-const zoneLabels = { epaules: "Épaules", dos: "Dos", bras: "Bras", abdos: "Abdos", jambes: "Jambes" };
-
-// ─── MAIN APP ───────────────────────────────────────────────────
-function App() {
-  const [state, setState] = useState(null);
-  const [activeWeek, setActiveWeek] = useState(0);
-  const [tab, setTab] = useState("track");
-  const [saving, setSaving] = useState(false);
-  const [timerActive, setTimerActive] = useState(false);
-  const [restDuration, setRestDuration] = useState(90);
-
-  useWakeLock(tab === "track");
-
-  // Load on mount
-  useEffect(() => {
-    const saved = loadData();
-    if (saved && saved.weekData) {
-      const merged = getDefaultState();
-      Object.keys(saved.weekData).forEach((wk) => {
-        if (merged.weekData[wk]) {
-          merged.weekData[wk] = Object.assign({}, merged.weekData[wk], saved.weekData[wk]);
-          defaultExercises.forEach((ex) => {
-            if (!merged.weekData[wk].exercises[ex.id]) {
-              merged.weekData[wk].exercises[ex.id] = getEmptyWeekData().exercises[ex.id];
-            }
-          });
-        }
-      });
-      merged.currentWeek = saved.currentWeek || 1;
-      setState(merged);
-      setActiveWeek(merged.currentWeek - 1);
-    } else {
-      setState(getDefaultState());
-      setActiveWeek(1); // Start on S2 since S1 is pre-filled
-    }
-  }, []);
-
-  // Auto-save
-  useEffect(() => {
-    if (state) {
-      const t = setTimeout(() => {
-        setSaving(true);
-        saveData(state);
-        setTimeout(() => setSaving(false), 500);
-      }, 800);
-      return () => clearTimeout(t);
-    }
-  }, [state]);
-
-  if (!state) {
-    return (
-      <div style={{ minHeight: "100vh", background: "#08080d", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff" }}>
-        <div style={{ fontSize: 14, color: "rgba(255,255,255,0.4)" }}>Chargement...</div>
-      </div>
-    );
-  }
-
-  const weekIdx = activeWeek;
-  const weekNum = weekIdx + 1;
-  const phase = phases[weekIdx];
-  const weekData = state.weekData[weekNum];
-  const prevWeekData = weekNum > 1 ? state.weekData[weekNum - 1] : null;
-  const proj = bicepsProjection[weekIdx];
-  const evo = evolutionData[weekIdx];
-
-  function updateExercise(exId, field, value) {
-    setState((prev) => {
-      const next = JSON.parse(JSON.stringify(prev));
-      const ex = next.weekData[weekNum].exercises[exId];
-      if (field === "targetWeight" || field === "targetReps") {
-        ex[field] = value;
-      } else if (field.indexOf("set_") === 0) {
-        const parts = field.split("_");
-        const si = parseInt(parts[1]);
-        const prop = parts[2];
-        ex.sets[si][prop] = value;
-      }
-      return next;
-    });
-  }
-
-  function updateWeekField(field, value) {
-    setState((prev) => {
-      const next = JSON.parse(JSON.stringify(prev));
-      next.weekData[weekNum][field] = value;
-      return next;
-    });
-  }
-
-  return (
-    <div style={{ minHeight: "100vh", background: "#08080d", color: "#fff", fontFamily: "'DM Sans', 'Segoe UI', sans-serif", padding: "20px 14px 40px" }}>
-
-      {/* HEADER */}
-      <div style={{ textAlign: "center", marginBottom: 20, position: "relative" }}>
-        <div style={{ display: "inline-block", padding: "4px 14px", borderRadius: 20, background: "rgba(255,255,255,0.05)", fontSize: 10, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", color: "rgba(255,255,255,0.4)", marginBottom: 8 }}>
-          Projection 12 semaines · Début 29 janvier 2026
-        </div>
-        <h1 style={{ fontSize: 24, fontWeight: 800, margin: 0, letterSpacing: -0.5, background: "linear-gradient(135deg, #fff 0%, rgba(255,255,255,0.5) 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-          Évolution & Suivi
-        </h1>
-        <p style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", margin: "4px 0 0" }}>1m96 · 95 kg · 38 ans · 4000 kcal · PPL 6×/sem</p>
-        {saving && (
-          <div style={{ position: "absolute", top: 4, right: 10, fontSize: 10, color: "#10B981", fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}>
-            <div style={{ width: 5, height: 5, borderRadius: "50%", background: "#10B981" }} /> Sauvegardé
-          </div>
-        )}
-      </div>
-
-      {/* TABS */}
-      <div style={{ display: "flex", justifyContent: "center", gap: 8, marginBottom: 20 }}>
-        <Pill color="#fff" active={tab === "track"} onClick={() => setTab("track")}>🎯 Suivi & Objectifs</Pill>
-        <Pill color="#fff" active={tab === "evolution"} onClick={() => setTab("evolution")}>📈 Évolution Physique</Pill>
-      </div>
-
-      {/* WEEK SELECTOR */}
-      <div style={{ display: "flex", gap: 5, justifyContent: "center", marginBottom: 20, flexWrap: "wrap" }}>
-        {phases.map((p, i) => (
-          <button
-            key={i}
-            onClick={() => setActiveWeek(i)}
-            style={{
-              width: 42, height: 42, borderRadius: 10,
-              border: activeWeek === i ? "2px solid " + p.color : "2px solid rgba(255,255,255,0.06)",
-              background: activeWeek === i ? p.color + "20" : "rgba(255,255,255,0.02)",
-              color: activeWeek === i ? "#fff" : "rgba(255,255,255,0.35)",
-              fontSize: 12, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace",
-              cursor: "pointer", transition: "all 0.2s", position: "relative",
-            }}
-          >
-            S{p.week}
-            {state.weekData[p.week] && defaultExercises.some((ex) => state.weekData[p.week].exercises[ex.id] && state.weekData[p.week].exercises[ex.id].sets.some((s) => s.done)) && (
-              <div style={{ position: "absolute", bottom: 2, left: "50%", transform: "translateX(-50%)", width: 4, height: 4, borderRadius: "50%", background: p.color }} />
-            )}
-          </button>
-        ))}
-      </div>
-
-      {/* PHASE BADGE */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, marginBottom: 20 }}>
-        <div style={{ padding: "5px 14px", borderRadius: 8, background: phase.color, fontSize: 12, fontWeight: 700 }}>SEMAINE {weekNum}</div>
-        <span style={{ fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.5)" }}>{phase.phase}</span>
-        <span style={{ fontSize: 12, color: "rgba(255,255,255,0.25)" }}>{phase.date}</span>
-      </div>
-
-      <div style={{ maxWidth: 700, margin: "0 auto" }}>
-        {/* ═══ TRACK TAB ═══ */}
-        {tab === "track" && (
-          <React.Fragment>
-            <PrevWeekRecap prevWeekData={prevWeekData} color={phase.color} />
-            <WeekProgress weekData={weekData} color={phase.color} />
-
-            {/* Biceps measurements */}
-            <div style={{ borderRadius: 14, background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.06)", padding: "16px 18px", marginBottom: 16 }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 16 }}>📐</span>
-                  <span style={{ fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: "rgba(255,255,255,0.5)" }}>Mesures biceps (jeudi)</span>
-                </div>
-                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.25)" }}>Objectif: {proj.contracte} cm contracté</div>
-              </div>
-              <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-                <div style={{ flex: 1, minWidth: 140 }}>
-                  <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 6 }}>Contracté</div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <InputField value={weekData.bicepsContracte} onChange={(v) => updateWeekField("bicepsContracte", v)} placeholder={String(proj.contracte)} width={70} />
-                    <span style={{ fontSize: 12, color: "rgba(255,255,255,0.3)" }}>cm</span>
-                    {prevWeekData && prevWeekData.bicepsContracte && weekData.bicepsContracte && <Delta current={weekData.bicepsContracte} previous={prevWeekData.bicepsContracte} unit="cm" />}
-                  </div>
-                </div>
-                <div style={{ flex: 1, minWidth: 140 }}>
-                  <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 6 }}>Au repos</div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <InputField value={weekData.bicepsRepos} onChange={(v) => updateWeekField("bicepsRepos", v)} placeholder={String(proj.repos)} width={70} />
-                    <span style={{ fontSize: 12, color: "rgba(255,255,255,0.3)" }}>cm</span>
-                    {prevWeekData && prevWeekData.bicepsRepos && weekData.bicepsRepos && <Delta current={weekData.bicepsRepos} previous={prevWeekData.bicepsRepos} unit="cm" />}
-                  </div>
-                </div>
-                <div style={{ flex: 1, minWidth: 140 }}>
-                  <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 6 }}>Poids corps</div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <InputField value={weekData.bodyweight} onChange={(v) => updateWeekField("bodyweight", v)} placeholder="95" width={60} />
-                    <span style={{ fontSize: 12, color: "rgba(255,255,255,0.3)" }}>kg</span>
-                  </div>
-                </div>
-              </div>
-              <div style={{ marginTop: 14, borderTop: "1px solid rgba(255,255,255,0.04)", paddingTop: 12 }}>
-                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.25)", marginBottom: 6 }}>
-                  Progression biceps contracté — <span style={{ color: "rgba(255,255,255,0.15)" }}>- - -</span> projection &nbsp; <span style={{ color: "#10B981" }}>—</span> réel
-                </div>
-                <BicepsSparkline allWeekData={state.weekData} currentWeek={weekNum} />
-              </div>
-            </div>
-
-            {/* Progression system */}
-            <div style={{ marginBottom: 12, padding: "10px 16px", borderRadius: 12, background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.04)" }}>
-              <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1.2, color: "rgba(255,255,255,0.3)", marginBottom: 6 }}>⚡ Double progression (10→12 reps)</div>
-              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.25)", lineHeight: 1.6 }}>
-                Toutes séries à 12 reps → <span style={{ color: "#10B981", fontWeight: 600 }}>+2.5kg barre / +1kg haltère</span>, retour à 10 reps
-                <br/>Reps non atteintes → <span style={{ color: phase.color, fontWeight: 600 }}>même poids, +1 rep</span>
-              </div>
-            </div>
-
-            {/* Rest timer setting */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, padding: "10px 16px", borderRadius: 12, background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.04)" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 14 }}>⏱</span>
-                <span style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", fontWeight: 600 }}>Pause entre séries</span>
-              </div>
-              <div style={{ display: "flex", gap: 4 }}>
-                {REST_PRESETS.map((p) => (
-                  <button
-                    key={p}
-                    onClick={() => setRestDuration(p)}
-                    style={{
-                      padding: "4px 8px", borderRadius: 6,
-                      border: restDuration === p ? "1px solid " + phase.color + "50" : "1px solid rgba(255,255,255,0.06)",
-                      background: restDuration === p ? phase.color + "15" : "transparent",
-                      color: restDuration === p ? phase.color : "rgba(255,255,255,0.3)",
-                      fontSize: 11, fontWeight: 600, fontFamily: "'JetBrains Mono', monospace", cursor: "pointer",
-                    }}
-                  >
-                    {Math.floor(p / 60)}:{(p % 60).toString().padStart(2, "0")}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Exercise cards */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 12, paddingBottom: timerActive ? 260 : 0, transition: "padding 0.3s" }}>
-              {defaultExercises.map((ex) => {
-                var prevExData = prevWeekData ? prevWeekData.exercises[ex.id] : null;
-                var autoObj = prevExData ? computeNextWeekObjective(ex, prevExData) : null;
-                return (
-                  <ExerciseCard
-                    key={ex.id}
-                    exercise={ex}
-                    data={weekData.exercises[ex.id]}
-                    prevData={prevExData}
-                    color={phase.color}
-                    onChange={(field, value) => updateExercise(ex.id, field, value)}
-                    onSetDone={() => setTimerActive(true)}
-                    autoObjective={autoObj}
-                  />
-                );
-              })}
-            </div>
-
-            {/* Notes */}
-            <div style={{ marginTop: 16, borderRadius: 14, background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.06)", padding: "16px 18px" }}>
-              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>📝 Notes / Ressenti de la semaine</div>
-              <textarea
-                value={weekData.notes}
-                onChange={(e) => updateWeekField("notes", e.target.value)}
-                placeholder="Comment tu t'es senti cette semaine ? Sommeil, énergie, pump..."
-                rows={3}
-                style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", color: "#fff", fontSize: 13, fontFamily: "inherit", lineHeight: 1.5, resize: "vertical", outline: "none", boxSizing: "border-box" }}
-              />
-            </div>
-          </React.Fragment>
-        )}
-
-        {/* ═══ EVOLUTION TAB ═══ */}
-        {tab === "evolution" && (
-          <React.Fragment>
-            <div style={{ padding: "14px 18px", borderRadius: 14, background: phase.color + "0a", border: "1px solid " + phase.color + "25", marginBottom: 16, display: "flex", alignItems: "center", gap: 10 }}>
-              <span style={{ fontSize: 20 }}>🎯</span>
-              <div>
-                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", fontWeight: 600, textTransform: "uppercase", letterSpacing: 1 }}>Moment clé</div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", marginTop: 2 }}>{evo.keyMoment}</div>
-              </div>
-            </div>
-
-            <div style={{ padding: "16px 18px", borderRadius: 14, background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.06)", marginBottom: 16 }}>
-              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>🪞 Ce que tu verras dans le miroir</div>
-              <p style={{ fontSize: 14, lineHeight: 1.65, color: "rgba(255,255,255,0.75)", margin: 0 }}>{evo.silhouette}</p>
-            </div>
-
-            <div style={{ padding: "16px 18px", borderRadius: 14, background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.06)", marginBottom: 16 }}>
-              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>Changements visibles</div>
-              {evo.changes.map((c, i) => (
-                <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "7px 0", borderBottom: i < evo.changes.length - 1 ? "1px solid rgba(255,255,255,0.04)" : "none" }}>
-                  <div style={{ minWidth: 6, height: 6, borderRadius: "50%", background: phase.color, marginTop: 6 }} />
-                  <span style={{ fontSize: 13, lineHeight: 1.5, color: "rgba(255,255,255,0.7)" }}>{c}</span>
-                </div>
-              ))}
-            </div>
-
-            <div style={{ padding: "16px 18px", borderRadius: 14, background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.06)" }}>
-              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 14 }}>Progression par zone musculaire</div>
-              {Object.entries(evo.zones).map(([key, val]) => (
-                <div key={key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 0" }}>
-                  <span style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", fontWeight: 500, minWidth: 70 }}>{zoneLabels[key]}</span>
-                  <div style={{ display: "flex", gap: 4 }}>
-                    {Array.from({ length: 5 }).map((_, i) => (
-                      <div key={i} style={{ width: 10, height: 10, borderRadius: "50%", background: i < val ? phase.color : "rgba(255,255,255,0.08)", transition: "background 0.3s" }} />
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </React.Fragment>
-        )}
-      </div>
-
-      {/* FOOTER */}
-      <div style={{ textAlign: "center", marginTop: 30, maxWidth: 500, margin: "30px auto 0" }}>
-        <p style={{ fontSize: 10, color: "rgba(255,255,255,0.2)", lineHeight: 1.5, margin: 0 }}>
-          Données sauvegardées automatiquement · Écran maintenu actif en mode suivi · Projection basée sur mémoire musculaire, 4000 kcal/j, PPL 6×/sem
-        </p>
-      </div>
-
-      {/* REST TIMER OVERLAY */}
-      {timerActive && (
-        <RestTimer
-          seconds={restDuration}
-          color={phase.color}
-          onDone={() => setTimerActive(false)}
-          onCancel={() => setTimerActive(false)}
-          onDurationChange={(d) => setRestDuration(d)}
-        />
-      )}
-    </div>
-  );
-}
-
-ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
 </script>
 </body>
 </html>
