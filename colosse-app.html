@@ -1,1788 +1,1126 @@
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Colosse">
-<meta name="theme-color" content="#0a0a0a">
-<meta name="mobile-web-app-capable" content="yes">
-<title>Colosse</title>
-<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%230a0a0a' width='100' height='100' rx='20'/><text y='68' x='50' text-anchor='middle' font-size='55'>🏋️</text></svg>">
-<link rel="manifest" href="data:application/json;base64,eyJuYW1lIjoiUHJvZ3JhbW1lIENvbG9zc2UiLCJzaG9ydF9uYW1lIjoiQ29sb3NzZSIsInN0YXJ0X3VybCI6Ii4iLCJkaXNwbGF5Ijoic3RhbmRhbG9uZSIsImJhY2tncm91bmRfY29sb3IiOiIjMGEwYTBhIiwidGhlbWVfY29sb3IiOiIjMGEwYTBhIn0=">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&family=JetBrains+Mono:wght@700&display=swap" rel="stylesheet">
-<style>
-:root {
-  --bg: #0a0a0a;
-  --card: #111113;
-  --card2: #1a1a1e;
-  --border: #2a2a2e;
-  --text: #f0f0f0;
-  --sub: #888;
-  --accent: #ff6b35;
-  --accent2: #ff8c5a;
-  --green: #2ec4b6;
-  --yellow: #ffd166;
-  --blue: #3a86ff;
-  --red: #e63946;
-  --safe-top: env(safe-area-inset-top, 0px);
-  --safe-bottom: env(safe-area-inset-bottom, 0px);
-  --font: 'Space Grotesk', -apple-system, sans-serif;
-  --mono: 'JetBrains Mono', monospace;
-}
-* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
-html { background: var(--bg); }
-body {
-  background: var(--bg);
-  color: var(--text);
-  font-family: var(--font);
-  padding: calc(var(--safe-top) + 8px) 12px calc(var(--safe-bottom) + 200px) 12px;
-  max-width: 500px;
-  margin: 0 auto;
-  -webkit-font-smoothing: antialiased;
-  overscroll-behavior: none;
+import { useState, useEffect, useCallback, useRef } from "react";
+
+// ─── WAKE LOCK (screen stays on) ────────────────────────────────
+function useWakeLock(enabled) {
+  const wakeLockRef = useRef(null);
+  useEffect(() => {
+    if (!enabled || !("wakeLock" in navigator)) return;
+    let active = true;
+    const request = async () => {
+      try {
+        wakeLockRef.current = await navigator.wakeLock.request("screen");
+        wakeLockRef.current.addEventListener("release", () => {
+          if (active) request();
+        });
+      } catch {}
+    };
+    request();
+    const onVisibility = () => {
+      if (document.visibilityState === "visible" && active) request();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      active = false;
+      document.removeEventListener("visibilitychange", onVisibility);
+      if (wakeLockRef.current) {
+        wakeLockRef.current.release().catch(() => {});
+      }
+    };
+  }, [enabled]);
 }
 
-/* === HEADER === */
-.app-header {
-  text-align: center;
-  padding: 8px 0 6px;
-}
-.app-header h1 {
-  font-size: 1.4rem;
-  font-weight: 700;
-  background: linear-gradient(135deg, var(--accent), var(--accent2));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  letter-spacing: -0.5px;
+// ─── REST TIMER DEFAULTS ────────────────────────────────────────
+const REST_PRESETS = [60, 90, 120, 150, 180];
+
+// ─── PHASE DATA ─────────────────────────────────────────────────
+const phases = [
+  { week: 1, phase: "Réactivation", color: "#F59E0B", date: "29 jan" },
+  { week: 2, phase: "Réactivation", color: "#F59E0B", date: "5 fév" },
+  { week: 3, phase: "Réactivation", color: "#F59E0B", date: "12 fév" },
+  { week: 4, phase: "Hypertrophie", color: "#EF4444", date: "19 fév" },
+  { week: 5, phase: "Hypertrophie", color: "#EF4444", date: "26 fév" },
+  { week: 6, phase: "Hypertrophie", color: "#EF4444", date: "5 mars" },
+  { week: 7, phase: "Consolidation", color: "#8B5CF6", date: "12 mars" },
+  { week: 8, phase: "Consolidation", color: "#8B5CF6", date: "19 mars" },
+  { week: 9, phase: "Maturation", color: "#10B981", date: "26 mars" },
+  { week: 10, phase: "Maturation", color: "#10B981", date: "2 avr" },
+  { week: 11, phase: "Maturation", color: "#10B981", date: "9 avr" },
+  { week: 12, phase: "Résultat", color: "#3B82F6", date: "16 avr" },
+];
+
+// ─── BICEPS PROJECTION (from your doc) ──────────────────────────
+const bicepsProjection = [
+  { contracte: 39, repos: 35 },
+  { contracte: 39.2, repos: 35.2 },
+  { contracte: 39.5, repos: 35.4 },
+  { contracte: 39.8, repos: 35.7 },
+  { contracte: 40.1, repos: 35.9 },
+  { contracte: 40.5, repos: 36.1 },
+  { contracte: 40.7, repos: 36.3 },
+  { contracte: 41, repos: 36.5 },
+  { contracte: 41.2, repos: 36.7 },
+  { contracte: 41.3, repos: 36.8 },
+  { contracte: 41.5, repos: 37 },
+  { contracte: 41.75, repos: 37.1 },
+];
+
+// ─── DEFAULT EXERCISES (PPL biceps focus) ───────────────────────
+const defaultExercises = [
+  { id: "curl_barre", name: "Curl barre EZ", icon: "🏋️" },
+  { id: "curl_incline", name: "Curl haltères incliné", icon: "💪" },
+  { id: "curl_marteau", name: "Curl marteau", icon: "🔨" },
+  { id: "curl_pupitre", name: "Curl pupitre", icon: "🎯" },
+  { id: "curl_cable", name: "Curl câble poulie basse", icon: "🔗" },
+];
+
+// ─── STORAGE HELPERS ────────────────────────────────────────────
+const STORAGE_KEY = "biceps-tracker-v2";
+
+async function loadData() {
+  try {
+    const result = await window.storage.get(STORAGE_KEY);
+    return result ? JSON.parse(result.value) : null;
+  } catch {
+    return null;
+  }
 }
 
-/* === NAVIGATION TABS === */
-.nav {
-  position: sticky;
-  top: var(--safe-top);
-  z-index: 100;
-  background: var(--bg);
-  padding: 6px 0 10px;
-}
-.tabs {
-  display: flex;
-  gap: 4px;
-  background: var(--card);
-  padding: 4px;
-  border-radius: 14px;
-  border: 1px solid var(--border);
-}
-.tab {
-  flex: 1;
-  background: transparent;
-  color: var(--sub);
-  border: none;
-  padding: 10px 4px;
-  border-radius: 10px;
-  cursor: pointer;
-  font-family: var(--font);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.3px;
-  transition: all 0.2s ease;
-  min-width: 0;
-}
-.tab.on {
-  background: var(--accent);
-  color: #fff;
-  box-shadow: 0 2px 12px rgba(255,107,53,0.3);
-}
-.tab.rest.on {
-  background: var(--green);
-  box-shadow: 0 2px 12px rgba(46,196,182,0.3);
-}
-.tab.stat.on {
-  background: var(--blue);
-  box-shadow: 0 2px 12px rgba(58,134,255,0.3);
-}
-.tab:active { transform: scale(0.95); }
-
-/* === PAGES === */
-.pg { display: none; animation: fadeIn 0.25s ease; }
-.pg.show { display: block; }
-@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-
-/* === DAY HEADER === */
-.hdr {
-  background: linear-gradient(135deg, var(--card2), var(--card));
-  border: 1px solid var(--border);
-  border-left: 4px solid var(--accent);
-  border-radius: 16px;
-  padding: 16px;
-  margin-bottom: 14px;
-}
-.hdr h2 {
-  color: var(--accent);
-  font-size: 1rem;
-  font-weight: 700;
-  margin-bottom: 4px;
-}
-.hdr p {
-  color: var(--sub);
-  font-size: 0.75rem;
-}
-.warm {
-  background: rgba(255,107,53,0.08);
-  border-left: 3px solid var(--accent);
-  padding: 8px 10px;
-  margin-top: 10px;
-  border-radius: 0 8px 8px 0;
-  font-size: 0.72rem;
-  color: #ccc;
+async function saveData(data) {
+  try {
+    await window.storage.set(STORAGE_KEY, JSON.stringify(data));
+  } catch (e) {
+    console.error("Save failed:", e);
+  }
 }
 
-/* === BLOC === */
-.blc {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  margin-bottom: 12px;
-  overflow: hidden;
-}
-.blc-h {
-  background: var(--card2);
-  padding: 10px 14px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-.blc-t { font-weight: 700; font-size: 0.85rem; }
-.blc-t.f { color: var(--accent); }
-.blc-t.h { color: var(--yellow); }
-.blc-t.a { color: var(--green); }
-.blc-d {
-  background: var(--border);
-  padding: 3px 8px;
-  border-radius: 10px;
-  font-size: 0.65rem;
-  color: var(--sub);
-}
-.blc-b { padding: 8px; }
-
-/* === EXERCICE === */
-.exo {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 12px;
-  margin-bottom: 8px;
-  transition: all 0.3s ease;
-}
-.exo.ok {
-  border-color: var(--green);
-  opacity: 0.6;
-  background: rgba(46,196,182,0.03);
-}
-.exo-h {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 6px;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-.exo-n { font-weight: 700; font-size: 0.85rem; flex: 1; }
-.bdg { display: flex; gap: 4px; }
-.bdg span {
-  padding: 3px 7px;
-  border-radius: 8px;
-  font-size: 0.6rem;
-  font-weight: 600;
-}
-.rpe { background: rgba(255,107,53,0.15); color: var(--accent); }
-.rst {
-  background: rgba(58,134,255,0.15);
-  color: var(--blue);
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.rst:active { transform: scale(0.9); }
-.exo-i {
-  display: flex;
-  gap: 5px;
-  flex-wrap: wrap;
-  margin-bottom: 6px;
-  font-size: 0.7rem;
-  color: var(--sub);
-}
-.exo-i span {
-  background: var(--card2);
-  padding: 3px 7px;
-  border-radius: 6px;
-}
-.exo-nt {
-  background: rgba(255,107,53,0.06);
-  border-left: 2px solid var(--accent);
-  padding: 6px 10px;
-  font-size: 0.72rem;
-  color: #bbb;
-  margin-bottom: 8px;
-  border-radius: 0 6px 6px 0;
+function getEmptyWeekData() {
+  const exercises = {};
+  defaultExercises.forEach((ex) => {
+    exercises[ex.id] = {
+      sets: [
+        { weight: "", reps: "", done: false },
+        { weight: "", reps: "", done: false },
+        { weight: "", reps: "", done: false },
+        { weight: "", reps: "", done: false },
+      ],
+      targetWeight: "",
+      targetReps: "",
+    };
+  });
+  return {
+    exercises,
+    bicepsContracte: "",
+    bicepsRepos: "",
+    notes: "",
+    bodyweight: "",
+  };
 }
 
-/* === TABLE === */
-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
-th {
-  background: var(--card2);
-  padding: 7px 4px;
-  text-align: center;
-  font-size: 0.65rem;
-  color: var(--sub);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-td { padding: 5px 3px; text-align: center; border-bottom: 1px solid var(--border); }
-input {
-  width: 52px;
-  background: var(--card);
-  border: 1px solid var(--border);
-  color: var(--text);
-  padding: 8px 4px;
-  border-radius: 8px;
-  text-align: center;
-  font-family: var(--font);
-  font-size: 0.8rem;
-  font-weight: 600;
-  transition: border-color 0.2s;
-}
-input:focus {
-  border-color: var(--accent);
-  outline: none;
-  box-shadow: 0 0 0 3px rgba(255,107,53,0.1);
-}
-.sn { font-weight: 700; color: var(--accent); font-size: 0.75rem; }
-.ds { background: rgba(230,57,70,0.05); }
-.ds .sn { color: var(--red); }
-
-/* === CHECK BUTTON === */
-.ck {
-  background: var(--card2);
-  border: 2px solid var(--border);
-  color: var(--sub);
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  cursor: pointer;
-  font-size: 1rem;
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.ck:active { transform: scale(0.85); }
-.ck.on {
-  background: var(--green);
-  border-color: var(--green);
-  color: #fff;
-  box-shadow: 0 2px 8px rgba(46,196,182,0.3);
+function getDefaultState() {
+  const weekData = {};
+  for (let i = 1; i <= 12; i++) {
+    weekData[i] = getEmptyWeekData();
+  }
+  return { weekData, currentWeek: 1 };
 }
 
-/* === VALIDATE BUTTON === */
-.val {
-  width: 100%;
-  background: var(--card2);
-  border: 1px solid var(--green);
-  color: var(--green);
-  padding: 12px;
-  border-radius: 12px;
-  cursor: pointer;
-  font-family: var(--font);
-  font-weight: 700;
-  margin-top: 8px;
-  font-size: 0.85rem;
-  transition: all 0.2s ease;
-}
-.val:active { transform: scale(0.98); }
-.val.ok {
-  background: var(--green);
-  color: #fff;
-  box-shadow: 0 4px 15px rgba(46,196,182,0.25);
-}
-
-/* === CHRONO === */
-.chr {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  background: linear-gradient(180deg, var(--card2), var(--card));
-  border-top: 1px solid var(--border);
-  padding: 14px 16px calc(var(--safe-bottom) + 14px);
-  z-index: 1000;
-  display: none;
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-}
-.chr.show { display: block; animation: slideUp 0.3s ease; }
-@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
-.chr-in {
-  max-width: 500px;
-  margin: 0 auto;
-}
-.chr-row1 {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 14px;
-  margin-bottom: 10px;
-}
-.chr-d {
-  font-size: 3.2rem;
-  font-weight: 700;
-  font-family: var(--mono);
-  color: var(--accent);
-  min-width: 140px;
-  text-align: center;
-  letter-spacing: 2px;
-  line-height: 1;
-}
-.chr-d.w { color: var(--yellow); }
-.chr-d.r { color: var(--red); animation: pls 0.5s infinite; }
-@keyframes pls { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
-.chr-bt { display: flex; gap: 8px; }
-.chr-b {
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  border: none;
-  font-size: 1.2rem;
-  cursor: pointer;
-  transition: transform 0.15s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.chr-b:active { transform: scale(0.85); }
-.c-pl { background: var(--green); color: #fff; }
-.c-rs { background: var(--red); color: #fff; }
-.c-cl { background: var(--card2); color: var(--sub); border: 1px solid var(--border); }
-.chr-row2 {
-  display: flex;
-  justify-content: center;
-  margin-bottom: 8px;
-}
-.pre { display: flex; gap: 6px; }
-.pre button {
-  background: var(--card2);
-  border: 1px solid var(--border);
-  color: var(--sub);
-  padding: 8px 14px;
-  border-radius: 12px;
-  cursor: pointer;
-  font-family: var(--font);
-  font-size: 0.8rem;
-  font-weight: 600;
-  transition: all 0.15s;
-}
-.pre button:active { transform: scale(0.9); }
-.pre button.on {
-  background: var(--accent);
-  color: #fff;
-  border-color: var(--accent);
-}
-.chr-br {
-  width: 100%;
-  height: 4px;
-  background: var(--border);
-  border-radius: 2px;
-  margin-top: 8px;
-  overflow: hidden;
-}
-.chr-fl {
-  height: 100%;
-  background: linear-gradient(90deg, var(--green), var(--accent));
-  border-radius: 2px;
-  transition: width 0.3s linear;
+// ─── MICRO COMPONENTS ───────────────────────────────────────────
+function Pill({ children, color, active, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        padding: "7px 14px",
+        borderRadius: 20,
+        border: active ? `2px solid ${color}` : "2px solid rgba(255,255,255,0.08)",
+        background: active ? `${color}18` : "rgba(255,255,255,0.03)",
+        color: active ? color : "rgba(255,255,255,0.45)",
+        fontSize: 12,
+        fontWeight: 600,
+        cursor: "pointer",
+        transition: "all 0.2s",
+        fontFamily: "inherit",
+        letterSpacing: 0.3,
+      }}
+    >
+      {children}
+    </button>
+  );
 }
 
-/* === TOAST MESSAGE === */
-.msg {
-  position: fixed;
-  top: calc(var(--safe-top) + 12px);
-  left: 50%;
-  transform: translateX(-50%) translateY(-20px);
-  background: var(--green);
-  color: #fff;
-  padding: 10px 20px;
-  border-radius: 14px;
-  font-size: 0.8rem;
-  font-weight: 600;
-  opacity: 0;
-  transition: all 0.3s ease;
-  z-index: 1001;
-  box-shadow: 0 4px 20px rgba(46,196,182,0.3);
-}
-.msg.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-
-/* === STATS === */
-.sts {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 16px;
-  margin-bottom: 12px;
-}
-.sts h3 {
-  color: var(--accent);
-  margin-bottom: 12px;
-  font-size: 0.9rem;
-}
-.st-g {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 8px;
-}
-.st-c {
-  background: var(--card2);
-  padding: 14px 8px;
-  border-radius: 12px;
-  text-align: center;
-}
-.st-v {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: var(--accent);
-  font-family: var(--mono);
-}
-.st-l {
-  font-size: 0.65rem;
-  color: var(--sub);
-  margin-top: 4px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-.acts { display: flex; gap: 8px; margin-top: 16px; }
-.act {
-  flex: 1;
-  padding: 14px;
-  border: none;
-  border-radius: 12px;
-  font-family: var(--font);
-  font-weight: 700;
-  cursor: pointer;
-  font-size: 0.85rem;
-  transition: transform 0.15s;
-}
-.act:active { transform: scale(0.97); }
-.act-r { background: rgba(230,57,70,0.15); color: var(--red); border: 1px solid rgba(230,57,70,0.3); }
-.act-e { background: rgba(46,196,182,0.15); color: var(--green); border: 1px solid rgba(46,196,182,0.3); }
-
-/* === PROGRESS BAR PER DAY === */
-.day-prog {
-  height: 3px;
-  background: var(--border);
-  border-radius: 2px;
-  margin-top: 10px;
-  overflow: hidden;
-}
-.day-prog-fill {
-  height: 100%;
-  background: linear-gradient(90deg, var(--green), var(--accent));
-  border-radius: 2px;
-  transition: width 0.5s ease;
-  width: 0%;
-}
-
-/* === VIDEO BUTTON === */
-.vid {
-  background: rgba(230,57,70,0.15);
-  color: var(--red);
-  cursor: pointer;
-  transition: all 0.15s;
-  font-size: 0.65rem;
-  padding: 3px 7px;
-  border-radius: 8px;
-  font-weight: 600;
-}
-.vid:active { transform: scale(0.9); }
-
-/* === VIDEO MODAL === */
-.modal-overlay {
-  position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0,0,0,0.85);
-  z-index: 2000;
-  display: none;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-}
-.modal-overlay.show {
-  display: flex;
-  animation: fadeIn 0.2s ease;
-}
-.modal-box {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 20px;
-  width: 100%;
-  max-width: 460px;
-  overflow: hidden;
-}
-.modal-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 14px 16px;
-  border-bottom: 1px solid var(--border);
-}
-.modal-title {
-  font-weight: 700;
-  font-size: 0.85rem;
-  color: var(--text);
-  flex: 1;
-  padding-right: 10px;
-}
-.modal-close {
-  background: var(--card2);
-  border: 1px solid var(--border);
-  color: var(--sub);
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  cursor: pointer;
-  font-size: 1.1rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-.modal-close:active { transform: scale(0.9); }
-.modal-iframe {
-  width: 100%;
-  aspect-ratio: 16/9;
-  border: none;
-}
-
-/* === CALENDAR === */
-.cal-day-name { color: var(--sub); font-weight: 600; padding: 6px 0; font-size: .7rem; }
-.cal-day {
-  aspect-ratio: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-direction: column;
-  border-radius: 10px;
-  color: var(--sub);
-  font-size: .75rem;
-  position: relative;
-  cursor: default;
-  gap: 2px;
-}
-.cal-day.today { border: 1.5px solid var(--accent); color: var(--text); font-weight: 700; }
-.cal-day.has-session { background: rgba(46,196,182,0.15); color: var(--green); font-weight: 700; cursor: pointer; }
-.cal-day.has-session:active { transform: scale(0.9); }
-.cal-dots { display: flex; gap: 2px; }
-.cal-dot { width: 5px; height: 5px; border-radius: 50%; }
-.cal-dot.push { background: #e63946; }
-.cal-dot.pull { background: #3a86ff; }
-.cal-dot.legs { background: #2ec4b6; }
-
-/* === HISTORY ITEMS === */
-.hist-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px;
-  background: var(--card2);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  margin-bottom: 8px;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.hist-item:active { transform: scale(0.98); }
-.hist-left { display: flex; align-items: center; gap: 10px; }
-.hist-type {
-  width: 38px; height: 38px;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.1rem;
-  font-weight: 700;
-}
-.hist-type.push { background: rgba(230,57,70,0.15); color: #e63946; }
-.hist-type.pull { background: rgba(58,134,255,0.15); color: #3a86ff; }
-.hist-type.legs { background: rgba(46,196,182,0.15); color: #2ec4b6; }
-.hist-info { display: flex; flex-direction: column; gap: 2px; }
-.hist-day { font-weight: 700; font-size: .85rem; color: var(--text); }
-.hist-date { font-size: .7rem; color: var(--sub); }
-.hist-stats { text-align: right; }
-.hist-tonnage { font-weight: 700; font-size: .85rem; color: var(--accent); }
-.hist-exos { font-size: .7rem; color: var(--sub); }
-
-/* === END SESSION BUTTON === */
-.end-session {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  width: calc(100% - 32px);
-  margin: 24px 16px 40px;
-  padding: 18px;
-  background: linear-gradient(135deg, #2ec4b6, #20a99d);
-  color: #fff;
-  border: none;
-  border-radius: 16px;
-  font-size: 1.05rem;
-  font-weight: 700;
-  cursor: pointer;
-  letter-spacing: 0.3px;
-  box-shadow: 0 4px 15px rgba(46,196,182,0.3);
-  transition: all 0.15s;
-}
-.end-session:active { transform: scale(0.96); }
-.end-session .es-icon { font-size: 1.3rem; }
-
-/* === CONFIRM POPUP === */
-.confirm-overlay {
-  position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0,0,0,0.8);
-  z-index: 3000;
-  display: none;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-}
-.confirm-overlay.show { display: flex; animation: fadeIn 0.2s ease; }
-.confirm-box {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 20px;
-  width: 100%;
-  max-width: 380px;
-  padding: 28px 24px;
-  text-align: center;
-}
-.confirm-emoji { font-size: 3rem; margin-bottom: 12px; }
-.confirm-title { font-size: 1.1rem; font-weight: 700; color: var(--text); margin-bottom: 6px; }
-.confirm-sub { font-size: 0.8rem; color: var(--sub); margin-bottom: 20px; line-height: 1.5; }
-.confirm-btns { display: flex; gap: 10px; }
-.confirm-btn {
-  flex: 1;
-  padding: 14px;
-  border-radius: 14px;
-  border: none;
-  font-weight: 700;
-  font-size: 0.9rem;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.confirm-btn:active { transform: scale(0.95); }
-.confirm-cancel { background: var(--card2); color: var(--sub); border: 1px solid var(--border); }
-.confirm-go { background: linear-gradient(135deg, #2ec4b6, #20a99d); color: #fff; }
-.confirm-ok { display: none; font-size: 0.8rem; color: var(--green); margin-top: 14px; font-weight: 600; }
-
-/* === RESPONSIVE === */
-@media (max-width: 380px) {
-  .tab { font-size: 8px; padding: 8px 2px; }
-  input { width: 44px; }
-  .chr-d { font-size: 2.5rem; min-width: 110px; }
-  .pre button { padding: 6px 10px; font-size: .7rem; }
-}
-
-/* Disable iOS rubber band on body but keep scroll on content */
-@supports (-webkit-touch-callout: none) {
-  body { min-height: 100vh; }
-}
-</style>
-</head>
-<body>
-
-<div class="app-header">
-  <h1>🏋️ Programme Colosse</h1>
-</div>
-
-<div class="nav">
-  <div class="tabs">
-    <button class="tab on" onclick="go('j1',this)">J1<br>Push</button>
-    <button class="tab" onclick="go('j2',this)">J2<br>Pull</button>
-    <button class="tab" onclick="go('j3',this)">J3<br>Legs</button>
-    <button class="tab" onclick="go('j4',this)">J4<br>Push</button>
-    <button class="tab" onclick="go('j5',this)">J5<br>Pull</button>
-    <button class="tab" onclick="go('j6',this)">J6<br>Legs</button>
-    <button class="tab rest" onclick="go('j7',this)">😴<br>Repos</button>
-    <button class="tab stat" onclick="go('st',this)">📊<br>Stats</button>
-  </div>
-</div>
-
-<!-- J1 PUSH A -->
-<div class="pg show" id="j1">
-<div class="hdr"><h2>💪 J1 — PUSH A + TRAPÈZES + COU</h2><p>📅 Lundi • ⏱️ 85-90 min</p><div class="warm">🔥 10 min rameur + rotations épaules + face pulls élastique</div></div>
-<div class="blc"><div class="blc-h"><span class="blc-t f">💪 BLOC FORCE</span><span class="blc-d">25-30 min</span></div><div class="blc-b">
-<div class="exo"><div class="exo-h"><span class="exo-n">1. Développé militaire debout</span><div class="bdg"><span class="rpe">RPE 8-9</span><span class="rst" onclick="T(180)">⏱️3m</span></div></div><div class="exo-i"><span>5×5</span><span>70-80% 1RM</span><span>Tempo 2-1-1-0</span></div><div class="exo-nt">💡 Gainage serré, pas de cambrure</div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j1e1s1p"></td><td><input data-x="j1e1s1r" value="5"></td><td><button class="ck" onclick="C(this,180)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j1e1s2p"></td><td><input data-x="j1e1s2r" value="5"></td><td><button class="ck" onclick="C(this,180)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j1e1s3p"></td><td><input data-x="j1e1s3r" value="5"></td><td><button class="ck" onclick="C(this,180)">○</button></td></tr><tr><td class="sn">4</td><td><input data-x="j1e1s4p"></td><td><input data-x="j1e1s4r" value="5"></td><td><button class="ck" onclick="C(this,180)">○</button></td></tr><tr><td class="sn">5</td><td><input data-x="j1e1s5p"></td><td><input data-x="j1e1s5r" value="5"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-<div class="exo"><div class="exo-h"><span class="exo-n">2. Développé incliné haltères 30°</span><div class="bdg"><span class="rpe">RPE 8</span><span class="rst" onclick="T(150)">⏱️2m30</span></div></div><div class="exo-i"><span>4×6</span><span>32-40kg</span><span>Tempo 3-0-1-0</span></div><div class="exo-nt">💡 Coudes 45°, squeeze en haut</div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j1e2s1p"></td><td><input data-x="j1e2s1r" value="6"></td><td><button class="ck" onclick="C(this,150)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j1e2s2p"></td><td><input data-x="j1e2s2r" value="6"></td><td><button class="ck" onclick="C(this,150)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j1e2s3p"></td><td><input data-x="j1e2s3r" value="6"></td><td><button class="ck" onclick="C(this,150)">○</button></td></tr><tr><td class="sn">4</td><td><input data-x="j1e2s4p"></td><td><input data-x="j1e2s4r" value="6"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-</div></div>
-<div class="blc"><div class="blc-h"><span class="blc-t h">🔥 BLOC HYPERTROPHIE</span><span class="blc-d">25-30 min</span></div><div class="blc-b">
-<div class="exo"><div class="exo-h"><span class="exo-n">3. Élévations latérales</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(90)">⏱️90s</span></div></div><div class="exo-i"><span>4×12-15+DS</span><span>10-14kg</span></div><div class="exo-nt">💡 Petit doigt vers haut</div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j1e3s1p"></td><td><input data-x="j1e3s1r" value="12"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j1e3s2p"></td><td><input data-x="j1e3s2r" value="12"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j1e3s3p"></td><td><input data-x="j1e3s3r" value="12"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">4</td><td><input data-x="j1e3s4p"></td><td><input data-x="j1e3s4r" value="12"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr><tr class="ds"><td class="sn">DS</td><td><input data-x="j1e3dsp"></td><td><input data-x="j1e3dsr" placeholder="max"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-<div class="exo"><div class="exo-h"><span class="exo-n">4. Dips lestés</span><div class="bdg"><span class="rpe">RPE 8</span><span class="rst" onclick="T(120)">⏱️2m</span></div></div><div class="exo-i"><span>3×8-10</span><span>+10-25kg</span></div><div class="exo-nt">💡 Coudes 90°, pousser fort</div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j1e4s1p"></td><td><input data-x="j1e4s1r" value="8"></td><td><button class="ck" onclick="C(this,120)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j1e4s2p"></td><td><input data-x="j1e4s2r" value="8"></td><td><button class="ck" onclick="C(this,120)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j1e4s3p"></td><td><input data-x="j1e4s3r" value="8"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-<div class="exo"><div class="exo-h"><span class="exo-n">5. Écartés poulie haute</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(90)">⏱️90s</span></div></div><div class="exo-i"><span>3×12</span><span>15-20kg</span></div><div class="exo-nt">💡 Croiser mains en bas</div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j1e5s1p"></td><td><input data-x="j1e5s1r" value="12"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j1e5s2p"></td><td><input data-x="j1e5s2r" value="12"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j1e5s3p"></td><td><input data-x="j1e5s3r" value="12"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-<div class="exo"><div class="exo-h"><span class="exo-n">6. Pushdown triceps corde</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(60)">⏱️60s</span></div></div><div class="exo-i"><span>3×12-15</span></div><div class="exo-nt">💡 Écarter corde en bas</div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j1e6s1p"></td><td><input data-x="j1e6s1r" value="12"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j1e6s2p"></td><td><input data-x="j1e6s2r" value="12"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j1e6s3p"></td><td><input data-x="j1e6s3r" value="12"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-</div></div>
-<div class="blc"><div class="blc-h"><span class="blc-t a">🦬 TRAPÈZES / COU</span><span class="blc-d">20-25 min</span></div><div class="blc-b">
-<div class="exo"><div class="exo-h"><span class="exo-n">7. Shrugs haltères lourds</span><div class="bdg"><span class="rpe">RPE 8</span><span class="rst" onclick="T(90)">⏱️90s</span></div></div><div class="exo-i"><span>4×10</span><span>40-50kg</span></div><div class="exo-nt">💡 PAUSE 2s en haut</div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j1e7s1p"></td><td><input data-x="j1e7s1r" value="10"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j1e7s2p"></td><td><input data-x="j1e7s2r" value="10"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j1e7s3p"></td><td><input data-x="j1e7s3r" value="10"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">4</td><td><input data-x="j1e7s4p"></td><td><input data-x="j1e7s4r" value="10"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-<div class="exo"><div class="exo-h"><span class="exo-n">8. Face pulls corde</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(60)">⏱️60s</span></div></div><div class="exo-i"><span>4×15</span><span>25-35kg</span></div><div class="exo-nt">💡 Coudes HAUTS</div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j1e8s1p"></td><td><input data-x="j1e8s1r" value="15"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j1e8s2p"></td><td><input data-x="j1e8s2r" value="15"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j1e8s3p"></td><td><input data-x="j1e8s3r" value="15"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">4</td><td><input data-x="j1e8s4p"></td><td><input data-x="j1e8s4r" value="15"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-<div class="exo"><div class="exo-h"><span class="exo-n">9. Shrugs barre derrière</span><div class="bdg"><span class="rpe">RPE 8</span><span class="rst" onclick="T(60)">⏱️60s</span></div></div><div class="exo-i"><span>3×12</span><span>80-100kg</span></div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j1e9s1p"></td><td><input data-x="j1e9s1r" value="12"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j1e9s2p"></td><td><input data-x="j1e9s2r" value="12"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j1e9s3p"></td><td><input data-x="j1e9s3r" value="12"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-<div class="exo"><div class="exo-h"><span class="exo-n">10. Neck curls</span><div class="bdg"><span class="rpe">RPE 8</span><span class="rst" onclick="T(60)">⏱️60s</span></div></div><div class="exo-i"><span>3×15-20</span><span>5-10kg</span></div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j1e10s1p"></td><td><input data-x="j1e10s1r" value="15"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j1e10s2p"></td><td><input data-x="j1e10s2r" value="15"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j1e10s3p"></td><td><input data-x="j1e10s3r" value="15"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-<div class="exo"><div class="exo-h"><span class="exo-n">11. Neck extensions</span><div class="bdg"><span class="rpe">RPE 8</span><span class="rst" onclick="T(60)">⏱️60s</span></div></div><div class="exo-i"><span>3×15-20</span><span>5-10kg</span></div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j1e11s1p"></td><td><input data-x="j1e11s1r" value="15"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j1e11s2p"></td><td><input data-x="j1e11s2r" value="15"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j1e11s3p"></td><td><input data-x="j1e11s3r" value="15"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-</div></div>
-</div>
-<!-- J2 PULL A -->
-<div class="pg" id="j2">
-<div class="hdr"><h2>🔥 J2 — PULL A + AVANT-BRAS</h2><p>📅 Mardi • ⏱️ 80-85 min</p><div class="warm">🔥 10 min rameur + tractions australiennes + band pull-aparts</div></div>
-<div class="blc"><div class="blc-h"><span class="blc-t f">💪 BLOC FORCE</span><span class="blc-d">25-30 min</span></div><div class="blc-b">
-<div class="exo"><div class="exo-h"><span class="exo-n">1. Soulevé de terre conventionnel</span><div class="bdg"><span class="rpe">RPE 8</span><span class="rst" onclick="T(210)">⏱️3m30</span></div></div><div class="exo-i"><span>5×3</span><span>85-90% 1RM</span></div><div class="exo-nt">💡 Reset chaque rep, dos PLAT</div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j2e1s1p"></td><td><input data-x="j2e1s1r" value="3"></td><td><button class="ck" onclick="C(this,210)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j2e1s2p"></td><td><input data-x="j2e1s2r" value="3"></td><td><button class="ck" onclick="C(this,210)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j2e1s3p"></td><td><input data-x="j2e1s3r" value="3"></td><td><button class="ck" onclick="C(this,210)">○</button></td></tr><tr><td class="sn">4</td><td><input data-x="j2e1s4p"></td><td><input data-x="j2e1s4r" value="3"></td><td><button class="ck" onclick="C(this,210)">○</button></td></tr><tr><td class="sn">5</td><td><input data-x="j2e1s5p"></td><td><input data-x="j2e1s5r" value="3"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-<div class="exo"><div class="exo-h"><span class="exo-n">2. Rowing barre pronation</span><div class="bdg"><span class="rpe">RPE 8</span><span class="rst" onclick="T(150)">⏱️2m30</span></div></div><div class="exo-i"><span>4×6</span><span>80-100kg</span></div><div class="exo-nt">💡 Buste 45°, tirer vers nombril</div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j2e2s1p"></td><td><input data-x="j2e2s1r" value="6"></td><td><button class="ck" onclick="C(this,150)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j2e2s2p"></td><td><input data-x="j2e2s2r" value="6"></td><td><button class="ck" onclick="C(this,150)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j2e2s3p"></td><td><input data-x="j2e2s3r" value="6"></td><td><button class="ck" onclick="C(this,150)">○</button></td></tr><tr><td class="sn">4</td><td><input data-x="j2e2s4p"></td><td><input data-x="j2e2s4r" value="6"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-</div></div>
-<div class="blc"><div class="blc-h"><span class="blc-t h">🔥 BLOC HYPERTROPHIE</span><span class="blc-d">25-30 min</span></div><div class="blc-b">
-<div class="exo"><div class="exo-h"><span class="exo-n">3. Tirage vertical prise large</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(120)">⏱️2m</span></div></div><div class="exo-i"><span>4×8-10</span><span>55-75kg</span></div><div class="exo-nt">💡 Tirer vers la poitrine, coudes vers le bas</div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j2e3s1p"></td><td><input data-x="j2e3s1r" value="6"></td><td><button class="ck" onclick="C(this,120)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j2e3s2p"></td><td><input data-x="j2e3s2r" value="6"></td><td><button class="ck" onclick="C(this,120)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j2e3s3p"></td><td><input data-x="j2e3s3r" value="6"></td><td><button class="ck" onclick="C(this,120)">○</button></td></tr><tr><td class="sn">4</td><td><input data-x="j2e3s4p"></td><td><input data-x="j2e3s4r" value="6"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-<div class="exo"><div class="exo-h"><span class="exo-n">4. Rowing 1 bras haltère</span><div class="bdg"><span class="rpe">RPE 8</span><span class="rst" onclick="T(90)">⏱️90s</span></div></div><div class="exo-i"><span>3×10</span><span>35-45kg</span></div><div class="exo-nt">💡 Tirer vers hanche</div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j2e4s1p"></td><td><input data-x="j2e4s1r" value="10"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j2e4s2p"></td><td><input data-x="j2e4s2r" value="10"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j2e4s3p"></td><td><input data-x="j2e4s3r" value="10"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-<div class="exo"><div class="exo-h"><span class="exo-n">5. Pullover poulie haute</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(90)">⏱️90s</span></div></div><div class="exo-i"><span>3×12</span><span>30-40kg</span></div><div class="exo-nt">💡 Sentir étirement dorsaux</div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j2e5s1p"></td><td><input data-x="j2e5s1r" value="12"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j2e5s2p"></td><td><input data-x="j2e5s2r" value="12"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j2e5s3p"></td><td><input data-x="j2e5s3r" value="12"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-<div class="exo"><div class="exo-h"><span class="exo-n">6. Curl barre EZ</span><div class="bdg"><span class="rpe">RPE 8</span><span class="rst" onclick="T(90)">⏱️90s</span></div></div><div class="exo-i"><span>3×10</span><span>30-40kg</span></div><div class="exo-nt">💡 Coudes FIXES</div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j2e6s1p"></td><td><input data-x="j2e6s1r" value="10"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j2e6s2p"></td><td><input data-x="j2e6s2r" value="10"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j2e6s3p"></td><td><input data-x="j2e6s3r" value="10"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-<div class="exo"><div class="exo-h"><span class="exo-n">7. Curl marteau haltères</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(60)">⏱️60s</span></div></div><div class="exo-i"><span>3×12</span><span>14-18kg</span></div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j2e7s1p"></td><td><input data-x="j2e7s1r" value="12"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j2e7s2p"></td><td><input data-x="j2e7s2r" value="12"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j2e7s3p"></td><td><input data-x="j2e7s3r" value="12"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-</div></div>
-<div class="blc"><div class="blc-h"><span class="blc-t a">💪 AVANT-BRAS</span><span class="blc-d">15-20 min</span></div><div class="blc-b">
-<div class="exo"><div class="exo-h"><span class="exo-n">8. Wrist curls barre</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(60)">⏱️60s</span></div></div><div class="exo-i"><span>4×15</span><span>20-30kg</span></div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j2e8s1p"></td><td><input data-x="j2e8s1r" value="15"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j2e8s2p"></td><td><input data-x="j2e8s2r" value="15"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j2e8s3p"></td><td><input data-x="j2e8s3r" value="15"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">4</td><td><input data-x="j2e8s4p"></td><td><input data-x="j2e8s4r" value="15"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-<div class="exo"><div class="exo-h"><span class="exo-n">9. Reverse wrist curls</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(60)">⏱️60s</span></div></div><div class="exo-i"><span>3×15</span><span>10-15kg</span></div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j2e9s1p"></td><td><input data-x="j2e9s1r" value="15"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j2e9s2p"></td><td><input data-x="j2e9s2r" value="15"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j2e9s3p"></td><td><input data-x="j2e9s3r" value="15"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-<div class="exo"><div class="exo-h"><span class="exo-n">10. Farmer's walk</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(90)">⏱️90s</span></div></div><div class="exo-i"><span>3×30sec</span><span>Max</span></div><table><tr><th>#</th><th>Kg</th><th>Durée</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j2e10s1p"></td><td><input data-x="j2e10s1r" value="30s"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j2e10s2p"></td><td><input data-x="j2e10s2r" value="30s"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j2e10s3p"></td><td><input data-x="j2e10s3r" value="30s"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-<div class="exo"><div class="exo-h"><span class="exo-n">11. Dead hangs</span><div class="bdg"><span class="rpe">RPE 10</span><span class="rst" onclick="T(60)">⏱️60s</span></div></div><div class="exo-i"><span>2×Max</span></div><table><tr><th>#</th><th>Durée</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j2e11s1r" placeholder="sec"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j2e11s2r" placeholder="sec"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-</div></div>
-</div>
-<!-- J3 LEGS A -->
-<div class="pg" id="j3">
-<div class="hdr"><h2>🦵 J3 — LEGS A + GAINAGE</h2><p>📅 Mercredi • ⏱️ 75-80 min</p><div class="warm">🔥 10 min vélo + squats goblet + mobilité hanches</div></div>
-<div class="blc"><div class="blc-h"><span class="blc-t f">💪 BLOC FORCE</span><span class="blc-d">20-25 min</span></div><div class="blc-b">
-<div class="exo"><div class="exo-h"><span class="exo-n">1. Back squat barre</span><div class="bdg"><span class="rpe">RPE 8</span><span class="rst" onclick="T(180)">⏱️3m</span></div></div><div class="exo-i"><span>5×5</span><span>80% 1RM</span></div><div class="exo-nt">💡 Parallèle minimum, genoux dehors</div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j3e1s1p"></td><td><input data-x="j3e1s1r" value="5"></td><td><button class="ck" onclick="C(this,180)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j3e1s2p"></td><td><input data-x="j3e1s2r" value="5"></td><td><button class="ck" onclick="C(this,180)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j3e1s3p"></td><td><input data-x="j3e1s3r" value="5"></td><td><button class="ck" onclick="C(this,180)">○</button></td></tr><tr><td class="sn">4</td><td><input data-x="j3e1s4p"></td><td><input data-x="j3e1s4r" value="5"></td><td><button class="ck" onclick="C(this,180)">○</button></td></tr><tr><td class="sn">5</td><td><input data-x="j3e1s5p"></td><td><input data-x="j3e1s5r" value="5"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-<div class="exo"><div class="exo-h"><span class="exo-n">2. Romanian deadlift (RDL)</span><div class="bdg"><span class="rpe">RPE 8</span><span class="rst" onclick="T(150)">⏱️2m30</span></div></div><div class="exo-i"><span>4×8</span><span>70% 1RM</span></div><div class="exo-nt">💡 Jambes quasi tendues, fesses en arrière</div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j3e2s1p"></td><td><input data-x="j3e2s1r" value="8"></td><td><button class="ck" onclick="C(this,150)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j3e2s2p"></td><td><input data-x="j3e2s2r" value="8"></td><td><button class="ck" onclick="C(this,150)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j3e2s3p"></td><td><input data-x="j3e2s3r" value="8"></td><td><button class="ck" onclick="C(this,150)">○</button></td></tr><tr><td class="sn">4</td><td><input data-x="j3e2s4p"></td><td><input data-x="j3e2s4r" value="8"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-</div></div>
-<div class="blc"><div class="blc-h"><span class="blc-t h">🔥 BLOC HYPERTROPHIE</span><span class="blc-d">25-30 min</span></div><div class="blc-b">
-<div class="exo"><div class="exo-h"><span class="exo-n">3. Presse jambes pieds hauts</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(120)">⏱️2m</span></div></div><div class="exo-i"><span>4×12</span><span>200-280kg</span></div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j3e3s1p"></td><td><input data-x="j3e3s1r" value="12"></td><td><button class="ck" onclick="C(this,120)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j3e3s2p"></td><td><input data-x="j3e3s2r" value="12"></td><td><button class="ck" onclick="C(this,120)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j3e3s3p"></td><td><input data-x="j3e3s3r" value="12"></td><td><button class="ck" onclick="C(this,120)">○</button></td></tr><tr><td class="sn">4</td><td><input data-x="j3e3s4p"></td><td><input data-x="j3e3s4r" value="12"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-<div class="exo"><div class="exo-h"><span class="exo-n">4. Leg curl allongé</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(90)">⏱️90s</span></div></div><div class="exo-i"><span>4×10</span><span>40-55kg</span></div><div class="exo-nt">💡 PAUSE 2s en contraction</div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j3e4s1p"></td><td><input data-x="j3e4s1r" value="10"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j3e4s2p"></td><td><input data-x="j3e4s2r" value="10"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j3e4s3p"></td><td><input data-x="j3e4s3r" value="10"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">4</td><td><input data-x="j3e4s4p"></td><td><input data-x="j3e4s4r" value="10"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-<div class="exo"><div class="exo-h"><span class="exo-n">5. Leg extension</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(90)">⏱️90s</span></div></div><div class="exo-i"><span>3×12</span><span>50-70kg</span></div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j3e5s1p"></td><td><input data-x="j3e5s1r" value="12"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j3e5s2p"></td><td><input data-x="j3e5s2r" value="12"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j3e5s3p"></td><td><input data-x="j3e5s3r" value="12"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-<div class="exo"><div class="exo-h"><span class="exo-n">6. Fentes marchées</span><div class="bdg"><span class="rpe">RPE 8</span><span class="rst" onclick="T(90)">⏱️90s</span></div></div><div class="exo-i"><span>3×12/jambe</span><span>20-30kg</span></div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j3e6s1p"></td><td><input data-x="j3e6s1r" value="12"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j3e6s2p"></td><td><input data-x="j3e6s2r" value="12"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j3e6s3p"></td><td><input data-x="j3e6s3r" value="12"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-<div class="exo"><div class="exo-h"><span class="exo-n">7. Mollets debout machine</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(60)">⏱️60s</span></div></div><div class="exo-i"><span>4×15</span></div><div class="exo-nt">💡 PAUSE 2s en bas (étirement)</div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j3e7s1p"></td><td><input data-x="j3e7s1r" value="15"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j3e7s2p"></td><td><input data-x="j3e7s2r" value="15"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j3e7s3p"></td><td><input data-x="j3e7s3r" value="15"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">4</td><td><input data-x="j3e7s4p"></td><td><input data-x="j3e7s4r" value="15"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-</div></div>
-<div class="blc"><div class="blc-h"><span class="blc-t a">🎯 TAILLE FINE</span><span class="blc-d">15 min</span></div><div class="blc-b">
-<div class="exo"><div class="exo-h"><span class="exo-n">8. Planche RKC</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(60)">⏱️60s</span></div></div><div class="exo-i"><span>4×30-45sec</span></div><table><tr><th>#</th><th>Durée</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j3e8s1r" value="30s"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j3e8s2r" value="30s"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j3e8s3r" value="30s"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">4</td><td><input data-x="j3e8s4r" value="30s"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-<div class="exo"><div class="exo-h"><span class="exo-n">9. Dead bug</span><div class="bdg"><span class="rpe">RPE 8</span><span class="rst" onclick="T(60)">⏱️60s</span></div></div><div class="exo-i"><span>3×10/côté</span></div><table><tr><th>#</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j3e9s1r" value="10"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j3e9s2r" value="10"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j3e9s3r" value="10"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-<div class="exo"><div class="exo-h"><span class="exo-n">10. Ab wheel rollout</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(90)">⏱️90s</span></div></div><div class="exo-i"><span>3×8-10</span></div><table><tr><th>#</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j3e10s1r" value="8"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j3e10s2r" value="8"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j3e10s3r" value="8"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-<div class="exo"><div class="exo-h"><span class="exo-n">11. Pallof press</span><div class="bdg"><span class="rpe">RPE 8</span><span class="rst" onclick="T(45)">⏱️45s</span></div></div><div class="exo-i"><span>3×20sec/côté</span></div><table><tr><th>#</th><th>Durée</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j3e11s1r" value="20s"></td><td><button class="ck" onclick="C(this,45)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j3e11s2r" value="20s"></td><td><button class="ck" onclick="C(this,45)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j3e11s3r" value="20s"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-</div></div>
-</div>
-<!-- J4 PUSH B -->
-<div class="pg" id="j4">
-<div class="hdr"><h2>💪 J4 — PUSH B + TRAPÈZES + COU</h2><p>📅 Jeudi • ⏱️ 85-90 min</p><div class="warm">🔥 10 min rameur + rotations épaules + échauffement coiffe</div></div>
-<div class="blc"><div class="blc-h"><span class="blc-t f">💪 BLOC FORCE</span><span class="blc-d">20-25 min</span></div><div class="blc-b">
-<div class="exo"><div class="exo-h"><span class="exo-n">1. Développé couché barre</span><div class="bdg"><span class="rpe">RPE 8-9</span><span class="rst" onclick="T(180)">⏱️3m</span></div></div><div class="exo-i"><span>5×5</span><span>80% 1RM</span></div><div class="exo-nt">💡 Omoplates serrées, toucher poitrine</div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j4e1s1p"></td><td><input data-x="j4e1s1r" value="5"></td><td><button class="ck" onclick="C(this,180)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j4e1s2p"></td><td><input data-x="j4e1s2r" value="5"></td><td><button class="ck" onclick="C(this,180)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j4e1s3p"></td><td><input data-x="j4e1s3r" value="5"></td><td><button class="ck" onclick="C(this,180)">○</button></td></tr><tr><td class="sn">4</td><td><input data-x="j4e1s4p"></td><td><input data-x="j4e1s4r" value="5"></td><td><button class="ck" onclick="C(this,180)">○</button></td></tr><tr><td class="sn">5</td><td><input data-x="j4e1s5p"></td><td><input data-x="j4e1s5r" value="5"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-<div class="exo"><div class="exo-h"><span class="exo-n">2. Push press</span><div class="bdg"><span class="rpe">RPE 8</span><span class="rst" onclick="T(150)">⏱️2m30</span></div></div><div class="exo-i"><span>4×6</span><span>70-80kg</span></div><div class="exo-nt">💡 Légère flexion genoux puis explosive</div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j4e2s1p"></td><td><input data-x="j4e2s1r" value="6"></td><td><button class="ck" onclick="C(this,150)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j4e2s2p"></td><td><input data-x="j4e2s2r" value="6"></td><td><button class="ck" onclick="C(this,150)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j4e2s3p"></td><td><input data-x="j4e2s3r" value="6"></td><td><button class="ck" onclick="C(this,150)">○</button></td></tr><tr><td class="sn">4</td><td><input data-x="j4e2s4p"></td><td><input data-x="j4e2s4r" value="6"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-</div></div>
-<div class="blc"><div class="blc-h"><span class="blc-t h">🔥 BLOC HYPERTROPHIE</span><span class="blc-d">25-30 min</span></div><div class="blc-b">
-<div class="exo"><div class="exo-h"><span class="exo-n">3. Développé haltères assis neutre</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(90)">⏱️90s</span></div></div><div class="exo-i"><span>4×10</span><span>28-36kg</span></div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j4e3s1p"></td><td><input data-x="j4e3s1r" value="10"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j4e3s2p"></td><td><input data-x="j4e3s2r" value="10"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j4e3s3p"></td><td><input data-x="j4e3s3r" value="10"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">4</td><td><input data-x="j4e3s4p"></td><td><input data-x="j4e3s4r" value="10"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-<div class="exo"><div class="exo-h"><span class="exo-n">4. Élévations latérales câble</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(60)">⏱️60s</span></div></div><div class="exo-i"><span>4×12/bras</span><span>8-12kg</span></div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j4e4s1p"></td><td><input data-x="j4e4s1r" value="12"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j4e4s2p"></td><td><input data-x="j4e4s2r" value="12"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j4e4s3p"></td><td><input data-x="j4e4s3r" value="12"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">4</td><td><input data-x="j4e4s4p"></td><td><input data-x="j4e4s4r" value="12"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-<div class="exo"><div class="exo-h"><span class="exo-n">5. Développé incliné machine</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(90)">⏱️90s</span></div></div><div class="exo-i"><span>3×12</span></div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j4e5s1p"></td><td><input data-x="j4e5s1r" value="12"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j4e5s2p"></td><td><input data-x="j4e5s2r" value="12"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j4e5s3p"></td><td><input data-x="j4e5s3r" value="12"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-<div class="exo"><div class="exo-h"><span class="exo-n">6. Extensions triceps overhead</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(60)">⏱️60s</span></div></div><div class="exo-i"><span>3×12</span><span>25-35kg</span></div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j4e6s1p"></td><td><input data-x="j4e6s1r" value="12"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j4e6s2p"></td><td><input data-x="j4e6s2r" value="12"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j4e6s3p"></td><td><input data-x="j4e6s3r" value="12"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-<div class="exo"><div class="exo-h"><span class="exo-n">7. Pompes diamant (finisher)</span><div class="bdg"><span class="rpe">RPE 10</span><span class="rst" onclick="T(60)">⏱️60s</span></div></div><div class="exo-i"><span>2×Max</span></div><table><tr><th>#</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j4e7s1r" placeholder="max"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j4e7s2r" placeholder="max"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-</div></div>
-<div class="blc"><div class="blc-h"><span class="blc-t a">🦬 TRAPÈZES / COU</span><span class="blc-d">20-25 min</span></div><div class="blc-b">
-<div class="exo"><div class="exo-h"><span class="exo-n">8. Shrugs machine ou barre</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(90)">⏱️90s</span></div></div><div class="exo-i"><span>4×12</span><span>100-140kg</span></div><div class="exo-nt">💡 PAUSE 2s en haut</div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j4e8s1p"></td><td><input data-x="j4e8s1r" value="12"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j4e8s2p"></td><td><input data-x="j4e8s2r" value="12"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j4e8s3p"></td><td><input data-x="j4e8s3r" value="12"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">4</td><td><input data-x="j4e8s4p"></td><td><input data-x="j4e8s4r" value="12"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-<div class="exo"><div class="exo-h"><span class="exo-n">9. Rowing menton prise large</span><div class="bdg"><span class="rpe">RPE 8</span><span class="rst" onclick="T(60)">⏱️60s</span></div></div><div class="exo-i"><span>3×12</span><span>40-50kg</span></div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j4e9s1p"></td><td><input data-x="j4e9s1r" value="12"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j4e9s2p"></td><td><input data-x="j4e9s2r" value="12"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j4e9s3p"></td><td><input data-x="j4e9s3r" value="12"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-<div class="exo"><div class="exo-h"><span class="exo-n">10. Face pulls (poulie basse)</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(60)">⏱️60s</span></div></div><div class="exo-i"><span>4×15</span><span>20-30kg</span></div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j4e10s1p"></td><td><input data-x="j4e10s1r" value="15"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j4e10s2p"></td><td><input data-x="j4e10s2r" value="15"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j4e10s3p"></td><td><input data-x="j4e10s3r" value="15"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">4</td><td><input data-x="j4e10s4p"></td><td><input data-x="j4e10s4r" value="15"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-<div class="exo"><div class="exo-h"><span class="exo-n">11. Neck curls</span><div class="bdg"><span class="rpe">RPE 8</span><span class="rst" onclick="T(60)">⏱️60s</span></div></div><div class="exo-i"><span>3×15-20</span><span>5-12kg</span></div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j4e11s1p"></td><td><input data-x="j4e11s1r" value="15"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j4e11s2p"></td><td><input data-x="j4e11s2r" value="15"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j4e11s3p"></td><td><input data-x="j4e11s3r" value="15"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-<div class="exo"><div class="exo-h"><span class="exo-n">12. Neck lateral raises</span><div class="bdg"><span class="rpe">RPE 8</span><span class="rst" onclick="T(45)">⏱️45s</span></div></div><div class="exo-i"><span>2×12/côté</span></div><table><tr><th>#</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j4e12s1r" value="12"></td><td><button class="ck" onclick="C(this,45)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j4e12s2r" value="12"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-</div></div>
-</div>
-<!-- J5 PULL B -->
-<div class="pg" id="j5">
-<div class="hdr"><h2>🔥 J5 — PULL B + AVANT-BRAS</h2><p>📅 Vendredi • ⏱️ 80-85 min</p><div class="warm">🔥 10 min rameur + tractions à vide + rotations thoraciques</div></div>
-<div class="blc"><div class="blc-h"><span class="blc-t f">💪 BLOC FORCE</span><span class="blc-d">20-25 min</span></div><div class="blc-b">
-<div class="exo"><div class="exo-h"><span class="exo-n">1. Rowing barre supination (Yates)</span><div class="bdg"><span class="rpe">RPE 8-9</span><span class="rst" onclick="T(150)">⏱️2m30</span></div></div><div class="exo-i"><span>5×6</span><span>80-100kg</span></div><div class="exo-nt">💡 Buste 60°, tirer vers bas ventre</div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j5e1s1p"></td><td><input data-x="j5e1s1r" value="6"></td><td><button class="ck" onclick="C(this,150)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j5e1s2p"></td><td><input data-x="j5e1s2r" value="6"></td><td><button class="ck" onclick="C(this,150)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j5e1s3p"></td><td><input data-x="j5e1s3r" value="6"></td><td><button class="ck" onclick="C(this,150)">○</button></td></tr><tr><td class="sn">4</td><td><input data-x="j5e1s4p"></td><td><input data-x="j5e1s4r" value="6"></td><td><button class="ck" onclick="C(this,150)">○</button></td></tr><tr><td class="sn">5</td><td><input data-x="j5e1s5p"></td><td><input data-x="j5e1s5r" value="6"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-<div class="exo"><div class="exo-h"><span class="exo-n">2. Tractions prise neutre lestées</span><div class="bdg"><span class="rpe">RPE 8</span><span class="rst" onclick="T(120)">⏱️2m</span></div></div><div class="exo-i"><span>4×6-8</span><span>+10-15kg</span></div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j5e2s1p"></td><td><input data-x="j5e2s1r" value="6"></td><td><button class="ck" onclick="C(this,120)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j5e2s2p"></td><td><input data-x="j5e2s2r" value="6"></td><td><button class="ck" onclick="C(this,120)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j5e2s3p"></td><td><input data-x="j5e2s3r" value="6"></td><td><button class="ck" onclick="C(this,120)">○</button></td></tr><tr><td class="sn">4</td><td><input data-x="j5e2s4p"></td><td><input data-x="j5e2s4r" value="6"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-</div></div>
-<div class="blc"><div class="blc-h"><span class="blc-t h">🔥 BLOC HYPERTROPHIE</span><span class="blc-d">25-30 min</span></div><div class="blc-b">
-<div class="exo"><div class="exo-h"><span class="exo-n">3. Tirage vertical prise large</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(90)">⏱️90s</span></div></div><div class="exo-i"><span>4×10</span><span>70-90kg</span></div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j5e3s1p"></td><td><input data-x="j5e3s1r" value="10"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j5e3s2p"></td><td><input data-x="j5e3s2r" value="10"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j5e3s3p"></td><td><input data-x="j5e3s3r" value="10"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">4</td><td><input data-x="j5e3s4p"></td><td><input data-x="j5e3s4r" value="10"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-<div class="exo"><div class="exo-h"><span class="exo-n">4. Rowing machine T-bar</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(90)">⏱️90s</span></div></div><div class="exo-i"><span>4×10</span></div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j5e4s1p"></td><td><input data-x="j5e4s1r" value="10"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j5e4s2p"></td><td><input data-x="j5e4s2r" value="10"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j5e4s3p"></td><td><input data-x="j5e4s3r" value="10"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">4</td><td><input data-x="j5e4s4p"></td><td><input data-x="j5e4s4r" value="10"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-<div class="exo"><div class="exo-h"><span class="exo-n">5. Pullover haltère</span><div class="bdg"><span class="rpe">RPE 8</span><span class="rst" onclick="T(90)">⏱️90s</span></div></div><div class="exo-i"><span>3×12</span><span>25-35kg</span></div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j5e5s1p"></td><td><input data-x="j5e5s1r" value="12"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j5e5s2p"></td><td><input data-x="j5e5s2r" value="12"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j5e5s3p"></td><td><input data-x="j5e5s3r" value="12"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-<div class="exo"><div class="exo-h"><span class="exo-n">6. Curl incliné 45°</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(90)">⏱️90s</span></div></div><div class="exo-i"><span>3×10</span><span>12-16kg</span></div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j5e6s1p"></td><td><input data-x="j5e6s1r" value="10"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j5e6s2p"></td><td><input data-x="j5e6s2r" value="10"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j5e6s3p"></td><td><input data-x="j5e6s3r" value="10"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-<div class="exo"><div class="exo-h"><span class="exo-n">7. Curl concentré</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(60)">⏱️60s</span></div></div><div class="exo-i"><span>2×12/bras</span><span>10-14kg</span></div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j5e7s1p"></td><td><input data-x="j5e7s1r" value="12"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j5e7s2p"></td><td><input data-x="j5e7s2r" value="12"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-</div></div>
-<div class="blc"><div class="blc-h"><span class="blc-t a">💪 AVANT-BRAS</span><span class="blc-d">15-20 min</span></div><div class="blc-b">
-<div class="exo"><div class="exo-h"><span class="exo-n">8. Reverse curl barre EZ</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(60)">⏱️60s</span></div></div><div class="exo-i"><span>3×12</span><span>25-35kg</span></div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j5e8s1p"></td><td><input data-x="j5e8s1r" value="12"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j5e8s2p"></td><td><input data-x="j5e8s2r" value="12"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j5e8s3p"></td><td><input data-x="j5e8s3r" value="12"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-<div class="exo"><div class="exo-h"><span class="exo-n">9. Wrist roller (enrouleur)</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(90)">⏱️90s</span></div></div><div class="exo-i"><span>3×2 A/R</span><span>5-10kg</span></div><table><tr><th>#</th><th>Kg</th><th>A/R</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j5e9s1p"></td><td><input data-x="j5e9s1r" value="2"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j5e9s2p"></td><td><input data-x="j5e9s2r" value="2"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j5e9s3p"></td><td><input data-x="j5e9s3r" value="2"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-<div class="exo"><div class="exo-h"><span class="exo-n">10. Pinch grip plate hold</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(60)">⏱️60s</span></div></div><div class="exo-i"><span>3×30sec</span></div><table><tr><th>#</th><th>Kg</th><th>Durée</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j5e10s1p"></td><td><input data-x="j5e10s1r" value="30s"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j5e10s2p"></td><td><input data-x="j5e10s2r" value="30s"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j5e10s3p"></td><td><input data-x="j5e10s3r" value="30s"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-<div class="exo"><div class="exo-h"><span class="exo-n">11. Farmer's walk (lourd)</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(90)">⏱️90s</span></div></div><div class="exo-i"><span>3×40sec</span></div><table><tr><th>#</th><th>Kg</th><th>Durée</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j5e11s1p"></td><td><input data-x="j5e11s1r" value="40s"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j5e11s2p"></td><td><input data-x="j5e11s2r" value="40s"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j5e11s3p"></td><td><input data-x="j5e11s3r" value="40s"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-</div></div>
-</div>
-<!-- J6 LEGS B -->
-<div class="pg" id="j6">
-<div class="hdr"><h2>🦵 J6 — LEGS B + GAINAGE</h2><p>📅 Samedi • ⏱️ 75-80 min</p><div class="warm">🔥 10 min vélo + goblet squats + étirements fléchisseurs</div></div>
-<div class="blc"><div class="blc-h"><span class="blc-t f">💪 BLOC FORCE</span><span class="blc-d">20-25 min</span></div><div class="blc-b">
-<div class="exo"><div class="exo-h"><span class="exo-n">1. Front squat</span><div class="bdg"><span class="rpe">RPE 8</span><span class="rst" onclick="T(180)">⏱️3m</span></div></div><div class="exo-i"><span>5×5</span><span>70% back squat</span></div><div class="exo-nt">💡 Coudes hauts, dos ultra droit</div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j6e1s1p"></td><td><input data-x="j6e1s1r" value="5"></td><td><button class="ck" onclick="C(this,180)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j6e1s2p"></td><td><input data-x="j6e1s2r" value="5"></td><td><button class="ck" onclick="C(this,180)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j6e1s3p"></td><td><input data-x="j6e1s3r" value="5"></td><td><button class="ck" onclick="C(this,180)">○</button></td></tr><tr><td class="sn">4</td><td><input data-x="j6e1s4p"></td><td><input data-x="j6e1s4r" value="5"></td><td><button class="ck" onclick="C(this,180)">○</button></td></tr><tr><td class="sn">5</td><td><input data-x="j6e1s5p"></td><td><input data-x="j6e1s5r" value="5"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-<div class="exo"><div class="exo-h"><span class="exo-n">2. Soulevé de terre sumo</span><div class="bdg"><span class="rpe">RPE 8</span><span class="rst" onclick="T(150)">⏱️2m30</span></div></div><div class="exo-i"><span>4×6</span><span>75-80% 1RM</span></div><div class="exo-nt">💡 Pieds larges, dos plat</div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j6e2s1p"></td><td><input data-x="j6e2s1r" value="6"></td><td><button class="ck" onclick="C(this,150)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j6e2s2p"></td><td><input data-x="j6e2s2r" value="6"></td><td><button class="ck" onclick="C(this,150)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j6e2s3p"></td><td><input data-x="j6e2s3r" value="6"></td><td><button class="ck" onclick="C(this,150)">○</button></td></tr><tr><td class="sn">4</td><td><input data-x="j6e2s4p"></td><td><input data-x="j6e2s4r" value="6"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-</div></div>
-<div class="blc"><div class="blc-h"><span class="blc-t h">🔥 BLOC HYPERTROPHIE</span><span class="blc-d">25-30 min</span></div><div class="blc-b">
-<div class="exo"><div class="exo-h"><span class="exo-n">3. Hack squat machine</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(120)">⏱️2m</span></div></div><div class="exo-i"><span>4×10</span></div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j6e3s1p"></td><td><input data-x="j6e3s1r" value="10"></td><td><button class="ck" onclick="C(this,120)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j6e3s2p"></td><td><input data-x="j6e3s2r" value="10"></td><td><button class="ck" onclick="C(this,120)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j6e3s3p"></td><td><input data-x="j6e3s3r" value="10"></td><td><button class="ck" onclick="C(this,120)">○</button></td></tr><tr><td class="sn">4</td><td><input data-x="j6e3s4p"></td><td><input data-x="j6e3s4r" value="10"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-<div class="exo"><div class="exo-h"><span class="exo-n">4. Leg curl assis</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(90)">⏱️90s</span></div></div><div class="exo-i"><span>4×12</span><span>40-55kg</span></div><div class="exo-nt">💡 PAUSE 2s en contraction</div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j6e4s1p"></td><td><input data-x="j6e4s1r" value="12"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j6e4s2p"></td><td><input data-x="j6e4s2r" value="12"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j6e4s3p"></td><td><input data-x="j6e4s3r" value="12"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">4</td><td><input data-x="j6e4s4p"></td><td><input data-x="j6e4s4r" value="12"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-<div class="exo"><div class="exo-h"><span class="exo-n">5. Split squat bulgare</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(90)">⏱️90s</span></div></div><div class="exo-i"><span>3×10/jambe</span><span>16-24kg</span></div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j6e5s1p"></td><td><input data-x="j6e5s1r" value="10"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j6e5s2p"></td><td><input data-x="j6e5s2r" value="10"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j6e5s3p"></td><td><input data-x="j6e5s3r" value="10"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-<div class="exo"><div class="exo-h"><span class="exo-n">6. Hip thrust barre</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(90)">⏱️90s</span></div></div><div class="exo-i"><span>3×12</span><span>100-140kg</span></div><div class="exo-nt">💡 Squeeze fessiers en haut</div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j6e6s1p"></td><td><input data-x="j6e6s1r" value="12"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j6e6s2p"></td><td><input data-x="j6e6s2r" value="12"></td><td><button class="ck" onclick="C(this,90)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j6e6s3p"></td><td><input data-x="j6e6s3r" value="12"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-<div class="exo"><div class="exo-h"><span class="exo-n">7. Mollets assis</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(45)">⏱️45s</span></div></div><div class="exo-i"><span>4×20</span></div><div class="exo-nt">💡 Reps hautes, PAUSE en étirement</div><table><tr><th>#</th><th>Kg</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j6e7s1p"></td><td><input data-x="j6e7s1r" value="20"></td><td><button class="ck" onclick="C(this,45)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j6e7s2p"></td><td><input data-x="j6e7s2r" value="20"></td><td><button class="ck" onclick="C(this,45)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j6e7s3p"></td><td><input data-x="j6e7s3r" value="20"></td><td><button class="ck" onclick="C(this,45)">○</button></td></tr><tr><td class="sn">4</td><td><input data-x="j6e7s4p"></td><td><input data-x="j6e7s4r" value="20"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-</div></div>
-<div class="blc"><div class="blc-h"><span class="blc-t a">🎯 TAILLE FINE</span><span class="blc-d">15 min</span></div><div class="blc-b">
-<div class="exo"><div class="exo-h"><span class="exo-n">8. Planche latérale</span><div class="bdg"><span class="rpe">RPE 8</span><span class="rst" onclick="T(45)">⏱️45s</span></div></div><div class="exo-i"><span>3×30sec/côté</span></div><table><tr><th>#</th><th>Durée</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j6e8s1r" value="30s"></td><td><button class="ck" onclick="C(this,45)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j6e8s2r" value="30s"></td><td><button class="ck" onclick="C(this,45)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j6e8s3r" value="30s"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-<div class="exo"><div class="exo-h"><span class="exo-n">9. Bird dog</span><div class="bdg"><span class="rpe">RPE 8</span><span class="rst" onclick="T(60)">⏱️60s</span></div></div><div class="exo-i"><span>3×10/côté</span></div><div class="exo-nt">💡 PAUSE 2s bras/jambe tendus</div><table><tr><th>#</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j6e9s1r" value="10"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j6e9s2r" value="10"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j6e9s3r" value="10"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-<div class="exo"><div class="exo-h"><span class="exo-n">10. Crunch inversé</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(60)">⏱️60s</span></div></div><div class="exo-i"><span>3×12</span></div><table><tr><th>#</th><th>Reps</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j6e10s1r" value="12"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j6e10s2r" value="12"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j6e10s3r" value="12"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-<div class="exo"><div class="exo-h"><span class="exo-n">11. Hollow body hold</span><div class="bdg"><span class="rpe">RPE 9</span><span class="rst" onclick="T(60)">⏱️60s</span></div></div><div class="exo-i"><span>3×20-30sec</span></div><table><tr><th>#</th><th>Durée</th><th>✓</th></tr><tr><td class="sn">1</td><td><input data-x="j6e11s1r" value="20s"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">2</td><td><input data-x="j6e11s2r" value="20s"></td><td><button class="ck" onclick="C(this,60)">○</button></td></tr><tr><td class="sn">3</td><td><input data-x="j6e11s3r" value="20s"></td><td><button class="ck" onclick="C(this,0)">○</button></td></tr></table><button class="val" onclick="V(this)">✓ Valider</button></div>
-</div></div>
-</div>
-<!-- J7 REPOS -->
-<div class="pg" id="j7">
-<div class="hdr" style="border-left-color:#2ec4b6"><h2 style="color:#2ec4b6">🧘 J7 — REPOS ACTIF</h2><p>📅 Dimanche • Récupération</p></div>
-<div class="blc" style="border-color:#2ec4b6"><div class="blc-b" style="text-align:center;padding:30px">
-<div style="font-size:4rem;margin-bottom:20px">🧘</div>
-<h3 style="color:#2ec4b6;margin-bottom:20px">Journée de récupération</h3>
-<div style="text-align:left;max-width:300px;margin:0 auto;color:#aaa;line-height:2">
-<p>🚶 <b>15-20 min</b> — Marche légère</p>
-<p>🤸 <b>10-15 min</b> — Étirements statiques</p>
-<p>🎾 <b>5-10 min</b> — Foam rolling</p>
-</div>
-<div style="margin-top:25px;padding:15px;background:#1a2a25;border-radius:10px;border:1px solid #2ec4b6">
-<h4 style="color:#2ec4b6;margin-bottom:8px">🎯 Routine quotidienne</h4>
-<p style="color:#888;font-size:.8rem">☀️ Matin: Planche RKC 3×30sec</p>
-<p style="color:#888;font-size:.8rem">🌙 Soir: Dead bug 2×10/côté</p>
-</div>
-</div></div>
-</div>
-<!-- STATS -->
-<div class="pg" id="st">
-<div class="hdr" style="border-left-color:#3a86ff"><h2 style="color:#3a86ff">📊 STATISTIQUES</h2></div>
-
-<!-- Stats semaine en cours -->
-<div class="sts"><h3>📈 Semaine en cours</h3><div class="st-g">
-<div class="st-c"><div class="st-v" id="s-ex">0</div><div class="st-l">Exercices</div></div>
-<div class="st-c"><div class="st-v" id="s-se">0</div><div class="st-l">Séries</div></div>
-<div class="st-c"><div class="st-v" id="s-to">0</div><div class="st-l">Tonnage (kg)</div></div>
-<div class="st-c"><div class="st-v" id="s-jr">0/6</div><div class="st-l">Jours</div></div>
-</div></div>
-
-<!-- Records -->
-<div class="sts"><h3>🏆 Records (tous temps)</h3>
-<table style="width:100%;font-size:.8rem">
-<tr style="border-bottom:1px solid #333"><td style="padding:8px;color:#888">Dév. militaire</td><td style="padding:8px;text-align:right;font-weight:bold" id="r1">—</td></tr>
-<tr style="border-bottom:1px solid #333"><td style="padding:8px;color:#888">Dév. couché</td><td style="padding:8px;text-align:right;font-weight:bold" id="r2">—</td></tr>
-<tr style="border-bottom:1px solid #333"><td style="padding:8px;color:#888">Soulevé terre</td><td style="padding:8px;text-align:right;font-weight:bold" id="r3">—</td></tr>
-<tr style="border-bottom:1px solid #333"><td style="padding:8px;color:#888">Back squat</td><td style="padding:8px;text-align:right;font-weight:bold" id="r4">—</td></tr>
-<tr style="border-bottom:1px solid #333"><td style="padding:8px;color:#888">Rowing barre</td><td style="padding:8px;text-align:right;font-weight:bold" id="r5">—</td></tr>
-<tr><td style="padding:8px;color:#888">Tirage vertical</td><td style="padding:8px;text-align:right;font-weight:bold" id="r6">—</td></tr>
-</table></div>
-
-<!-- Calendrier -->
-<div class="sts">
-<h3>📅 Calendrier</h3>
-<div id="calNav" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-  <button onclick="calPrev()" style="background:var(--card2);border:1px solid var(--border);color:var(--text);width:36px;height:36px;border-radius:10px;font-size:1rem;cursor:pointer">◀</button>
-  <span id="calMonth" style="font-weight:700;font-size:.9rem;color:var(--text)"></span>
-  <button onclick="calNext()" style="background:var(--card2);border:1px solid var(--border);color:var(--text);width:36px;height:36px;border-radius:10px;font-size:1rem;cursor:pointer">▶</button>
-</div>
-<div id="calGrid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center;font-size:.75rem"></div>
-</div>
-
-<!-- Historique séances -->
-<div class="sts">
-<h3>📋 Historique</h3>
-<div id="historyList" style="font-size:.8rem;color:var(--sub)">Aucune séance enregistrée</div>
-</div>
-
-<!-- Actions -->
-<div class="acts">
-<button class="act" onclick="importData()" style="background:rgba(58,134,255,0.15);color:var(--blue);border:1px solid rgba(58,134,255,0.3)">📥 Restaurer une séance</button>
-<button class="act act-r" onclick="resetWeek()">🔄 Nouvelle semaine</button>
-</div>
-<div class="acts" style="margin-top:8px">
-<button class="act act-e" onclick="exportAllHistory()">💾 Sauvegarder tout (iCloud)</button>
-<button class="act act-r" onclick="resetAll()">🗑️ Tout supprimer</button>
-</div>
-<input type="file" id="importFile" accept=".json" style="display:none" onchange="handleImport(event)">
-</div>
-<!-- CONFIRM SESSION POPUP -->
-<div class="confirm-overlay" id="confirmPopup">
-  <div class="confirm-box">
-    <div class="confirm-emoji">🏆</div>
-    <div class="confirm-title" id="confirmTitle">Terminer la séance ?</div>
-    <div class="confirm-sub" id="confirmSub">Tes résultats seront sauvegardés dans iCloud.<br>Tu pourras les restaurer à tout moment.</div>
-    <div class="confirm-btns" id="confirmBtns">
-      <button class="confirm-btn confirm-cancel" onclick="closeConfirm()">Annuler</button>
-      <button class="confirm-btn confirm-go" onclick="confirmSession()">💾 Sauvegarder</button>
+function StatBox({ label, value, sub, color, small }) {
+  return (
+    <div
+      style={{
+        flex: small ? "0 0 auto" : 1,
+        padding: small ? "10px 14px" : "14px 18px",
+        borderRadius: 12,
+        background: "rgba(255,255,255,0.03)",
+        border: "1px solid rgba(255,255,255,0.06)",
+      }}
+    >
+      <div style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", fontWeight: 600, textTransform: "uppercase", letterSpacing: 1 }}>
+        {label}
+      </div>
+      <div style={{ fontSize: small ? 18 : 22, fontWeight: 700, marginTop: 4, fontFamily: "'JetBrains Mono', monospace", color: color || "#fff" }}>
+        {value}
+      </div>
+      {sub && <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", marginTop: 2 }}>{sub}</div>}
     </div>
-    <div class="confirm-ok" id="confirmOk">✅ Séance sauvegardée avec succès !</div>
-  </div>
-</div>
-
-<!-- CHRONO -->
-<div class="chr" id="chr">
-<div class="chr-in">
-<div class="chr-row1">
-<div class="chr-d" id="cd">0:00</div>
-<div class="chr-bt">
-<button class="chr-b c-pl" id="bp" onclick="toggle()">▶</button>
-<button class="chr-b c-rs" onclick="reset()">↺</button>
-<button class="chr-b c-cl" onclick="close_()">✕</button>
-</div>
-</div>
-<div class="chr-row2">
-<div class="pre">
-<button onclick="P(60,this)">60s</button>
-<button onclick="P(90,this)">90s</button>
-<button onclick="P(120,this)">2m</button>
-<button onclick="P(150,this)">2m30</button>
-<button class="on" onclick="P(180,this)">3m</button>
-</div>
-</div>
-<div class="chr-br"><div class="chr-fl" id="cb" style="width:100%"></div></div>
-</div>
-</div>
-<div class="msg" id="mg">💾 Sauvegardé !</div>
-</body>
-</html>
-<script>
-// === CHRONO ===
-let I=null, t=0, mx=180, run=false;
-
-function T(s) {
-  mx=s; t=s; U();
-  document.getElementById('chr').classList.add('show');
-  start();
-  haptic();
+  );
 }
 
-function start() {
-  if(I) clearInterval(I);
-  run=true;
-  document.getElementById('bp').textContent='⏸';
-  I=setInterval(()=>{
-    t--;
-    U();
-    if(t<=0) { clearInterval(I); run=false; document.getElementById('bp').textContent='▶'; fin(); }
-  }, 1000);
+function Delta({ current, previous, unit = "kg", better = "higher" }) {
+  if (!current || !previous) return null;
+  const diff = parseFloat(current) - parseFloat(previous);
+  if (isNaN(diff) || diff === 0) return null;
+  const isGood = better === "higher" ? diff > 0 : diff < 0;
+  return (
+    <span style={{ fontSize: 11, fontWeight: 700, color: isGood ? "#10B981" : "#EF4444", marginLeft: 6 }}>
+      {diff > 0 ? "▲" : "▼"} {Math.abs(diff).toFixed(1)}{unit}
+    </span>
+  );
 }
 
-function toggle() {
-  haptic();
-  if(run) { clearInterval(I); run=false; document.getElementById('bp').textContent='▶'; }
-  else { if(t<=0) t=mx; start(); }
+function MiniBar({ value, max, color }) {
+  const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0;
+  return (
+    <div style={{ height: 4, background: "rgba(255,255,255,0.06)", borderRadius: 2, flex: 1 }}>
+      <div style={{ height: "100%", width: `${pct}%`, background: color, borderRadius: 2, transition: "width 0.4s ease" }} />
+    </div>
+  );
 }
 
-function reset() { haptic(); clearInterval(I); run=false; t=mx; U(); document.getElementById('bp').textContent='▶'; }
-function close_() { haptic(); clearInterval(I); run=false; document.getElementById('chr').classList.remove('show'); }
-
-function P(s,btn) {
-  mx=s; t=s; U(); haptic();
-  document.querySelectorAll('.pre button').forEach(b=>b.classList.remove('on'));
-  if(btn) btn.classList.add('on');
+function InputField({ value, onChange, placeholder, width = 60, align = "center" }) {
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      style={{
+        width,
+        padding: "8px 8px",
+        borderRadius: 8,
+        border: "1px solid rgba(255,255,255,0.1)",
+        background: "rgba(255,255,255,0.04)",
+        color: "#fff",
+        fontSize: 14,
+        fontFamily: "'JetBrains Mono', monospace",
+        fontWeight: 600,
+        textAlign: align,
+        outline: "none",
+        transition: "border 0.2s",
+      }}
+      onFocus={(e) => (e.target.style.borderColor = "rgba(255,255,255,0.3)")}
+      onBlur={(e) => (e.target.style.borderColor = "rgba(255,255,255,0.1)")}
+    />
+  );
 }
 
-function U() {
-  const m=Math.floor(t/60), s=t%60, d=document.getElementById('cd');
-  d.textContent=m+':'+(s<10?'0':'')+s;
-  d.classList.remove('w','r');
-  if(t<=10) d.classList.add('r');
-  else if(t<=30) d.classList.add('w');
-  document.getElementById('cb').style.width=(t/mx)*100+'%';
+function CheckDot({ checked, onToggle, color }) {
+  return (
+    <button
+      onClick={onToggle}
+      style={{
+        width: 24,
+        height: 24,
+        borderRadius: "50%",
+        border: `2px solid ${checked ? color : "rgba(255,255,255,0.15)"}`,
+        background: checked ? color : "transparent",
+        cursor: "pointer",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        transition: "all 0.2s",
+        padding: 0,
+        flexShrink: 0,
+      }}
+    >
+      {checked && (
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+          <path d="M2 6L5 9L10 3" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      )}
+    </button>
+  );
 }
 
-function fin() {
-  haptic('heavy');
-  // Triple beep
-  try {
-    const c=new(window.AudioContext||window.webkitAudioContext)();
-    [0, 0.25, 0.5].forEach(delay => {
-      const o=c.createOscillator(), g=c.createGain();
-      o.connect(g); g.connect(c.destination);
-      o.frequency.value=880; g.gain.value=0.25;
-      o.start(c.currentTime + delay);
-      o.stop(c.currentTime + delay + 0.15);
+// ─── REST TIMER (floating overlay) ──────────────────────────────
+function RestTimer({ seconds, color, onDone, onCancel, onDurationChange }) {
+  const [remaining, setRemaining] = useState(seconds);
+  const [paused, setPaused] = useState(false);
+  const total = useRef(seconds);
+  const audioCtx = useRef(null);
+
+  useEffect(() => {
+    setRemaining(seconds);
+    total.current = seconds;
+  }, [seconds]);
+
+  useEffect(() => {
+    if (paused) return;
+    if (remaining <= 0) {
+      // Beep sound
+      try {
+        if (!audioCtx.current) audioCtx.current = new (window.AudioContext || window.webkitAudioContext)();
+        const ctx = audioCtx.current;
+        const playBeep = (delay) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.frequency.value = 880;
+          osc.type = "sine";
+          gain.gain.value = 0.3;
+          osc.start(ctx.currentTime + delay);
+          osc.stop(ctx.currentTime + delay + 0.12);
+        };
+        playBeep(0);
+        playBeep(0.2);
+        playBeep(0.4);
+      } catch {}
+      // Vibrate if available
+      try { navigator.vibrate?.([200, 100, 200, 100, 200]); } catch {}
+      onDone();
+      return;
+    }
+    const t = setTimeout(() => setRemaining((r) => r - 1), 1000);
+    return () => clearTimeout(t);
+  }, [remaining, paused, onDone]);
+
+  const pct = total.current > 0 ? remaining / total.current : 0;
+  const radius = 54;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference * (1 - pct);
+  const mins = Math.floor(remaining / 60);
+  const secs = remaining % 60;
+  const isLow = remaining <= 5 && remaining > 0;
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        bottom: 0,
+        left: 0,
+        right: 0,
+        zIndex: 9999,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        padding: "20px 16px 28px",
+        background: "linear-gradient(to top, rgba(8,8,13,0.98) 0%, rgba(8,8,13,0.92) 100%)",
+        backdropFilter: "blur(20px)",
+        WebkitBackdropFilter: "blur(20px)",
+        borderTop: `1px solid ${color}30`,
+        animation: "slideUp 0.3s ease-out",
+      }}
+    >
+      <style>{`
+        @keyframes slideUp { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+      `}</style>
+
+      <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 2, color: "rgba(255,255,255,0.35)", marginBottom: 14 }}>
+        ⏱ Temps de repos
+      </div>
+
+      {/* Circular progress */}
+      <div style={{ position: "relative", width: 130, height: 130, marginBottom: 16 }}>
+        <svg width="130" height="130" viewBox="0 0 130 130" style={{ transform: "rotate(-90deg)" }}>
+          <circle cx="65" cy="65" r={radius} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="6" />
+          <circle
+            cx="65" cy="65" r={radius} fill="none"
+            stroke={isLow ? "#EF4444" : color}
+            strokeWidth="6"
+            strokeLinecap="round"
+            strokeDasharray={circumference}
+            strokeDashoffset={offset}
+            style={{ transition: "stroke-dashoffset 1s linear, stroke 0.3s" }}
+          />
+        </svg>
+        <div style={{
+          position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+          animation: isLow ? "pulse 0.5s ease-in-out infinite" : "none",
+        }}>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 36, fontWeight: 700, color: isLow ? "#EF4444" : "#fff", letterSpacing: -1 }}>
+            {mins}:{secs.toString().padStart(2, "0")}
+          </div>
+        </div>
+      </div>
+
+      {/* Preset buttons to adjust */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
+        {REST_PRESETS.map((p) => (
+          <button
+            key={p}
+            onClick={() => { setRemaining(p); total.current = p; onDurationChange?.(p); }}
+            style={{
+              padding: "6px 10px",
+              borderRadius: 8,
+              border: total.current === p ? `1px solid ${color}60` : "1px solid rgba(255,255,255,0.08)",
+              background: total.current === p ? `${color}15` : "rgba(255,255,255,0.03)",
+              color: total.current === p ? color : "rgba(255,255,255,0.4)",
+              fontSize: 12,
+              fontWeight: 600,
+              fontFamily: "'JetBrains Mono', monospace",
+              cursor: "pointer",
+            }}
+          >
+            {p >= 60 ? `${p / 60 >= 1 ? Math.floor(p / 60) + ":" + (p % 60 === 0 ? "00" : p % 60 < 10 ? "0" + (p % 60) : p % 60) : p + "s"}` : p + "s"}
+          </button>
+        ))}
+      </div>
+
+      {/* Controls */}
+      <div style={{ display: "flex", gap: 10 }}>
+        <button
+          onClick={() => setPaused((p) => !p)}
+          style={{
+            padding: "10px 24px",
+            borderRadius: 10,
+            border: "1px solid rgba(255,255,255,0.1)",
+            background: "rgba(255,255,255,0.05)",
+            color: "#fff",
+            fontSize: 13,
+            fontWeight: 600,
+            cursor: "pointer",
+            fontFamily: "inherit",
+          }}
+        >
+          {paused ? "▶ Reprendre" : "⏸ Pause"}
+        </button>
+        <button
+          onClick={onCancel}
+          style={{
+            padding: "10px 24px",
+            borderRadius: 10,
+            border: "1px solid rgba(255,255,255,0.06)",
+            background: "rgba(255,255,255,0.02)",
+            color: "rgba(255,255,255,0.4)",
+            fontSize: 13,
+            fontWeight: 600,
+            cursor: "pointer",
+            fontFamily: "inherit",
+          }}
+        >
+          ✕ Passer
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── EXERCISE CARD ──────────────────────────────────────────────
+function ExerciseCard({ exercise, data, prevData, color, onChange, onSetDone }) {
+  const prevBestWeight = prevData
+    ? Math.max(...prevData.sets.filter((s) => s.weight && s.done).map((s) => parseFloat(s.weight) || 0), 0)
+    : 0;
+  const prevBestReps = prevData
+    ? Math.max(...prevData.sets.filter((s) => s.reps && s.done).map((s) => parseInt(s.reps) || 0), 0)
+    : 0;
+  const currBestWeight = Math.max(...data.sets.filter((s) => s.weight && s.done).map((s) => parseFloat(s.weight) || 0), 0);
+  const setsCompleted = data.sets.filter((s) => s.done).length;
+
+  const targetW = parseFloat(data.targetWeight) || 0;
+  const targetR = parseInt(data.targetReps) || 0;
+
+  return (
+    <div
+      style={{
+        borderRadius: 16,
+        background: "rgba(255,255,255,0.025)",
+        border: "1px solid rgba(255,255,255,0.06)",
+        overflow: "hidden",
+        transition: "all 0.3s",
+      }}
+    >
+      {/* Header */}
+      <div style={{ padding: "14px 18px 12px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ fontSize: 20 }}>{exercise.icon}</span>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>{exercise.name}</div>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginTop: 1 }}>
+              {setsCompleted}/4 séries
+              {prevBestWeight > 0 && (
+                <span style={{ marginLeft: 8, color: "rgba(255,255,255,0.25)" }}>
+                  Sem. préc: {prevBestWeight}kg × {prevBestReps}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+        {/* Mini completion bar */}
+        <div style={{ width: 60, display: "flex", alignItems: "center", gap: 6 }}>
+          <MiniBar value={setsCompleted} max={4} color={color} />
+          <span style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontWeight: 600 }}>{setsCompleted * 25}%</span>
+        </div>
+      </div>
+
+      {/* Targets row */}
+      <div
+        style={{
+          padding: "10px 18px",
+          background: `${color}08`,
+          borderTop: `1px solid ${color}15`,
+          borderBottom: `1px solid ${color}15`,
+          display: "flex",
+          alignItems: "center",
+          gap: 16,
+        }}
+      >
+        <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: color, minWidth: 70 }}>
+          🎯 Objectif
+        </span>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <InputField
+            value={data.targetWeight}
+            onChange={(v) => onChange("targetWeight", v)}
+            placeholder="kg"
+            width={52}
+          />
+          <span style={{ fontSize: 12, color: "rgba(255,255,255,0.3)" }}>kg</span>
+        </div>
+        <span style={{ color: "rgba(255,255,255,0.15)" }}>×</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <InputField
+            value={data.targetReps}
+            onChange={(v) => onChange("targetReps", v)}
+            placeholder="reps"
+            width={46}
+          />
+          <span style={{ fontSize: 12, color: "rgba(255,255,255,0.3)" }}>reps</span>
+        </div>
+        {prevBestWeight > 0 && targetW > 0 && (
+          <Delta current={targetW} previous={prevBestWeight} unit="kg" />
+        )}
+      </div>
+
+      {/* Sets */}
+      <div style={{ padding: "10px 18px 14px" }}>
+        <div style={{ display: "flex", gap: 8, marginBottom: 8, paddingLeft: 34 }}>
+          <span style={{ width: 60, fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.8, color: "rgba(255,255,255,0.25)", textAlign: "center" }}>
+            Poids
+          </span>
+          <span style={{ width: 46, fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.8, color: "rgba(255,255,255,0.25)", textAlign: "center" }}>
+            Reps
+          </span>
+        </div>
+        {data.sets.map((set, si) => {
+          const w = parseFloat(set.weight) || 0;
+          const r = parseInt(set.reps) || 0;
+          const hitTarget = targetW > 0 && targetR > 0 && w >= targetW && r >= targetR && set.done;
+          return (
+            <div
+              key={si}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                marginBottom: 6,
+                padding: "4px 0",
+                opacity: set.done ? 1 : 0.7,
+              }}
+            >
+              <CheckDot
+                checked={set.done}
+                onToggle={() => {
+                  onChange(`set_${si}_done`, !set.done);
+                  if (!set.done) onSetDone();
+                }}
+                color={hitTarget ? "#10B981" : color}
+              />
+              <InputField
+                value={set.weight}
+                onChange={(v) => onChange(`set_${si}_weight`, v)}
+                placeholder="—"
+                width={60}
+              />
+              <InputField
+                value={set.reps}
+                onChange={(v) => onChange(`set_${si}_reps`, v)}
+                placeholder="—"
+                width={46}
+              />
+              {set.done && hitTarget && (
+                <span style={{ fontSize: 12, color: "#10B981", fontWeight: 700 }}>✓ Target</span>
+              )}
+              {set.done && w > 0 && !hitTarget && targetW > 0 && (
+                <span style={{ fontSize: 11, color: "rgba(255,255,255,0.25)" }}>
+                  {w < targetW ? `${(targetW - w).toFixed(1)}kg restant` : `${r}/${targetR} reps`}
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── PREVIOUS WEEK RECAP ────────────────────────────────────────
+function PrevWeekRecap({ prevWeekData, color }) {
+  if (!prevWeekData) return null;
+
+  const exerciseResults = defaultExercises.map((ex) => {
+    const d = prevWeekData.exercises[ex.id];
+    const doneSets = d.sets.filter((s) => s.done);
+    const bestWeight = Math.max(...doneSets.map((s) => parseFloat(s.weight) || 0), 0);
+    const bestReps = Math.max(...doneSets.filter((s) => parseFloat(s.weight) === bestWeight).map((s) => parseInt(s.reps) || 0), 0);
+    return { ...ex, bestWeight, bestReps, setsCompleted: doneSets.length, total: d.sets.length };
+  }).filter((r) => r.setsCompleted > 0);
+
+  if (exerciseResults.length === 0) return null;
+
+  return (
+    <div
+      style={{
+        borderRadius: 14,
+        background: "linear-gradient(135deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015))",
+        border: "1px solid rgba(255,255,255,0.08)",
+        padding: "16px 18px",
+        marginBottom: 16,
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+        <span style={{ fontSize: 16 }}>📊</span>
+        <span style={{ fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: "rgba(255,255,255,0.5)" }}>
+          Résultats semaine précédente
+        </span>
+      </div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+        {exerciseResults.map((r) => (
+          <div
+            key={r.id}
+            style={{
+              padding: "10px 14px",
+              borderRadius: 10,
+              background: "rgba(255,255,255,0.03)",
+              border: "1px solid rgba(255,255,255,0.06)",
+              minWidth: 140,
+              flex: "1 1 140px",
+            }}
+          >
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", fontWeight: 600, marginBottom: 4 }}>
+              {r.icon} {r.name}
+            </div>
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 16, fontWeight: 700 }}>
+              {r.bestWeight}<span style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", fontWeight: 500 }}>kg</span>
+              <span style={{ color: "rgba(255,255,255,0.2)", margin: "0 4px" }}>×</span>
+              {r.bestReps}<span style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", fontWeight: 500 }}>reps</span>
+            </div>
+            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.25)", marginTop: 3 }}>
+              {r.setsCompleted}/{r.total} séries complétées
+            </div>
+          </div>
+        ))}
+      </div>
+      {prevWeekData.bicepsContracte && (
+        <div style={{ marginTop: 12, display: "flex", gap: 12 }}>
+          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)" }}>
+            Biceps contracté: <span style={{ color: color, fontWeight: 700 }}>{prevWeekData.bicepsContracte} cm</span>
+          </div>
+          {prevWeekData.bicepsRepos && (
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)" }}>
+              Repos: <span style={{ color: "rgba(255,255,255,0.6)", fontWeight: 700 }}>{prevWeekData.bicepsRepos} cm</span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── WEEK PROGRESS SUMMARY ─────────────────────────────────────
+function WeekProgress({ weekData, color }) {
+  const totalSets = defaultExercises.length * 4;
+  const doneSets = defaultExercises.reduce((acc, ex) => {
+    return acc + weekData.exercises[ex.id].sets.filter((s) => s.done).length;
+  }, 0);
+  const targetsHit = defaultExercises.reduce((acc, ex) => {
+    const d = weekData.exercises[ex.id];
+    const tw = parseFloat(d.targetWeight) || 0;
+    const tr = parseInt(d.targetReps) || 0;
+    if (tw === 0 || tr === 0) return acc;
+    const hits = d.sets.filter((s) => s.done && (parseFloat(s.weight) || 0) >= tw && (parseInt(s.reps) || 0) >= tr).length;
+    return acc + (hits > 0 ? 1 : 0);
+  }, 0);
+  const targetsSet = defaultExercises.filter((ex) => {
+    const d = weekData.exercises[ex.id];
+    return (parseFloat(d.targetWeight) || 0) > 0 && (parseInt(d.targetReps) || 0) > 0;
+  }).length;
+
+  return (
+    <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
+      <StatBox label="Séries complétées" value={`${doneSets}/${totalSets}`} color={doneSets === totalSets ? "#10B981" : "#fff"} />
+      <StatBox label="Objectifs atteints" value={targetsSet > 0 ? `${targetsHit}/${targetsSet}` : "—"} color={targetsHit === targetsSet && targetsSet > 0 ? "#10B981" : "#fff"} />
+      <StatBox label="Complétion" value={`${Math.round((doneSets / totalSets) * 100)}%`} color={color} />
+    </div>
+  );
+}
+
+// ─── BICEPS CHART (mini sparkline) ──────────────────────────────
+function BicepsSparkline({ allWeekData, currentWeek }) {
+  const w = 320;
+  const h = 80;
+  const pad = { l: 30, r: 10, t: 10, b: 20 };
+  const iw = w - pad.l - pad.r;
+  const ih = h - pad.t - pad.b;
+
+  const projPoints = bicepsProjection.map((p, i) => ({
+    x: pad.l + (i / 11) * iw,
+    y: pad.t + ih - ((p.contracte - 38.5) / 4) * ih,
+  }));
+
+  const realPoints = [];
+  for (let i = 0; i < 12; i++) {
+    const wd = allWeekData[i + 1];
+    if (wd && wd.bicepsContracte) {
+      const v = parseFloat(wd.bicepsContracte);
+      if (!isNaN(v)) {
+        realPoints.push({
+          x: pad.l + (i / 11) * iw,
+          y: pad.t + ih - ((v - 38.5) / 4) * ih,
+          v,
+        });
+      }
+    }
+  }
+
+  const projPath = projPoints.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ");
+  const realPath = realPoints.length > 1
+    ? realPoints.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ")
+    : null;
+
+  return (
+    <svg width={w} height={h} style={{ display: "block" }}>
+      {/* Grid lines */}
+      {[39, 40, 41, 42].map((v) => {
+        const y = pad.t + ih - ((v - 38.5) / 4) * ih;
+        return (
+          <g key={v}>
+            <line x1={pad.l} x2={w - pad.r} y1={y} y2={y} stroke="rgba(255,255,255,0.06)" strokeDasharray="2,4" />
+            <text x={pad.l - 4} y={y + 3} fill="rgba(255,255,255,0.2)" fontSize="8" textAnchor="end" fontFamily="monospace">{v}</text>
+          </g>
+        );
+      })}
+      {/* Week labels */}
+      {[1, 4, 8, 12].map((wk) => {
+        const x = pad.l + ((wk - 1) / 11) * iw;
+        return <text key={wk} x={x} y={h - 4} fill="rgba(255,255,255,0.2)" fontSize="8" textAnchor="middle" fontFamily="monospace">S{wk}</text>;
+      })}
+      {/* Projection line */}
+      <path d={projPath} fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="1.5" strokeDasharray="4,3" />
+      {/* Real data line */}
+      {realPath && <path d={realPath} fill="none" stroke="#10B981" strokeWidth="2" />}
+      {realPoints.map((p, i) => (
+        <circle key={i} cx={p.x} cy={p.y} r={3} fill="#10B981" />
+      ))}
+      {/* Current week indicator */}
+      <line
+        x1={pad.l + ((currentWeek - 1) / 11) * iw}
+        x2={pad.l + ((currentWeek - 1) / 11) * iw}
+        y1={pad.t}
+        y2={pad.t + ih}
+        stroke="rgba(255,255,255,0.1)"
+        strokeWidth="1"
+      />
+    </svg>
+  );
+}
+
+// ─── MAIN APP ───────────────────────────────────────────────────
+export default function EvolutionTracker() {
+  const [state, setState] = useState(null);
+  const [activeWeek, setActiveWeek] = useState(0);
+  const [tab, setTab] = useState("track"); // "track" | "evolution"
+  const [saving, setSaving] = useState(false);
+  const [timerActive, setTimerActive] = useState(false);
+  const [restDuration, setRestDuration] = useState(90);
+
+  // Keep screen awake when on track tab
+  useWakeLock(tab === "track");
+
+  // Load on mount
+  useEffect(() => {
+    loadData().then((saved) => {
+      if (saved && saved.weekData) {
+        // Merge with defaults to handle new exercises
+        const merged = getDefaultState();
+        Object.keys(saved.weekData).forEach((wk) => {
+          if (merged.weekData[wk]) {
+            merged.weekData[wk] = { ...merged.weekData[wk], ...saved.weekData[wk] };
+            // Ensure all exercises exist
+            defaultExercises.forEach((ex) => {
+              if (!merged.weekData[wk].exercises[ex.id]) {
+                merged.weekData[wk].exercises[ex.id] = getEmptyWeekData().exercises[ex.id];
+              }
+            });
+          }
+        });
+        merged.currentWeek = saved.currentWeek || 1;
+        setState(merged);
+        setActiveWeek(merged.currentWeek - 1);
+      } else {
+        setState(getDefaultState());
+      }
     });
-  } catch(e){}
-  if('vibrate'in navigator) navigator.vibrate([200,100,200,100,300]);
-  msg('⏰ Repos terminé — C\'est reparti !');
-}
+  }, []);
 
-// === VIDEO ===
-const videoMap = {
-  'Développé militaire debout': 'overhead press barbell form',
-  'Développé incliné haltères 30°': 'incline dumbbell press 30',
-  'Élévations latérales': 'lateral raises dumbbell form',
-  'Dips lestés': 'weighted dips chest triceps',
-  'Écartés poulie haute': 'cable fly high pulley',
-  'Pushdown triceps corde': 'tricep pushdown rope',
-  'Shrugs haltères lourds': 'heavy dumbbell shrugs',
-  'Face pulls corde': 'face pulls rope form',
-  'Shrugs barre derrière': 'behind back barbell shrugs',
-  'Neck curls': 'neck curls plate exercise',
-  'Neck extensions': 'neck extensions plate exercise',
-  'Soulevé de terre conventionnel': 'conventional deadlift form',
-  'Rowing barre pronation': 'barbell row overhand grip',
-  'Tirage vertical prise large': 'lat pulldown wide grip form',
-  'Rowing 1 bras haltère': 'one arm dumbbell row',
-  'Pullover poulie haute': 'straight arm pulldown cable',
-  'Curl barre EZ': 'ez bar curl biceps',
-  'Curl marteau haltères': 'hammer curl dumbbell',
-  'Wrist curls barre': 'wrist curls barbell forearm',
-  'Reverse wrist curls': 'reverse wrist curls forearm',
-  "Farmer's walk": 'farmers walk exercise form',
-  'Dead hangs': 'dead hang bar grip',
-  'Back squat barre': 'barbell back squat form',
-  'Romanian deadlift (RDL)': 'romanian deadlift rdl form',
-  'Presse jambes pieds hauts': 'leg press high feet placement',
-  'Leg curl allongé': 'lying leg curl hamstring',
-  'Leg extension': 'leg extension quadriceps',
-  'Fentes marchées': 'walking lunges dumbbell',
-  'Mollets debout machine': 'standing calf raise machine',
-  'Planche RKC': 'rkc plank exercise form',
-  'Dead bug': 'dead bug exercise core',
-  'Ab wheel rollout': 'ab wheel rollout form',
-  'Pallof press': 'pallof press cable core',
-  'Développé couché barre': 'barbell bench press form',
-  'Push press': 'push press barbell form',
-  'Développé haltères assis neutre': 'seated neutral grip dumbbell press',
-  'Élévations latérales câble': 'cable lateral raise one arm',
-  'Développé incliné machine': 'incline chest press machine',
-  'Extensions triceps overhead': 'overhead tricep extension cable',
-  'Pompes diamant (finisher)': 'diamond push ups form',
-  'Shrugs machine ou barre': 'shrug machine exercise',
-  'Rowing menton prise large': 'upright row wide grip',
-  'Face pulls assis': 'seated face pulls cable',
-  'Neck lateral raises': 'neck lateral flexion exercise',
-  'Rowing barre supination (Yates)': 'yates row underhand barbell',
-  'Tractions prise neutre lestées': 'weighted chin ups neutral grip',
-  'Tirage vertical prise large': 'lat pulldown wide grip',
-  'Rowing machine T-bar': 't bar row machine form',
-  'Pullover haltère': 'dumbbell pullover chest',
-  'Curl incliné 45°': 'incline dumbbell curl 45',
-  'Curl concentré': 'concentration curl dumbbell',
-  'Reverse curl barre EZ': 'reverse curl ez bar forearm',
-  'Wrist roller (enrouleur)': 'wrist roller forearm exercise',
-  'Pinch grip plate hold': 'pinch grip plate hold forearm',
-  'Front squat': 'front squat barbell form',
-  'Soulevé de terre sumo': 'sumo deadlift form',
-  'Hack squat machine': 'hack squat machine form',
-  'Leg curl assis': 'seated leg curl hamstring',
-  'Split squat bulgare': 'bulgarian split squat dumbbell',
-  'Hip thrust barre': 'barbell hip thrust glutes',
-  'Mollets assis': 'seated calf raise machine',
-  'Planche latérale': 'side plank exercise form',
-  'Bird dog': 'bird dog exercise core',
-  'Crunch inversé': 'reverse crunch abs',
-  'Hollow body hold': 'hollow body hold exercise',
-  'Face pulls (poulie basse)': 'face pulls low cable',
-  "Farmer's walk (lourd)": 'heavy farmers walk exercise'
-};
+  // Auto-save
+  const doSave = useCallback(async (s) => {
+    setSaving(true);
+    await saveData(s);
+    setTimeout(() => setSaving(false), 500);
+  }, []);
 
-function vid(btn) {
-  const name = btn.closest('.exo').querySelector('.exo-n').textContent.replace(/^\d+\.\s*/, '');
-  const query = videoMap[name] || name + ' exercise form';
-  const url = 'https://www.youtube.com/results?search_query=' + encodeURIComponent(query);
-  // PWA compatible: create a real link and click it
-  const a = document.createElement('a');
-  a.href = url;
-  a.target = '_blank';
-  a.rel = 'noopener';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  haptic();
-}
-
-// === HAPTIC FEEDBACK ===
-function haptic(style='light') {
-  if('vibrate' in navigator) {
-    if(style==='heavy') navigator.vibrate([50,30,50]);
-    else navigator.vibrate(10);
-  }
-}
-
-// === NAVIGATION ===
-function go(id, btn) {
-  haptic();
-  document.querySelectorAll('.pg').forEach(p=>p.classList.remove('show'));
-  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));
-  document.getElementById(id).classList.add('show');
-  btn.classList.add('on');
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-  if(id==='st') stats();
-}
-
-// === CHECK SÉRIE ===
-function C(b, r) {
-  b.classList.toggle('on');
-  b.textContent = b.classList.contains('on') ? '✓' : '○';
-  haptic(b.classList.contains('on') ? 'light' : 'light');
-  if(b.classList.contains('on') && r > 0) T(r);
-  save();
-  updateProgress();
-}
-
-// === VALIDER EXERCICE ===
-function V(b) {
-  const e=b.closest('.exo');
-  e.classList.toggle('ok');
-  b.classList.toggle('ok');
-  b.textContent = e.classList.contains('ok') ? '✓ Terminé !' : '✓ Valider';
-  haptic(e.classList.contains('ok') ? 'heavy' : 'light');
-  save();
-  updateProgress();
-  if(e.classList.contains('ok')) msg('💪 Exercice validé !');
-}
-
-// === PROGRESS PER DAY ===
-function updateProgress() {
-  for(let j=1; j<=6; j++) {
-    const pg = document.getElementById('j'+j);
-    if(!pg) continue;
-    const total = pg.querySelectorAll('.exo').length;
-    const done = pg.querySelectorAll('.exo.ok').length;
-    const bar = pg.querySelector('.day-prog-fill');
-    if(bar) bar.style.width = (done/total*100)+'%';
-  }
-}
-
-// === SAVE / LOAD ===
-function save() {
-  const d = { i:{}, c:[], e:[] };
-  document.querySelectorAll('input[data-x]').forEach(i=>{
-    if(i.value) d.i[i.dataset.x] = i.value;
-  });
-  document.querySelectorAll('.ck.on').forEach((b,i) => d.c.push(i));
-  document.querySelectorAll('.exo.ok').forEach(e => {
-    const n=e.querySelector('.exo-n');
-    if(n) d.e.push(n.textContent);
-  });
-  localStorage.setItem('colosse', JSON.stringify(d));
-}
-
-function load() {
-  const s=localStorage.getItem('colosse');
-  if(!s) return;
-  try {
-    const d=JSON.parse(s);
-    for(const k in d.i) {
-      const i=document.querySelector('[data-x="'+k+'"]');
-      if(i) i.value = d.i[k];
+  useEffect(() => {
+    if (state) {
+      const t = setTimeout(() => doSave(state), 800);
+      return () => clearTimeout(t);
     }
-    const cks=document.querySelectorAll('.ck');
-    d.c.forEach(i => {
-      if(cks[i]) { cks[i].classList.add('on'); cks[i].textContent='✓'; }
-    });
-    d.e?.forEach(n => {
-      document.querySelectorAll('.exo-n').forEach(el => {
-        if(el.textContent===n) {
-          const ex=el.closest('.exo');
-          ex.classList.add('ok');
-          const b=ex.querySelector('.val');
-          b.classList.add('ok');
-          b.textContent='✓ Terminé !';
-        }
-      });
-    });
-    updateProgress();
-  } catch(e) { console.log('Load error:', e); }
-}
+  }, [state, doSave]);
 
-// === STATS ===
-function stats() {
-  const ex=document.querySelectorAll('.exo.ok').length;
-  const se=document.querySelectorAll('.ck.on').length;
-  let to=0;
-  document.querySelectorAll('input[data-x$="p"]').forEach(i=>{
-    const p=parseFloat(i.value)||0;
-    const row=i.closest('tr');
-    const ri=row?.querySelector('input[data-x$="r"]');
-    const r=parseFloat(ri?.value)||0;
-    to += p*r;
-  });
-  let days=0;
-  for(let j=1;j<=6;j++){
-    const pg=document.getElementById('j'+j);
-    if(pg && pg.querySelectorAll('.exo.ok').length > 0) days++;
+  if (!state) {
+    return (
+      <div style={{ minHeight: "100vh", background: "#08080d", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff" }}>
+        <div style={{ fontSize: 14, color: "rgba(255,255,255,0.4)" }}>Chargement...</div>
+      </div>
+    );
   }
-  document.getElementById('s-ex').textContent=ex;
-  document.getElementById('s-se').textContent=se;
-  document.getElementById('s-to').textContent=Math.round(to).toLocaleString();
-  document.getElementById('s-jr').textContent=days+'/6';
-  // Records from history + current
-  updateRecords();
-  // Calendar + history
-  renderCalendar();
-  renderHistory();
-}
 
-// === RECORDS (all time from history) ===
-function updateRecords() {
-  const history = getHistory();
-  const recMap = { j1e1:0, j4e1:0, j2e1:0, j3e1:0, j2e2:0, j2e3:0 };
-  // Current session
-  for(const pre in recMap) {
-    document.querySelectorAll('[data-x^="'+pre+'"][data-x$="p"]').forEach(i=>{
-      const v=parseFloat(i.value)||0;
-      if(v>recMap[pre]) recMap[pre]=v;
+  const weekIdx = activeWeek;
+  const weekNum = weekIdx + 1;
+  const phase = phases[weekIdx];
+  const weekData = state.weekData[weekNum];
+  const prevWeekData = weekNum > 1 ? state.weekData[weekNum - 1] : null;
+  const proj = bicepsProjection[weekIdx];
+
+  function updateExercise(exId, field, value) {
+    setState((prev) => {
+      const next = JSON.parse(JSON.stringify(prev));
+      const ex = next.weekData[weekNum].exercises[exId];
+      if (field === "targetWeight" || field === "targetReps") {
+        ex[field] = value;
+      } else if (field.startsWith("set_")) {
+        const parts = field.split("_");
+        const si = parseInt(parts[1]);
+        const prop = parts[2];
+        ex.sets[si][prop] = value;
+      }
+      return next;
     });
   }
-  // All history
-  history.forEach(h => {
-    if(!h.data || !h.data.i) return;
-    for(const pre in recMap) {
-      for(const k in h.data.i) {
-        if(k.startsWith(pre) && k.endsWith('p')) {
-          const v=parseFloat(h.data.i[k])||0;
-          if(v>recMap[pre]) recMap[pre]=v;
-        }
-      }
-    }
-  });
-  const f = v => v > 0 ? v+' kg' : '—';
-  document.getElementById('r1').textContent=f(recMap.j1e1);
-  document.getElementById('r2').textContent=f(recMap.j4e1);
-  document.getElementById('r3').textContent=f(recMap.j2e1);
-  document.getElementById('r4').textContent=f(recMap.j3e1);
-  document.getElementById('r5').textContent=f(recMap.j2e2);
-  document.getElementById('r6').textContent=f(recMap.j2e3);
-}
 
-// === HISTORY SYSTEM ===
-function getHistory() {
-  try { return JSON.parse(localStorage.getItem('colosse_history') || '[]'); }
-  catch(e) { return []; }
-}
-function saveHistory(history) {
-  localStorage.setItem('colosse_history', JSON.stringify(history));
-}
-
-const dayNames = {
-  j1: 'J1 — Push A',
-  j2: 'J2 — Pull A',
-  j3: 'J3 — Legs A',
-  j4: 'J4 — Push B',
-  j5: 'J5 — Pull B',
-  j6: 'J6 — Legs B'
-};
-const dayTypes = { j1:'push', j2:'pull', j3:'legs', j4:'push', j5:'pull', j6:'legs' };
-const dayEmojis = { j1:'💪', j2:'🔥', j3:'🦵', j4:'💪', j5:'🔥', j6:'🦵' };
-
-// Collect data for a specific day
-function getDayData(dayId) {
-  const pg = document.getElementById(dayId);
-  if(!pg) return null;
-  const data = { i:{}, c:[], e:[] };
-  const allCks = document.querySelectorAll('.ck');
-  pg.querySelectorAll('input[data-x]').forEach(i=>{
-    if(i.value) data.i[i.dataset.x] = i.value;
-  });
-  pg.querySelectorAll('.ck.on').forEach(b => {
-    const idx = Array.from(allCks).indexOf(b);
-    if(idx>=0) data.c.push(idx);
-  });
-  pg.querySelectorAll('.exo.ok').forEach(e => {
-    const n=e.querySelector('.exo-n');
-    if(n) data.e.push(n.textContent);
-  });
-  // Calc tonnage for this day
-  let tonnage = 0;
-  pg.querySelectorAll('input[data-x$="p"]').forEach(i=>{
-    const p=parseFloat(i.value)||0;
-    const row=i.closest('tr');
-    const ri=row?.querySelector('input[data-x$="r"]');
-    const r=parseFloat(ri?.value)||0;
-    tonnage += p*r;
-  });
-  const exos = pg.querySelectorAll('.exo.ok').length;
-  const series = pg.querySelectorAll('.ck.on').length;
-  return { data, tonnage: Math.round(tonnage), exos, series };
-}
-
-// === END SESSION ===
-let pendingDay = null;
-
-function endSession(dayId) {
-  pendingDay = dayId;
-  const name = dayNames[dayId] || dayId;
-  const dayData = getDayData(dayId);
-  const exos = dayData ? dayData.exos : 0;
-  const totalExos = document.getElementById(dayId).querySelectorAll('.exo').length;
-
-  document.getElementById('confirmTitle').textContent = 'Terminer ' + name + ' ?';
-  document.getElementById('confirmSub').innerHTML =
-    exos + '/' + totalExos + ' exercices validés<br>' +
-    (dayData ? dayData.tonnage.toLocaleString() + ' kg de tonnage' : '') +
-    '<br><br>La séance sera sauvegardée dans iCloud.';
-  document.getElementById('confirmBtns').style.display = 'flex';
-  document.getElementById('confirmOk').style.display = 'none';
-  document.getElementById('confirmPopup').classList.add('show');
-  haptic();
-}
-
-function closeConfirm() {
-  document.getElementById('confirmPopup').classList.remove('show');
-  pendingDay = null;
-}
-
-function confirmSession() {
-  if(!pendingDay) return;
-  const dayId = pendingDay;
-  const dayData = getDayData(dayId);
-  if(!dayData) { closeConfirm(); return; }
-
-  const now = new Date();
-  const dateStr = now.toISOString().split('T')[0];
-  const timeStr = now.toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'});
-
-  // Build session record
-  const session = {
-    id: Date.now(),
-    date: dateStr,
-    time: timeStr,
-    day: dayId,
-    dayName: dayNames[dayId],
-    type: dayTypes[dayId],
-    programme: 'Colosse v1',
-    tonnage: dayData.tonnage,
-    exos: dayData.exos,
-    series: dayData.series,
-    data: dayData.data
-  };
-
-  // Save to history in localStorage
-  const history = getHistory();
-  history.push(session);
-  saveHistory(history);
-
-  // Share file to iCloud
-  const json = JSON.stringify(session, null, 2);
-  const fileName = 'Colosse-' + dayNames[dayId].replace(/ /g,'-') + '-' + dateStr + '.json';
-  const blob = new Blob([json], {type:'application/json'});
-  const file = new File([blob], fileName, {type:'application/json'});
-
-  document.getElementById('confirmBtns').style.display = 'none';
-  document.getElementById('confirmOk').style.display = 'block';
-  document.getElementById('confirmOk').textContent = '✅ Séance enregistrée !';
-  haptic('heavy');
-
-  // Share to iCloud
-  if(navigator.canShare && navigator.canShare({files:[file]})) {
-    navigator.share({ title: 'Séance Colosse', files: [file] })
-    .then(() => {
-      document.getElementById('confirmOk').textContent = '✅ Sauvegardé dans iCloud !';
-    })
-    .catch(() => {
-      // User cancelled share but session is still saved locally
-      document.getElementById('confirmOk').textContent = '✅ Séance enregistrée localement';
+  function updateWeekField(field, value) {
+    setState((prev) => {
+      const next = JSON.parse(JSON.stringify(prev));
+      next.weekData[weekNum][field] = value;
+      return next;
     });
-  } else {
-    // Fallback download
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = fileName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
   }
 
-  setTimeout(()=> {
-    closeConfirm();
-    msg('🏆 Séance validée !');
-  }, 2000);
+  // ─── Evolution data (reuse from original) ─────────────────────
+  const evolutionData = [
+    { keyMoment: "Premier vrai pump satisfaisant", silhouette: "Quasi identique — le changement est interne. Tes séances vont devenir plus fluides.", changes: ["Pump post-séance plus prononcé", "Muscles plus gonflés au réveil", "Veines des avant-bras plus apparentes"], zones: { epaules: 1, dos: 1, bras: 1, abdos: 0, jambes: 1 } },
+    { keyMoment: "Premier compliment 'tu fais de la muscu ?'", silhouette: "Les gens proches peuvent remarquer que tu as l'air plus large.", changes: ["Deltoïdes légèrement plus ronds", "Haut du dos plus plein en T-shirt", "Rétention d'eau musculaire visible"], zones: { epaules: 2, dos: 2, bras: 1, abdos: 0, jambes: 1 } },
+    { keyMoment: "Tes anciens T-shirts serrent aux épaules", silhouette: "De face, tes épaules commencent à déborder. L'ébauche du V-taper se devine.", changes: ["Trapèzes visiblement plus épais", "Bras plus tendus dans les manches", "Début de tonus pectoral"], zones: { epaules: 2, dos: 2, bras: 2, abdos: 0, jambes: 1 } },
+    { keyMoment: "📸 Premier avant/après convaincant", silhouette: "Premier vrai changement visible sur photos. Le haut du corps a clairement changé.", changes: ["V-taper perceptible de face", "Deltoïdes commencent à capper", "Dorsaux plus larges", "Veines permanentes avant-bras"], zones: { epaules: 3, dos: 3, bras: 2, abdos: 0, jambes: 2 } },
+    { keyMoment: "La séparation deltoïde/biceps apparaît", silhouette: "Même sans pump, tu parais athlétique. Le ratio épaules/taille s'améliore.", changes: ["Séparation deltoïde/bras visible", "Pectoraux prennent du volume", "Quadriceps plus dessinés", "Cou plus épais"], zones: { epaules: 3, dos: 3, bras: 3, abdos: 1, jambes: 2 } },
+    { keyMoment: "Les inconnus te demandent ton programme", silhouette: "Tu as l'air d'un gars qui s'entraîne sérieusement, pas juste en forme.", changes: ["V-taper net même en T-shirt ample", "Triceps plus découpés", "Ligne médiane abdominale", "Avant-bras vasculaires"], zones: { epaules: 4, dos: 4, bras: 3, abdos: 1, jambes: 2 } },
+    { keyMoment: "Le dos commence à parler en photo", silhouette: "Phase de remplissage — les muscles prennent de la densité et de la qualité.", changes: ["Dorsaux créent un vrai flare", "Pectoraux se séparent du deltoïde", "Fessiers plus proéminents", "Avant-bras rattrapent"], zones: { epaules: 4, dos: 4, bras: 3, abdos: 1, jambes: 3 } },
+    { keyMoment: "📸 Transformation claire sur photos", silhouette: "Le physique a une vraie présence. À 1m96, tu remplis une pièce.", changes: ["Séparation épaule/bras au repos", "Stries pectorales visibles", "Tour de cou +1.5 cm", "Mollets proportionnels"], zones: { epaules: 4, dos: 4, bras: 4, abdos: 1, jambes: 3 } },
+    { keyMoment: "Les abdos supérieurs pointent", silhouette: "En T-shirt ajusté, physique clairement musclé et athlétique.", changes: ["V-taper prononcé", "Biceps peak en flexion", "Abdos supérieurs se dessinent", "Trapèzes imposants"], zones: { epaules: 5, dos: 5, bras: 4, abdos: 2, jambes: 3 } },
+    { keyMoment: "Les veines des bras sont permanentes", silhouette: "La définition se superpose au volume. Phase la plus gratifiante.", changes: ["Séparation triceps 3 chefs", "Christmas tree bas du dos", "Veines bicipitales permanentes", "Quadriceps sweep visible"], zones: { epaules: 5, dos: 5, bras: 4, abdos: 2, jambes: 4 } },
+    { keyMoment: "Le physique tourne les têtes à la salle", silhouette: "Physique d'athlète qui force le respect.", changes: ["Stries deltoïdes visibles", "Ligne abdominale nette", "Avant-bras épaissis par farmer's walk", "Obliques découpés"], zones: { epaules: 5, dos: 5, bras: 5, abdos: 2, jambes: 4 } },
+    { keyMoment: "🏆 Photo finale — méconnaissable", silhouette: "Transformation complète. À 1m96, physique qui impressionne même habillé.", changes: ["V-taper imposant", "Séparation musculaire haut du corps", "4 abdos supérieurs visibles", "Look de puissance installé"], zones: { epaules: 5, dos: 5, bras: 5, abdos: 3, jambes: 4 } },
+  ];
+  const evo = evolutionData[weekIdx];
+  const zoneLabels = { epaules: "Épaules", dos: "Dos", bras: "Bras", abdos: "Abdos", jambes: "Jambes" };
+
+  return (
+    <div
+      style={{
+        minHeight: "100vh",
+        background: "#08080d",
+        color: "#fff",
+        fontFamily: "'DM Sans', 'Segoe UI', sans-serif",
+        padding: "20px 14px 40px",
+      }}
+    >
+      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+      {/* ── HEADER ────────────────────────────────────────── */}
+      <div style={{ textAlign: "center", marginBottom: 20, position: "relative" }}>
+        <div style={{ display: "inline-block", padding: "4px 14px", borderRadius: 20, background: "rgba(255,255,255,0.05)", fontSize: 10, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", color: "rgba(255,255,255,0.4)", marginBottom: 8 }}>
+          Projection 12 semaines · Début 29 janvier 2026
+        </div>
+        <h1 style={{ fontSize: 24, fontWeight: 800, margin: 0, letterSpacing: -0.5, background: "linear-gradient(135deg, #fff 0%, rgba(255,255,255,0.5) 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+          Évolution & Suivi
+        </h1>
+        <p style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", margin: "4px 0 0" }}>
+          1m96 · 95 kg · 38 ans · 4000 kcal · PPL 6×/sem
+        </p>
+        {saving && (
+          <div style={{ position: "absolute", top: 4, right: 10, fontSize: 10, color: "#10B981", fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}>
+            <div style={{ width: 5, height: 5, borderRadius: "50%", background: "#10B981" }} /> Sauvegardé
+          </div>
+        )}
+      </div>
+
+      {/* ── TABS ──────────────────────────────────────────── */}
+      <div style={{ display: "flex", justifyContent: "center", gap: 8, marginBottom: 20 }}>
+        <Pill color="#fff" active={tab === "track"} onClick={() => setTab("track")}>
+          🎯 Suivi & Objectifs
+        </Pill>
+        <Pill color="#fff" active={tab === "evolution"} onClick={() => setTab("evolution")}>
+          📈 Évolution Physique
+        </Pill>
+      </div>
+
+      {/* ── WEEK SELECTOR ─────────────────────────────────── */}
+      <div style={{ display: "flex", gap: 5, justifyContent: "center", marginBottom: 20, flexWrap: "wrap" }}>
+        {phases.map((p, i) => (
+          <button
+            key={i}
+            onClick={() => setActiveWeek(i)}
+            style={{
+              width: 42,
+              height: 42,
+              borderRadius: 10,
+              border: activeWeek === i ? `2px solid ${p.color}` : "2px solid rgba(255,255,255,0.06)",
+              background: activeWeek === i ? `${p.color}20` : "rgba(255,255,255,0.02)",
+              color: activeWeek === i ? "#fff" : "rgba(255,255,255,0.35)",
+              fontSize: 12,
+              fontWeight: 700,
+              fontFamily: "'JetBrains Mono', monospace",
+              cursor: "pointer",
+              transition: "all 0.2s",
+              position: "relative",
+            }}
+          >
+            S{p.week}
+            {/* Dot if data exists */}
+            {state.weekData[p.week] && defaultExercises.some((ex) => state.weekData[p.week].exercises[ex.id]?.sets.some((s) => s.done)) && (
+              <div style={{ position: "absolute", bottom: 2, left: "50%", transform: "translateX(-50%)", width: 4, height: 4, borderRadius: "50%", background: p.color }} />
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* ── PHASE BADGE ───────────────────────────────────── */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, marginBottom: 20 }}>
+        <div style={{ padding: "5px 14px", borderRadius: 8, background: phase.color, fontSize: 12, fontWeight: 700 }}>
+          SEMAINE {weekNum}
+        </div>
+        <span style={{ fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.5)" }}>{phase.phase}</span>
+        <span style={{ fontSize: 12, color: "rgba(255,255,255,0.25)" }}>{phase.date}</span>
+      </div>
+
+      <div style={{ maxWidth: 700, margin: "0 auto" }}>
+        {/* ═══════════════════════════════════════════════════ */}
+        {/* ── TRACK TAB ──────────────────────────────────── */}
+        {/* ═══════════════════════════════════════════════════ */}
+        {tab === "track" && (
+          <>
+            {/* Previous week recap */}
+            <PrevWeekRecap prevWeekData={prevWeekData} color={phase.color} />
+
+            {/* Week progress summary */}
+            <WeekProgress weekData={weekData} color={phase.color} />
+
+            {/* Biceps measurements */}
+            <div style={{ borderRadius: 14, background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.06)", padding: "16px 18px", marginBottom: 16 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 16 }}>📐</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: "rgba(255,255,255,0.5)" }}>
+                    Mesures biceps (jeudi)
+                  </span>
+                </div>
+                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.25)" }}>
+                  Objectif: {proj.contracte} cm contracté
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                <div style={{ flex: 1, minWidth: 140 }}>
+                  <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 6 }}>Contracté</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <InputField value={weekData.bicepsContracte} onChange={(v) => updateWeekField("bicepsContracte", v)} placeholder={`${proj.contracte}`} width={70} />
+                    <span style={{ fontSize: 12, color: "rgba(255,255,255,0.3)" }}>cm</span>
+                    {prevWeekData?.bicepsContracte && weekData.bicepsContracte && (
+                      <Delta current={weekData.bicepsContracte} previous={prevWeekData.bicepsContracte} unit="cm" />
+                    )}
+                  </div>
+                </div>
+                <div style={{ flex: 1, minWidth: 140 }}>
+                  <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 6 }}>Au repos</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <InputField value={weekData.bicepsRepos} onChange={(v) => updateWeekField("bicepsRepos", v)} placeholder={`${proj.repos}`} width={70} />
+                    <span style={{ fontSize: 12, color: "rgba(255,255,255,0.3)" }}>cm</span>
+                    {prevWeekData?.bicepsRepos && weekData.bicepsRepos && (
+                      <Delta current={weekData.bicepsRepos} previous={prevWeekData.bicepsRepos} unit="cm" />
+                    )}
+                  </div>
+                </div>
+                <div style={{ flex: 1, minWidth: 140 }}>
+                  <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 6 }}>Poids corps</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <InputField value={weekData.bodyweight} onChange={(v) => updateWeekField("bodyweight", v)} placeholder="95" width={60} />
+                    <span style={{ fontSize: 12, color: "rgba(255,255,255,0.3)" }}>kg</span>
+                  </div>
+                </div>
+              </div>
+              {/* Mini sparkline */}
+              <div style={{ marginTop: 14, borderTop: "1px solid rgba(255,255,255,0.04)", paddingTop: 12 }}>
+                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.25)", marginBottom: 6 }}>
+                  Progression biceps contracté — <span style={{ color: "rgba(255,255,255,0.15)" }}>- - -</span> projection &nbsp; <span style={{ color: "#10B981" }}>—</span> réel
+                </div>
+                <BicepsSparkline allWeekData={state.weekData} currentWeek={weekNum} />
+              </div>
+            </div>
+
+            {/* Rest timer setting */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, padding: "10px 16px", borderRadius: 12, background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.04)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 14 }}>⏱</span>
+                <span style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", fontWeight: 600 }}>Pause entre séries</span>
+              </div>
+              <div style={{ display: "flex", gap: 4 }}>
+                {REST_PRESETS.map((p) => (
+                  <button
+                    key={p}
+                    onClick={() => setRestDuration(p)}
+                    style={{
+                      padding: "4px 8px",
+                      borderRadius: 6,
+                      border: restDuration === p ? `1px solid ${phase.color}50` : "1px solid rgba(255,255,255,0.06)",
+                      background: restDuration === p ? `${phase.color}15` : "transparent",
+                      color: restDuration === p ? phase.color : "rgba(255,255,255,0.3)",
+                      fontSize: 11,
+                      fontWeight: 600,
+                      fontFamily: "'JetBrains Mono', monospace",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {Math.floor(p / 60)}:{(p % 60).toString().padStart(2, "0")}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Exercise cards */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 12, paddingBottom: timerActive ? 260 : 0, transition: "padding 0.3s" }}>
+              {defaultExercises.map((ex) => (
+                <ExerciseCard
+                  key={ex.id}
+                  exercise={ex}
+                  data={weekData.exercises[ex.id]}
+                  prevData={prevWeekData?.exercises[ex.id]}
+                  color={phase.color}
+                  onChange={(field, value) => updateExercise(ex.id, field, value)}
+                  onSetDone={() => setTimerActive(true)}
+                />
+              ))}
+            </div>
+
+            {/* Notes */}
+            <div style={{ marginTop: 16, borderRadius: 14, background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.06)", padding: "16px 18px" }}>
+              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>
+                📝 Notes / Ressenti de la semaine
+              </div>
+              <textarea
+                value={weekData.notes}
+                onChange={(e) => updateWeekField("notes", e.target.value)}
+                placeholder="Comment tu t'es senti cette semaine ? Sommeil, énergie, pump..."
+                rows={3}
+                style={{
+                  width: "100%",
+                  padding: "10px 12px",
+                  borderRadius: 10,
+                  border: "1px solid rgba(255,255,255,0.08)",
+                  background: "rgba(255,255,255,0.03)",
+                  color: "#fff",
+                  fontSize: 13,
+                  fontFamily: "inherit",
+                  lineHeight: 1.5,
+                  resize: "vertical",
+                  outline: "none",
+                  boxSizing: "border-box",
+                }}
+              />
+            </div>
+          </>
+        )}
+
+        {/* ═══════════════════════════════════════════════════ */}
+        {/* ── EVOLUTION TAB ──────────────────────────────── */}
+        {/* ═══════════════════════════════════════════════════ */}
+        {tab === "evolution" && (
+          <>
+            {/* Key moment */}
+            <div style={{ padding: "14px 18px", borderRadius: 14, background: `${phase.color}0a`, border: `1px solid ${phase.color}25`, marginBottom: 16, display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ fontSize: 20 }}>🎯</span>
+              <div>
+                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", fontWeight: 600, textTransform: "uppercase", letterSpacing: 1 }}>Moment clé</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", marginTop: 2 }}>{evo.keyMoment}</div>
+              </div>
+            </div>
+
+            {/* Silhouette */}
+            <div style={{ padding: "16px 18px", borderRadius: 14, background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.06)", marginBottom: 16 }}>
+              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>🪞 Ce que tu verras dans le miroir</div>
+              <p style={{ fontSize: 14, lineHeight: 1.65, color: "rgba(255,255,255,0.75)", margin: 0 }}>{evo.silhouette}</p>
+            </div>
+
+            {/* Changements visibles */}
+            <div style={{ padding: "16px 18px", borderRadius: 14, background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.06)", marginBottom: 16 }}>
+              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>Changements visibles</div>
+              {evo.changes.map((c, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "7px 0", borderBottom: i < evo.changes.length - 1 ? "1px solid rgba(255,255,255,0.04)" : "none" }}>
+                  <div style={{ minWidth: 6, height: 6, borderRadius: "50%", background: phase.color, marginTop: 6 }} />
+                  <span style={{ fontSize: 13, lineHeight: 1.5, color: "rgba(255,255,255,0.7)" }}>{c}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Zone progress */}
+            <div style={{ padding: "16px 18px", borderRadius: 14, background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.06)" }}>
+              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 14 }}>Progression par zone musculaire</div>
+              {Object.entries(evo.zones).map(([key, val]) => (
+                <div key={key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 0" }}>
+                  <span style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", fontWeight: 500, minWidth: 70 }}>{zoneLabels[key]}</span>
+                  <div style={{ display: "flex", gap: 4 }}>
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <div key={i} style={{ width: 10, height: 10, borderRadius: "50%", background: i < val ? phase.color : "rgba(255,255,255,0.08)", transition: "background 0.3s" }} />
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* ── FOOTER ────────────────────────────────────────── */}
+      <div style={{ textAlign: "center", marginTop: 30, maxWidth: 500, margin: "30px auto 0" }}>
+        <p style={{ fontSize: 10, color: "rgba(255,255,255,0.2)", lineHeight: 1.5, margin: 0 }}>
+          Données sauvegardées automatiquement · Écran maintenu actif en mode suivi · Projection basée sur mémoire musculaire, 4000 kcal/j, PPL 6×/sem
+        </p>
+      </div>
+
+      {/* ── REST TIMER OVERLAY ────────────────────────────── */}
+      {timerActive && (
+        <RestTimer
+          seconds={restDuration}
+          color={phase.color}
+          onDone={() => setTimerActive(false)}
+          onCancel={() => setTimerActive(false)}
+          onDurationChange={(d) => setRestDuration(d)}
+        />
+      )}
+    </div>
+  );
 }
-
-// === CALENDAR ===
-let calYear, calMonth;
-(function initCal() {
-  const now = new Date();
-  calYear = now.getFullYear();
-  calMonth = now.getMonth();
-})();
-
-function calPrev() { calMonth--; if(calMonth<0){calMonth=11;calYear--;} renderCalendar(); haptic(); }
-function calNext() { calMonth++; if(calMonth>11){calMonth=0;calYear++;} renderCalendar(); haptic(); }
-
-function renderCalendar() {
-  const months = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
-  document.getElementById('calMonth').textContent = months[calMonth] + ' ' + calYear;
-
-  const history = getHistory();
-  // Map dates to sessions
-  const dateMap = {};
-  history.forEach(h => {
-    if(!dateMap[h.date]) dateMap[h.date] = [];
-    dateMap[h.date].push(h);
-  });
-
-  const grid = document.getElementById('calGrid');
-  grid.innerHTML = '';
-
-  // Day headers
-  ['Lu','Ma','Me','Je','Ve','Sa','Di'].forEach(d => {
-    grid.innerHTML += '<div class="cal-day-name">'+d+'</div>';
-  });
-
-  const firstDay = new Date(calYear, calMonth, 1);
-  let startDay = firstDay.getDay(); // 0=Sun
-  startDay = startDay === 0 ? 6 : startDay - 1; // Convert to Mon=0
-
-  const daysInMonth = new Date(calYear, calMonth+1, 0).getDate();
-  const today = new Date();
-  const todayStr = today.toISOString().split('T')[0];
-
-  // Empty cells
-  for(let i=0; i<startDay; i++) {
-    grid.innerHTML += '<div class="cal-day"></div>';
-  }
-
-  for(let d=1; d<=daysInMonth; d++) {
-    const dateStr = calYear + '-' + String(calMonth+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
-    const sessions = dateMap[dateStr] || [];
-    const isToday = dateStr === todayStr;
-    const cls = 'cal-day' + (isToday ? ' today' : '') + (sessions.length ? ' has-session' : '');
-
-    let dots = '';
-    if(sessions.length) {
-      dots = '<div class="cal-dots">';
-      sessions.forEach(s => {
-        dots += '<div class="cal-dot '+( s.type || 'push')+'"></div>';
-      });
-      dots += '</div>';
-    }
-
-    const onclick = sessions.length ? ' onclick="showDaySessions(\''+dateStr+'\')"' : '';
-    grid.innerHTML += '<div class="'+cls+'"'+onclick+'>'+d+dots+'</div>';
-  }
-}
-
-function showDaySessions(dateStr) {
-  const history = getHistory();
-  const sessions = history.filter(h => h.date === dateStr);
-  if(!sessions.length) return;
-
-  const parts = dateStr.split('-');
-  const dateLabel = parts[2]+'/'+parts[1]+'/'+parts[0];
-
-  let html = '<div style="margin-bottom:12px;font-weight:700;color:var(--text)">📅 ' + dateLabel + '</div>';
-  sessions.forEach(s => {
-    html += '<div style="padding:10px;background:var(--bg);border-radius:10px;margin-bottom:8px;font-size:.8rem">';
-    html += '<div style="font-weight:700;color:var(--text);margin-bottom:4px">' + (dayEmojis[s.day]||'') + ' ' + (s.dayName||s.day) + '</div>';
-    html += '<div style="color:var(--sub)">⏰ ' + (s.time||'') + ' • 🏋️ ' + (s.exos||0) + ' exos • ⚡ ' + (s.tonnage||0).toLocaleString() + ' kg</div>';
-    html += '</div>';
-  });
-
-  document.getElementById('historyList').innerHTML = html;
-  haptic();
-}
-
-// === HISTORY LIST ===
-function renderHistory() {
-  const history = getHistory();
-  const el = document.getElementById('historyList');
-
-  if(!history.length) {
-    el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--sub)">Aucune séance enregistrée<br><span style="font-size:.7rem">Termine une séance pour la voir ici</span></div>';
-    return;
-  }
-
-  // Show last 10 sessions
-  const recent = history.slice(-10).reverse();
-  let html = '';
-  recent.forEach(s => {
-    const parts = (s.date||'').split('-');
-    const dateLabel = parts[2]+'/'+parts[1];
-    const type = s.type || 'push';
-    html += '<div class="hist-item" onclick="showSessionDetail('+s.id+')">';
-    html += '<div class="hist-left">';
-    html += '<div class="hist-type '+type+'">'+(dayEmojis[s.day]||'💪')+'</div>';
-    html += '<div class="hist-info"><div class="hist-day">'+(s.dayName||s.day)+'</div>';
-    html += '<div class="hist-date">'+dateLabel+' à '+(s.time||'')+'</div></div></div>';
-    html += '<div class="hist-stats"><div class="hist-tonnage">'+(s.tonnage||0).toLocaleString()+' kg</div>';
-    html += '<div class="hist-exos">'+(s.exos||0)+' exos • '+(s.series||0)+' séries</div></div>';
-    html += '</div>';
-  });
-
-  if(history.length > 10) {
-    html += '<div style="text-align:center;padding:10px;color:var(--sub);font-size:.75rem">+ '+(history.length-10)+' séances plus anciennes</div>';
-  }
-
-  el.innerHTML = html;
-}
-
-function showSessionDetail(id) {
-  const history = getHistory();
-  const s = history.find(h => h.id === id);
-  if(!s) return;
-
-  const parts = (s.date||'').split('-');
-  const dateLabel = parts[2]+'/'+parts[1]+'/'+parts[0];
-
-  let html = '<div style="margin-bottom:12px">';
-  html += '<div style="font-weight:700;color:var(--text);font-size:.95rem">'+(dayEmojis[s.day]||'')+' '+(s.dayName||s.day)+'</div>';
-  html += '<div style="color:var(--sub);font-size:.75rem;margin-top:2px">'+dateLabel+' à '+(s.time||'')+' • Programme: '+(s.programme||'Colosse')+'</div>';
-  html += '</div>';
-
-  html += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">';
-  html += '<div style="background:var(--bg);border-radius:10px;padding:10px;text-align:center"><div style="font-weight:700;color:var(--accent)">'+(s.exos||0)+'</div><div style="font-size:.65rem;color:var(--sub)">Exercices</div></div>';
-  html += '<div style="background:var(--bg);border-radius:10px;padding:10px;text-align:center"><div style="font-weight:700;color:var(--accent)">'+(s.series||0)+'</div><div style="font-size:.65rem;color:var(--sub)">Séries</div></div>';
-  html += '<div style="background:var(--bg);border-radius:10px;padding:10px;text-align:center"><div style="font-weight:700;color:var(--accent)">'+(s.tonnage||0).toLocaleString()+'</div><div style="font-size:.65rem;color:var(--sub)">Tonnage kg</div></div>';
-  html += '</div>';
-
-  // Show exercise data if available
-  if(s.data && s.data.i) {
-    const exoKeys = {};
-    for(const k in s.data.i) {
-      const match = k.match(/^(j\de+\d+)/);
-      if(match) {
-        if(!exoKeys[match[1]]) exoKeys[match[1]] = {};
-        exoKeys[match[1]][k] = s.data.i[k];
-      }
-    }
-    for(const prefix in exoKeys) {
-      const weights = [];
-      for(const k in exoKeys[prefix]) {
-        if(k.endsWith('p')) {
-          const v = parseFloat(exoKeys[prefix][k]);
-          if(v>0) weights.push(v);
-        }
-      }
-      if(weights.length) {
-        const maxW = Math.max(...weights);
-        html += '<div style="font-size:.7rem;color:var(--sub);padding:3px 0">• '+prefix+': max '+maxW+'kg</div>';
-      }
-    }
-  }
-
-  html += '<div style="margin-top:12px"><button onclick="restoreSession('+s.id+')" style="width:100%;padding:12px;background:rgba(58,134,255,0.15);color:var(--blue);border:1px solid rgba(58,134,255,0.3);border-radius:12px;font-weight:700;font-size:.85rem;cursor:pointer">📥 Charger cette séance</button></div>';
-
-  document.getElementById('historyList').innerHTML = html;
-  haptic();
-}
-
-function restoreSession(id) {
-  const history = getHistory();
-  const s = history.find(h => h.id === id);
-  if(!s || !s.data) { msg('❌ Données introuvables'); return; }
-
-  // Merge session data into current localStorage
-  const current = JSON.parse(localStorage.getItem('colosse') || '{"i":{},"c":[],"e":[]}');
-  for(const k in s.data.i) {
-    current.i[k] = s.data.i[k];
-  }
-  localStorage.setItem('colosse', JSON.stringify(current));
-  msg('✅ Données chargées !');
-  setTimeout(() => location.reload(), 800);
-}
-
-// === TOAST ===
-function msg(t) {
-  const m=document.getElementById('mg');
-  m.textContent=t;
-  m.classList.add('show');
-  setTimeout(()=>m.classList.remove('show'), 2500);
-}
-
-// === ACTIONS ===
-function resetWeek() {
-  if(confirm('🔄 Remettre les séries à zéro pour la nouvelle semaine ?\n\nL\'historique des séances validées sera conservé.')) {
-    localStorage.removeItem('colosse');
-    location.reload();
-  }
-}
-
-function resetAll() {
-  if(confirm('⚠️ TOUT supprimer ?\n\nCela effacera la semaine en cours ET tout l\'historique.\n\nCette action est irréversible.')) {
-    if(confirm('Vraiment tout supprimer ? Dernier avertissement.')) {
-      localStorage.removeItem('colosse');
-      localStorage.removeItem('colosse_history');
-      location.reload();
-    }
-  }
-}
-
-function exportAllHistory() {
-  const history = getHistory();
-  const current = localStorage.getItem('colosse');
-  const exportData = {
-    _type: 'colosse_full_backup',
-    _date: new Date().toISOString(),
-    _version: 'Colosse v2',
-    _totalSessions: history.length,
-    current: current ? JSON.parse(current) : null,
-    history: history
-  };
-  const json = JSON.stringify(exportData, null, 2);
-  const fileName = 'Colosse-Backup-Complet-' + new Date().toISOString().split('T')[0] + '.json';
-  const blob = new Blob([json], {type:'application/json'});
-  const file = new File([blob], fileName, {type:'application/json'});
-
-  if(navigator.canShare && navigator.canShare({files:[file]})) {
-    navigator.share({ title: 'Backup Colosse complet', files: [file] })
-    .then(() => msg('✅ Tout sauvegardé !'))
-    .catch(() => {
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      msg('💾 Fichier téléchargé');
-    });
-  } else {
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = fileName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    msg('💾 Fichier téléchargé');
-  }
-}
-
-function importData() {
-  document.getElementById('importFile').click();
-}
-
-function handleImport(event) {
-  const file = event.target.files[0];
-  if(!file) return;
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    try {
-      const data = JSON.parse(e.target.result);
-
-      // Full backup restore
-      if(data._type === 'colosse_full_backup') {
-        if(data.current) localStorage.setItem('colosse', JSON.stringify(data.current));
-        if(data.history) saveHistory(data.history);
-        msg('✅ Backup complet restauré ! (' + (data.history?.length||0) + ' séances)');
-        setTimeout(() => location.reload(), 1000);
-        return;
-      }
-
-      // Single session restore
-      if(data.day && data.data) {
-        const history = getHistory();
-        // Check if already exists
-        if(!history.find(h => h.id === data.id)) {
-          history.push(data);
-          saveHistory(history);
-        }
-        // Also load into current
-        const current = JSON.parse(localStorage.getItem('colosse') || '{"i":{},"c":[],"e":[]}');
-        for(const k in data.data.i) {
-          current.i[k] = data.data.i[k];
-        }
-        localStorage.setItem('colosse', JSON.stringify(current));
-        msg('✅ Séance restaurée !');
-        setTimeout(() => location.reload(), 1000);
-        return;
-      }
-
-      // Legacy format (old colosse backup)
-      if(data.i) {
-        delete data._savedAt;
-        delete data._version;
-        localStorage.setItem('colosse', JSON.stringify(data));
-        msg('✅ Données restaurées !');
-        setTimeout(() => location.reload(), 1000);
-        return;
-      }
-
-      msg('❌ Format non reconnu');
-    } catch(err) {
-      msg('❌ Erreur de lecture');
-    }
-  };
-  reader.readAsText(file);
-  event.target.value = '';
-}
-
-// === INIT ===
-document.querySelectorAll('input').forEach(i=>i.addEventListener('change', save));
-
-// Add progress bars to each day header
-document.querySelectorAll('.hdr').forEach(hdr => {
-  const pg = hdr.closest('.pg');
-  if(pg && pg.id.match(/^j[1-6]$/)) {
-    const bar = document.createElement('div');
-    bar.className = 'day-prog';
-    bar.innerHTML = '<div class="day-prog-fill"></div>';
-    hdr.appendChild(bar);
-  }
-});
-
-// Add "End Session" buttons to each day (J1-J6)
-for(let j=1; j<=6; j++) {
-  const pg = document.getElementById('j'+j);
-  if(pg) {
-    const btn = document.createElement('button');
-    btn.className = 'end-session';
-    btn.innerHTML = '<span class="es-icon">🏆</span> Terminer la séance';
-    btn.onclick = function(){ endSession('j'+j); };
-    pg.appendChild(btn);
-  }
-}
-
-// Add video buttons to every exercise
-document.querySelectorAll('.bdg').forEach(bdg => {
-  const exo = bdg.closest('.exo');
-  if(!exo) return;
-  const name = exo.querySelector('.exo-n');
-  if(!name) return;
-  const vidBtn = document.createElement('span');
-  vidBtn.className = 'vid';
-  vidBtn.textContent = '🎬';
-  vidBtn.onclick = function(){ vid(this); };
-  bdg.insertBefore(vidBtn, bdg.firstChild);
-});
-
-// === WAKE LOCK (prevent screen sleep) ===
-let wakeLock = null;
-async function requestWakeLock() {
-  try {
-    if('wakeLock' in navigator) {
-      wakeLock = await navigator.wakeLock.request('screen');
-      wakeLock.addEventListener('release', () => { wakeLock = null; });
-    }
-  } catch(e) { /* permission denied or not supported */ }
-}
-// Request on load
-requestWakeLock();
-// Re-request when app becomes visible again (after switching apps)
-document.addEventListener('visibilitychange', () => {
-  if(document.visibilityState === 'visible') requestWakeLock();
-});
-
-// Prevent zoom on double tap for iOS
-let lastTouchEnd = 0;
-document.addEventListener('touchend', e => {
-  const now = Date.now();
-  if(now - lastTouchEnd <= 300) e.preventDefault();
-  lastTouchEnd = now;
-}, false);
-
-// iOS keyboard handling - scroll input into view
-document.querySelectorAll('input').forEach(i => {
-  i.addEventListener('focus', () => {
-    setTimeout(() => i.scrollIntoView({ behavior:'smooth', block:'center' }), 300);
-  });
-});
-
-load();
-</script>
