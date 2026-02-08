@@ -1,4 +1,29 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Colosse — Évolution & Suivi</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body { background: #08080d; overflow-x: hidden; }
+    #root { min-height: 100vh; }
+    input, textarea, button { font-family: inherit; }
+    @keyframes slideUp { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+  </style>
+  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useCallback, useRef } = React;
 
 // ─── WAKE LOCK (screen stays on) ────────────────────────────────
 function useWakeLock(enabled) {
@@ -12,7 +37,7 @@ function useWakeLock(enabled) {
         wakeLockRef.current.addEventListener("release", () => {
           if (active) request();
         });
-      } catch {}
+      } catch (e) {}
     };
     request();
     const onVisibility = () => {
@@ -48,7 +73,7 @@ const phases = [
   { week: 12, phase: "Résultat", color: "#3B82F6", date: "16 avr" },
 ];
 
-// ─── BICEPS PROJECTION (from your doc) ──────────────────────────
+// ─── BICEPS PROJECTION ─────────────────────────────────────────
 const bicepsProjection = [
   { contracte: 39, repos: 35 },
   { contracte: 39.2, repos: 35.2 },
@@ -64,30 +89,131 @@ const bicepsProjection = [
   { contracte: 41.75, repos: 37.1 },
 ];
 
-// ─── DEFAULT EXERCISES (PPL biceps focus) ───────────────────────
+// ─── DEFAULT EXERCISES ──────────────────────────────────────────
 const defaultExercises = [
-  { id: "curl_barre", name: "Curl barre EZ", icon: "🏋️" },
-  { id: "curl_incline", name: "Curl haltères incliné", icon: "💪" },
-  { id: "curl_marteau", name: "Curl marteau", icon: "🔨" },
-  { id: "curl_pupitre", name: "Curl pupitre", icon: "🎯" },
-  { id: "curl_cable", name: "Curl câble poulie basse", icon: "🔗" },
+  { id: "curl_barre", name: "Curl barre EZ", icon: "🏋️", day: "Pull A", type: "barbell" },
+  { id: "curl_marteau", name: "Curl marteau haltères", icon: "🔨", day: "Pull A", type: "dumbbell" },
+  { id: "curl_incline", name: "Curl incliné 45°", icon: "💪", day: "Pull B", type: "dumbbell" },
+  { id: "curl_concentre", name: "Curl concentré", icon: "🎯", day: "Pull B", type: "dumbbell" },
+  { id: "reverse_curl", name: "Reverse curl barre EZ", icon: "🔗", day: "Pull B", type: "barbell" },
 ];
 
-// ─── STORAGE HELPERS ────────────────────────────────────────────
-const STORAGE_KEY = "biceps-tracker-v2";
+// ─── DOUBLE PROGRESSION ALGORITHM ──────────────────────────────
+// Rep range: 10 → 12
+// All sets hit 12 reps → +2.5kg barbell / +1kg dumbbell, reset to 10 reps
+// Didn't hit target reps → same weight, +1 rep target (max 12)
+const REP_MIN = 10;
+const REP_MAX = 12;
+const BARBELL_INCREMENT = 2.5;
+const DUMBBELL_INCREMENT = 1;
 
-async function loadData() {
+function computeNextWeekObjective(exerciseDef, prevExData) {
+  if (!prevExData) return { weight: "", reps: "" };
+
+  const doneSets = prevExData.sets.filter(function(s) { return s.done && s.weight; });
+  if (doneSets.length === 0) return { weight: "", reps: "" };
+
+  // Best weight used this week
+  const bestWeight = Math.max.apply(null, doneSets.map(function(s) { return parseFloat(s.weight) || 0; }).concat([0]));
+  if (bestWeight === 0) return { weight: "", reps: "" };
+
+  // Check reps on sets at best weight
+  const setsAtBestWeight = doneSets.filter(function(s) { return (parseFloat(s.weight) || 0) === bestWeight; });
+  const minRepsAtWeight = Math.min.apply(null, setsAtBestWeight.map(function(s) { return parseInt(s.reps) || 0; }));
+  const allHitMax = minRepsAtWeight >= REP_MAX;
+
+  if (allHitMax) {
+    // All sets hit 12 reps → increase weight, reset reps to 10
+    var increment = exerciseDef.type === "barbell" ? BARBELL_INCREMENT : DUMBBELL_INCREMENT;
+    return {
+      weight: String(bestWeight + increment),
+      reps: String(REP_MIN)
+    };
+  } else {
+    // Didn't hit max → same weight, target = min reps achieved + 1 (capped at 12)
+    var targetReps = Math.min(minRepsAtWeight + 1, REP_MAX);
+    return {
+      weight: String(bestWeight),
+      reps: String(targetReps)
+    };
+  }
+}
+
+// ─── S1 ACTUAL RESULTS (semaine du 29 janvier) ─────────────────
+const S1_DATA = {
+  exercises: {
+    curl_barre: {
+      sets: [
+        { weight: "15", reps: "10", done: true },
+        { weight: "15", reps: "10", done: true },
+        { weight: "15", reps: "10", done: true },
+        { weight: "", reps: "", done: false },
+      ],
+      targetWeight: "",
+      targetReps: "",
+    },
+    curl_marteau: {
+      sets: [
+        { weight: "18", reps: "12", done: true },
+        { weight: "18", reps: "12", done: true },
+        { weight: "18", reps: "12", done: true },
+        { weight: "", reps: "", done: false },
+      ],
+      targetWeight: "",
+      targetReps: "",
+    },
+    curl_incline: {
+      sets: [
+        { weight: "12", reps: "10", done: true },
+        { weight: "12", reps: "10", done: true },
+        { weight: "12", reps: "10", done: true },
+        { weight: "", reps: "", done: false },
+      ],
+      targetWeight: "",
+      targetReps: "",
+    },
+    curl_concentre: {
+      sets: [
+        { weight: "17.5", reps: "12", done: true },
+        { weight: "17.5", reps: "12", done: true },
+        { weight: "", reps: "", done: false },
+        { weight: "", reps: "", done: false },
+      ],
+      targetWeight: "",
+      targetReps: "",
+    },
+    reverse_curl: {
+      sets: [
+        { weight: "12.5", reps: "12", done: true },
+        { weight: "12.5", reps: "12", done: true },
+        { weight: "12.5", reps: "12", done: true },
+        { weight: "", reps: "", done: false },
+      ],
+      targetWeight: "",
+      targetReps: "",
+    },
+  },
+  bicepsContracte: "39",
+  bicepsRepos: "35",
+  notes: "S1 — Réactivation. Pull A + Pull B complétés. Bonnes sensations curl marteau 18kg.",
+  bodyweight: "95",
+};
+
+// ─── STORAGE (localStorage for GitHub Pages) ────────────────────
+const STORAGE_KEY = "colosse-tracker-v3";
+
+function loadData() {
   try {
-    const result = await window.storage.get(STORAGE_KEY);
-    return result ? JSON.parse(result.value) : null;
-  } catch {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
     return null;
   }
 }
 
-async function saveData(data) {
+function saveData(data) {
   try {
-    await window.storage.set(STORAGE_KEY, JSON.stringify(data));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   } catch (e) {
     console.error("Save failed:", e);
   }
@@ -121,7 +247,9 @@ function getDefaultState() {
   for (let i = 1; i <= 12; i++) {
     weekData[i] = getEmptyWeekData();
   }
-  return { weekData, currentWeek: 1 };
+  // Pre-fill S1 with actual results
+  weekData[1] = S1_DATA;
+  return { weekData, currentWeek: 2 };
 }
 
 // ─── MICRO COMPONENTS ───────────────────────────────────────────
@@ -170,7 +298,9 @@ function StatBox({ label, value, sub, color, small }) {
   );
 }
 
-function Delta({ current, previous, unit = "kg", better = "higher" }) {
+function Delta({ current, previous, unit, better }) {
+  unit = unit || "kg";
+  better = better || "higher";
   if (!current || !previous) return null;
   const diff = parseFloat(current) - parseFloat(previous);
   if (isNaN(diff) || diff === 0) return null;
@@ -186,12 +316,14 @@ function MiniBar({ value, max, color }) {
   const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0;
   return (
     <div style={{ height: 4, background: "rgba(255,255,255,0.06)", borderRadius: 2, flex: 1 }}>
-      <div style={{ height: "100%", width: `${pct}%`, background: color, borderRadius: 2, transition: "width 0.4s ease" }} />
+      <div style={{ height: "100%", width: pct + "%", background: color, borderRadius: 2, transition: "width 0.4s ease" }} />
     </div>
   );
 }
 
-function InputField({ value, onChange, placeholder, width = 60, align = "center" }) {
+function InputField({ value, onChange, placeholder, width, align }) {
+  width = width || 60;
+  align = align || "center";
   return (
     <input
       type="text"
@@ -200,7 +332,7 @@ function InputField({ value, onChange, placeholder, width = 60, align = "center"
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
       style={{
-        width,
+        width: width,
         padding: "8px 8px",
         borderRadius: 8,
         border: "1px solid rgba(255,255,255,0.1)",
@@ -213,8 +345,8 @@ function InputField({ value, onChange, placeholder, width = 60, align = "center"
         outline: "none",
         transition: "border 0.2s",
       }}
-      onFocus={(e) => (e.target.style.borderColor = "rgba(255,255,255,0.3)")}
-      onBlur={(e) => (e.target.style.borderColor = "rgba(255,255,255,0.1)")}
+      onFocus={(e) => { e.target.style.borderColor = "rgba(255,255,255,0.3)"; }}
+      onBlur={(e) => { e.target.style.borderColor = "rgba(255,255,255,0.1)"; }}
     />
   );
 }
@@ -227,7 +359,7 @@ function CheckDot({ checked, onToggle, color }) {
         width: 24,
         height: 24,
         borderRadius: "50%",
-        border: `2px solid ${checked ? color : "rgba(255,255,255,0.15)"}`,
+        border: "2px solid " + (checked ? color : "rgba(255,255,255,0.15)"),
         background: checked ? color : "transparent",
         cursor: "pointer",
         display: "flex",
@@ -247,7 +379,7 @@ function CheckDot({ checked, onToggle, color }) {
   );
 }
 
-// ─── REST TIMER (floating overlay) ──────────────────────────────
+// ─── REST TIMER ─────────────────────────────────────────────────
 function RestTimer({ seconds, color, onDone, onCancel, onDurationChange }) {
   const [remaining, setRemaining] = useState(seconds);
   const [paused, setPaused] = useState(false);
@@ -262,7 +394,6 @@ function RestTimer({ seconds, color, onDone, onCancel, onDurationChange }) {
   useEffect(() => {
     if (paused) return;
     if (remaining <= 0) {
-      // Beep sound
       try {
         if (!audioCtx.current) audioCtx.current = new (window.AudioContext || window.webkitAudioContext)();
         const ctx = audioCtx.current;
@@ -280,9 +411,8 @@ function RestTimer({ seconds, color, onDone, onCancel, onDurationChange }) {
         playBeep(0);
         playBeep(0.2);
         playBeep(0.4);
-      } catch {}
-      // Vibrate if available
-      try { navigator.vibrate?.([200, 100, 200, 100, 200]); } catch {}
+      } catch (e) {}
+      try { navigator.vibrate && navigator.vibrate([200, 100, 200, 100, 200]); } catch (e) {}
       onDone();
       return;
     }
@@ -297,6 +427,12 @@ function RestTimer({ seconds, color, onDone, onCancel, onDurationChange }) {
   const mins = Math.floor(remaining / 60);
   const secs = remaining % 60;
   const isLow = remaining <= 5 && remaining > 0;
+
+  function formatPreset(p) {
+    const m = Math.floor(p / 60);
+    const s = p % 60;
+    return m + ":" + (s < 10 ? "0" + s : s);
+  }
 
   return (
     <div
@@ -313,20 +449,14 @@ function RestTimer({ seconds, color, onDone, onCancel, onDurationChange }) {
         background: "linear-gradient(to top, rgba(8,8,13,0.98) 0%, rgba(8,8,13,0.92) 100%)",
         backdropFilter: "blur(20px)",
         WebkitBackdropFilter: "blur(20px)",
-        borderTop: `1px solid ${color}30`,
+        borderTop: "1px solid " + color + "30",
         animation: "slideUp 0.3s ease-out",
       }}
     >
-      <style>{`
-        @keyframes slideUp { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
-      `}</style>
-
       <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 2, color: "rgba(255,255,255,0.35)", marginBottom: 14 }}>
         ⏱ Temps de repos
       </div>
 
-      {/* Circular progress */}
       <div style={{ position: "relative", width: 130, height: 130, marginBottom: 16 }}>
         <svg width="130" height="130" viewBox="0 0 130 130" style={{ transform: "rotate(-90deg)" }}>
           <circle cx="65" cy="65" r={radius} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="6" />
@@ -341,7 +471,7 @@ function RestTimer({ seconds, color, onDone, onCancel, onDurationChange }) {
           />
         </svg>
         <div style={{
-          position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+          position: "absolute", top: 0, left: 0, right: 0, bottom: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
           animation: isLow ? "pulse 0.5s ease-in-out infinite" : "none",
         }}>
           <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 36, fontWeight: 700, color: isLow ? "#EF4444" : "#fff", letterSpacing: -1 }}>
@@ -350,17 +480,16 @@ function RestTimer({ seconds, color, onDone, onCancel, onDurationChange }) {
         </div>
       </div>
 
-      {/* Preset buttons to adjust */}
       <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
         {REST_PRESETS.map((p) => (
           <button
             key={p}
-            onClick={() => { setRemaining(p); total.current = p; onDurationChange?.(p); }}
+            onClick={() => { setRemaining(p); total.current = p; if (onDurationChange) onDurationChange(p); }}
             style={{
               padding: "6px 10px",
               borderRadius: 8,
-              border: total.current === p ? `1px solid ${color}60` : "1px solid rgba(255,255,255,0.08)",
-              background: total.current === p ? `${color}15` : "rgba(255,255,255,0.03)",
+              border: total.current === p ? "1px solid " + color + "60" : "1px solid rgba(255,255,255,0.08)",
+              background: total.current === p ? color + "15" : "rgba(255,255,255,0.03)",
               color: total.current === p ? color : "rgba(255,255,255,0.4)",
               fontSize: 12,
               fontWeight: 600,
@@ -368,12 +497,11 @@ function RestTimer({ seconds, color, onDone, onCancel, onDurationChange }) {
               cursor: "pointer",
             }}
           >
-            {p >= 60 ? `${p / 60 >= 1 ? Math.floor(p / 60) + ":" + (p % 60 === 0 ? "00" : p % 60 < 10 ? "0" + (p % 60) : p % 60) : p + "s"}` : p + "s"}
+            {formatPreset(p)}
           </button>
         ))}
       </div>
 
-      {/* Controls */}
       <div style={{ display: "flex", gap: 10 }}>
         <button
           onClick={() => setPaused((p) => !p)}
@@ -413,148 +541,119 @@ function RestTimer({ seconds, color, onDone, onCancel, onDurationChange }) {
 }
 
 // ─── EXERCISE CARD ──────────────────────────────────────────────
-function ExerciseCard({ exercise, data, prevData, color, onChange, onSetDone }) {
+function ExerciseCard({ exercise, data, prevData, color, onChange, onSetDone, autoObjective }) {
   const prevBestWeight = prevData
-    ? Math.max(...prevData.sets.filter((s) => s.weight && s.done).map((s) => parseFloat(s.weight) || 0), 0)
+    ? Math.max.apply(null, prevData.sets.filter((s) => s.weight && s.done).map((s) => parseFloat(s.weight) || 0).concat([0]))
     : 0;
   const prevBestReps = prevData
-    ? Math.max(...prevData.sets.filter((s) => s.reps && s.done).map((s) => parseInt(s.reps) || 0), 0)
+    ? (() => { const doneSets = prevData.sets.filter((s) => s.done && (parseFloat(s.weight) || 0) === prevBestWeight); return doneSets.length > 0 ? Math.min.apply(null, doneSets.map((s) => parseInt(s.reps) || 0)) : 0; })()
     : 0;
-  const currBestWeight = Math.max(...data.sets.filter((s) => s.weight && s.done).map((s) => parseFloat(s.weight) || 0), 0);
   const setsCompleted = data.sets.filter((s) => s.done).length;
 
-  const targetW = parseFloat(data.targetWeight) || 0;
-  const targetR = parseInt(data.targetReps) || 0;
+  // Use auto-computed objective if user hasn't overridden
+  const displayW = data.targetWeight || (autoObjective ? autoObjective.weight : "");
+  const displayR = data.targetReps || (autoObjective ? autoObjective.reps : "");
+  const targetW = parseFloat(displayW) || 0;
+  const targetR = parseInt(displayR) || 0;
+  const isAutoTarget = !data.targetWeight && !data.targetReps && autoObjective && autoObjective.weight;
+
+  // Progression status
+  const allSetsHitTarget = targetW > 0 && targetR > 0 && setsCompleted >= 3 &&
+    data.sets.filter((s) => s.done).every((s) => (parseFloat(s.weight) || 0) >= targetW && (parseInt(s.reps) || 0) >= targetR);
+  const weightIncrement = exercise.type === "barbell" ? BARBELL_INCREMENT : DUMBBELL_INCREMENT;
 
   return (
-    <div
-      style={{
-        borderRadius: 16,
-        background: "rgba(255,255,255,0.025)",
-        border: "1px solid rgba(255,255,255,0.06)",
-        overflow: "hidden",
-        transition: "all 0.3s",
-      }}
-    >
-      {/* Header */}
-      <div style={{ padding: "14px 18px 12px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+    <div style={{ borderRadius: 16, background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.06)", overflow: "hidden", transition: "all 0.3s" }}>
+
+      {/* ── OBJECTIVE BANNER (big, first thing you see) ── */}
+      <div style={{
+        padding: "12px 18px",
+        background: allSetsHitTarget ? "rgba(16,185,129,0.12)" : "linear-gradient(135deg, " + color + "12, " + color + "06)",
+        borderBottom: "1px solid " + (allSetsHitTarget ? "rgba(16,185,129,0.25)" : color + "20"),
+        display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8,
+      }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ fontSize: 20 }}>{exercise.icon}</span>
           <div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>{exercise.name}</div>
-            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginTop: 1 }}>
-              {setsCompleted}/4 séries
-              {prevBestWeight > 0 && (
-                <span style={{ marginLeft: 8, color: "rgba(255,255,255,0.25)" }}>
-                  Sem. préc: {prevBestWeight}kg × {prevBestReps}
-                </span>
-              )}
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>
+              {exercise.name}
+              {exercise.day && <span style={{ fontSize: 9, fontWeight: 600, color: "rgba(255,255,255,0.3)", marginLeft: 6, padding: "2px 5px", borderRadius: 4, background: "rgba(255,255,255,0.06)" }}>{exercise.day}</span>}
             </div>
+            {prevBestWeight > 0 && (
+              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", marginTop: 2 }}>
+                S. préc: {prevBestWeight}kg × {prevBestReps}
+                {targetW > prevBestWeight && <span style={{ color: "#10B981", fontWeight: 700 }}> → +{(targetW - prevBestWeight).toFixed(1)}kg</span>}
+                {targetW === prevBestWeight && targetR > prevBestReps && <span style={{ color: color, fontWeight: 700 }}> → +{targetR - prevBestReps} rep{targetR - prevBestReps > 1 ? "s" : ""}</span>}
+              </div>
+            )}
           </div>
         </div>
-        {/* Mini completion bar */}
-        <div style={{ width: 60, display: "flex", alignItems: "center", gap: 6 }}>
-          <MiniBar value={setsCompleted} max={4} color={color} />
-          <span style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontWeight: 600 }}>{setsCompleted * 25}%</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          {targetW > 0 ? (
+            <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+              <span style={{ fontSize: 10, fontWeight: 700, color: allSetsHitTarget ? "#10B981" : color, textTransform: "uppercase", letterSpacing: 1 }}>
+                {allSetsHitTarget ? "✓ VALIDÉ" : "🎯 OBJ"}
+              </span>
+              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 22, fontWeight: 800, color: allSetsHitTarget ? "#10B981" : "#fff" }}>
+                {targetW}<span style={{ fontSize: 12, fontWeight: 500, color: "rgba(255,255,255,0.4)" }}>kg</span>
+              </span>
+              <span style={{ fontSize: 14, color: "rgba(255,255,255,0.2)" }}>×</span>
+              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 22, fontWeight: 800, color: allSetsHitTarget ? "#10B981" : "#fff" }}>
+                {targetR}<span style={{ fontSize: 12, fontWeight: 500, color: "rgba(255,255,255,0.4)" }}>reps</span>
+              </span>
+            </div>
+          ) : (
+            <span style={{ fontSize: 11, color: "rgba(255,255,255,0.25)", fontStyle: "italic" }}>Pas d'objectif</span>
+          )}
         </div>
       </div>
 
-      {/* Targets row */}
-      <div
-        style={{
-          padding: "10px 18px",
-          background: `${color}08`,
-          borderTop: `1px solid ${color}15`,
-          borderBottom: `1px solid ${color}15`,
-          display: "flex",
-          alignItems: "center",
-          gap: 16,
-        }}
-      >
-        <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: color, minWidth: 70 }}>
-          🎯 Objectif
-        </span>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <InputField
-            value={data.targetWeight}
-            onChange={(v) => onChange("targetWeight", v)}
-            placeholder="kg"
-            width={52}
-          />
-          <span style={{ fontSize: 12, color: "rgba(255,255,255,0.3)" }}>kg</span>
+      {/* Override target manually */}
+      {isAutoTarget && (
+        <div style={{ padding: "6px 18px", background: "rgba(255,255,255,0.015)", display: "flex", alignItems: "center", gap: 8, fontSize: 10, color: "rgba(255,255,255,0.25)" }}>
+          ⚡ Auto-calculé (double progression) · <button onClick={() => { onChange("targetWeight", autoObjective.weight); onChange("targetReps", autoObjective.reps); }} style={{ background: "none", border: "none", color: color, fontSize: 10, fontWeight: 600, cursor: "pointer", padding: 0, textDecoration: "underline" }}>Modifier</button>
         </div>
-        <span style={{ color: "rgba(255,255,255,0.15)" }}>×</span>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <InputField
-            value={data.targetReps}
-            onChange={(v) => onChange("targetReps", v)}
-            placeholder="reps"
-            width={46}
-          />
-          <span style={{ fontSize: 12, color: "rgba(255,255,255,0.3)" }}>reps</span>
-        </div>
-        {prevBestWeight > 0 && targetW > 0 && (
-          <Delta current={targetW} previous={prevBestWeight} unit="kg" />
-        )}
+      )}
+
+      {/* Progress bar */}
+      <div style={{ padding: "8px 18px 4px", display: "flex", alignItems: "center", gap: 8 }}>
+        <MiniBar value={setsCompleted} max={4} color={allSetsHitTarget ? "#10B981" : color} />
+        <span style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontWeight: 600, minWidth: 30 }}>{setsCompleted}/4</span>
       </div>
 
       {/* Sets */}
-      <div style={{ padding: "10px 18px 14px" }}>
-        <div style={{ display: "flex", gap: 8, marginBottom: 8, paddingLeft: 34 }}>
-          <span style={{ width: 60, fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.8, color: "rgba(255,255,255,0.25)", textAlign: "center" }}>
-            Poids
-          </span>
-          <span style={{ width: 46, fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.8, color: "rgba(255,255,255,0.25)", textAlign: "center" }}>
-            Reps
-          </span>
+      <div style={{ padding: "8px 18px 14px" }}>
+        <div style={{ display: "flex", gap: 8, marginBottom: 6, paddingLeft: 34 }}>
+          <span style={{ width: 60, fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.8, color: "rgba(255,255,255,0.25)", textAlign: "center" }}>Poids</span>
+          <span style={{ width: 46, fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.8, color: "rgba(255,255,255,0.25)", textAlign: "center" }}>Reps</span>
         </div>
         {data.sets.map((set, si) => {
           const w = parseFloat(set.weight) || 0;
           const r = parseInt(set.reps) || 0;
           const hitTarget = targetW > 0 && targetR > 0 && w >= targetW && r >= targetR && set.done;
           return (
-            <div
-              key={si}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                marginBottom: 6,
-                padding: "4px 0",
-                opacity: set.done ? 1 : 0.7,
-              }}
-            >
+            <div key={si} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, padding: "4px 0", opacity: set.done ? 1 : 0.7 }}>
               <CheckDot
                 checked={set.done}
-                onToggle={() => {
-                  onChange(`set_${si}_done`, !set.done);
-                  if (!set.done) onSetDone();
-                }}
+                onToggle={() => { onChange("set_" + si + "_done", !set.done); if (!set.done) onSetDone(); }}
                 color={hitTarget ? "#10B981" : color}
               />
-              <InputField
-                value={set.weight}
-                onChange={(v) => onChange(`set_${si}_weight`, v)}
-                placeholder="—"
-                width={60}
-              />
-              <InputField
-                value={set.reps}
-                onChange={(v) => onChange(`set_${si}_reps`, v)}
-                placeholder="—"
-                width={46}
-              />
-              {set.done && hitTarget && (
-                <span style={{ fontSize: 12, color: "#10B981", fontWeight: 700 }}>✓ Target</span>
-              )}
+              <InputField value={set.weight} onChange={(v) => onChange("set_" + si + "_weight", v)} placeholder={targetW > 0 ? String(targetW) : "—"} width={60} />
+              <InputField value={set.reps} onChange={(v) => onChange("set_" + si + "_reps", v)} placeholder={targetR > 0 ? String(targetR) : "—"} width={46} />
+              {set.done && hitTarget && <span style={{ fontSize: 12, color: "#10B981", fontWeight: 700 }}>✓</span>}
               {set.done && w > 0 && !hitTarget && targetW > 0 && (
                 <span style={{ fontSize: 11, color: "rgba(255,255,255,0.25)" }}>
-                  {w < targetW ? `${(targetW - w).toFixed(1)}kg restant` : `${r}/${targetR} reps`}
+                  {w < targetW ? (targetW - w).toFixed(1) + "kg ↗" : r + "/" + targetR}
                 </span>
               )}
             </div>
           );
         })}
+        {allSetsHitTarget && (
+          <div style={{ marginTop: 8, padding: "8px 12px", borderRadius: 8, background: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.15)", fontSize: 11, color: "#10B981", fontWeight: 600 }}>
+            🚀 Semaine prochaine → {targetW + weightIncrement}kg × {REP_MIN} reps
+          </div>
+        )}
       </div>
     </div>
   );
@@ -563,82 +662,49 @@ function ExerciseCard({ exercise, data, prevData, color, onChange, onSetDone }) 
 // ─── PREVIOUS WEEK RECAP ────────────────────────────────────────
 function PrevWeekRecap({ prevWeekData, color }) {
   if (!prevWeekData) return null;
-
   const exerciseResults = defaultExercises.map((ex) => {
     const d = prevWeekData.exercises[ex.id];
     const doneSets = d.sets.filter((s) => s.done);
-    const bestWeight = Math.max(...doneSets.map((s) => parseFloat(s.weight) || 0), 0);
-    const bestReps = Math.max(...doneSets.filter((s) => parseFloat(s.weight) === bestWeight).map((s) => parseInt(s.reps) || 0), 0);
-    return { ...ex, bestWeight, bestReps, setsCompleted: doneSets.length, total: d.sets.length };
+    const bestWeight = Math.max.apply(null, doneSets.map((s) => parseFloat(s.weight) || 0).concat([0]));
+    const bestReps = Math.max.apply(null, doneSets.filter((s) => parseFloat(s.weight) === bestWeight).map((s) => parseInt(s.reps) || 0).concat([0]));
+    return { id: ex.id, icon: ex.icon, name: ex.name, bestWeight: bestWeight, bestReps: bestReps, setsCompleted: doneSets.length, total: d.sets.length };
   }).filter((r) => r.setsCompleted > 0);
 
   if (exerciseResults.length === 0) return null;
 
   return (
-    <div
-      style={{
-        borderRadius: 14,
-        background: "linear-gradient(135deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015))",
-        border: "1px solid rgba(255,255,255,0.08)",
-        padding: "16px 18px",
-        marginBottom: 16,
-      }}
-    >
+    <div style={{ borderRadius: 14, background: "linear-gradient(135deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015))", border: "1px solid rgba(255,255,255,0.08)", padding: "16px 18px", marginBottom: 16 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
         <span style={{ fontSize: 16 }}>📊</span>
-        <span style={{ fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: "rgba(255,255,255,0.5)" }}>
-          Résultats semaine précédente
-        </span>
+        <span style={{ fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: "rgba(255,255,255,0.5)" }}>Résultats semaine précédente</span>
       </div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
         {exerciseResults.map((r) => (
-          <div
-            key={r.id}
-            style={{
-              padding: "10px 14px",
-              borderRadius: 10,
-              background: "rgba(255,255,255,0.03)",
-              border: "1px solid rgba(255,255,255,0.06)",
-              minWidth: 140,
-              flex: "1 1 140px",
-            }}
-          >
-            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", fontWeight: 600, marginBottom: 4 }}>
-              {r.icon} {r.name}
-            </div>
+          <div key={r.id} style={{ padding: "10px 14px", borderRadius: 10, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", minWidth: 140, flex: "1 1 140px" }}>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", fontWeight: 600, marginBottom: 4 }}>{r.icon} {r.name}</div>
             <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 16, fontWeight: 700 }}>
               {r.bestWeight}<span style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", fontWeight: 500 }}>kg</span>
               <span style={{ color: "rgba(255,255,255,0.2)", margin: "0 4px" }}>×</span>
               {r.bestReps}<span style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", fontWeight: 500 }}>reps</span>
             </div>
-            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.25)", marginTop: 3 }}>
-              {r.setsCompleted}/{r.total} séries complétées
-            </div>
+            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.25)", marginTop: 3 }}>{r.setsCompleted}/{r.total} séries complétées</div>
           </div>
         ))}
       </div>
       {prevWeekData.bicepsContracte && (
         <div style={{ marginTop: 12, display: "flex", gap: 12 }}>
-          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)" }}>
-            Biceps contracté: <span style={{ color: color, fontWeight: 700 }}>{prevWeekData.bicepsContracte} cm</span>
-          </div>
-          {prevWeekData.bicepsRepos && (
-            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)" }}>
-              Repos: <span style={{ color: "rgba(255,255,255,0.6)", fontWeight: 700 }}>{prevWeekData.bicepsRepos} cm</span>
-            </div>
-          )}
+          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)" }}>Biceps contracté: <span style={{ color: color, fontWeight: 700 }}>{prevWeekData.bicepsContracte} cm</span></div>
+          {prevWeekData.bicepsRepos && <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)" }}>Repos: <span style={{ color: "rgba(255,255,255,0.6)", fontWeight: 700 }}>{prevWeekData.bicepsRepos} cm</span></div>}
         </div>
       )}
     </div>
   );
 }
 
-// ─── WEEK PROGRESS SUMMARY ─────────────────────────────────────
+// ─── WEEK PROGRESS SUMMARY ──────────────────────────────────────
 function WeekProgress({ weekData, color }) {
   const totalSets = defaultExercises.length * 4;
-  const doneSets = defaultExercises.reduce((acc, ex) => {
-    return acc + weekData.exercises[ex.id].sets.filter((s) => s.done).length;
-  }, 0);
+  const doneSets = defaultExercises.reduce((acc, ex) => acc + weekData.exercises[ex.id].sets.filter((s) => s.done).length, 0);
   const targetsHit = defaultExercises.reduce((acc, ex) => {
     const d = weekData.exercises[ex.id];
     const tw = parseFloat(d.targetWeight) || 0;
@@ -654,17 +720,16 @@ function WeekProgress({ weekData, color }) {
 
   return (
     <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
-      <StatBox label="Séries complétées" value={`${doneSets}/${totalSets}`} color={doneSets === totalSets ? "#10B981" : "#fff"} />
-      <StatBox label="Objectifs atteints" value={targetsSet > 0 ? `${targetsHit}/${targetsSet}` : "—"} color={targetsHit === targetsSet && targetsSet > 0 ? "#10B981" : "#fff"} />
-      <StatBox label="Complétion" value={`${Math.round((doneSets / totalSets) * 100)}%`} color={color} />
+      <StatBox label="Séries complétées" value={doneSets + "/" + totalSets} color={doneSets === totalSets ? "#10B981" : "#fff"} />
+      <StatBox label="Objectifs atteints" value={targetsSet > 0 ? targetsHit + "/" + targetsSet : "—"} color={targetsHit === targetsSet && targetsSet > 0 ? "#10B981" : "#fff"} />
+      <StatBox label="Complétion" value={Math.round((doneSets / totalSets) * 100) + "%"} color={color} />
     </div>
   );
 }
 
-// ─── BICEPS CHART (mini sparkline) ──────────────────────────────
+// ─── BICEPS SPARKLINE ───────────────────────────────────────────
 function BicepsSparkline({ allWeekData, currentWeek }) {
-  const w = 320;
-  const h = 80;
+  const w = 320, h = 80;
   const pad = { l: 30, r: 10, t: 10, b: 20 };
   const iw = w - pad.l - pad.r;
   const ih = h - pad.t - pad.b;
@@ -680,23 +745,16 @@ function BicepsSparkline({ allWeekData, currentWeek }) {
     if (wd && wd.bicepsContracte) {
       const v = parseFloat(wd.bicepsContracte);
       if (!isNaN(v)) {
-        realPoints.push({
-          x: pad.l + (i / 11) * iw,
-          y: pad.t + ih - ((v - 38.5) / 4) * ih,
-          v,
-        });
+        realPoints.push({ x: pad.l + (i / 11) * iw, y: pad.t + ih - ((v - 38.5) / 4) * ih, v: v });
       }
     }
   }
 
-  const projPath = projPoints.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ");
-  const realPath = realPoints.length > 1
-    ? realPoints.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ")
-    : null;
+  const projPath = projPoints.map((p, i) => (i === 0 ? "M" : "L") + p.x + "," + p.y).join(" ");
+  const realPath = realPoints.length > 1 ? realPoints.map((p, i) => (i === 0 ? "M" : "L") + p.x + "," + p.y).join(" ") : null;
 
   return (
     <svg width={w} height={h} style={{ display: "block" }}>
-      {/* Grid lines */}
       {[39, 40, 41, 42].map((v) => {
         const y = pad.t + ih - ((v - 38.5) / 4) * ih;
         return (
@@ -706,82 +764,81 @@ function BicepsSparkline({ allWeekData, currentWeek }) {
           </g>
         );
       })}
-      {/* Week labels */}
       {[1, 4, 8, 12].map((wk) => {
         const x = pad.l + ((wk - 1) / 11) * iw;
         return <text key={wk} x={x} y={h - 4} fill="rgba(255,255,255,0.2)" fontSize="8" textAnchor="middle" fontFamily="monospace">S{wk}</text>;
       })}
-      {/* Projection line */}
       <path d={projPath} fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="1.5" strokeDasharray="4,3" />
-      {/* Real data line */}
       {realPath && <path d={realPath} fill="none" stroke="#10B981" strokeWidth="2" />}
-      {realPoints.map((p, i) => (
-        <circle key={i} cx={p.x} cy={p.y} r={3} fill="#10B981" />
-      ))}
-      {/* Current week indicator */}
-      <line
-        x1={pad.l + ((currentWeek - 1) / 11) * iw}
-        x2={pad.l + ((currentWeek - 1) / 11) * iw}
-        y1={pad.t}
-        y2={pad.t + ih}
-        stroke="rgba(255,255,255,0.1)"
-        strokeWidth="1"
-      />
+      {realPoints.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r={3} fill="#10B981" />)}
+      <line x1={pad.l + ((currentWeek - 1) / 11) * iw} x2={pad.l + ((currentWeek - 1) / 11) * iw} y1={pad.t} y2={pad.t + ih} stroke="rgba(255,255,255,0.1)" strokeWidth="1" />
     </svg>
   );
 }
 
+// ─── EVOLUTION DATA ─────────────────────────────────────────────
+const evolutionData = [
+  { keyMoment: "Premier vrai pump satisfaisant", silhouette: "Quasi identique — le changement est interne. Tes séances vont devenir plus fluides.", changes: ["Pump post-séance plus prononcé", "Muscles plus gonflés au réveil", "Veines des avant-bras plus apparentes"], zones: { epaules: 1, dos: 1, bras: 1, abdos: 0, jambes: 1 } },
+  { keyMoment: "Premier compliment 'tu fais de la muscu ?'", silhouette: "Les gens proches peuvent remarquer que tu as l'air plus large.", changes: ["Deltoïdes légèrement plus ronds", "Haut du dos plus plein en T-shirt", "Rétention d'eau musculaire visible"], zones: { epaules: 2, dos: 2, bras: 1, abdos: 0, jambes: 1 } },
+  { keyMoment: "Tes anciens T-shirts serrent aux épaules", silhouette: "De face, tes épaules commencent à déborder. L'ébauche du V-taper se devine.", changes: ["Trapèzes visiblement plus épais", "Bras plus tendus dans les manches", "Début de tonus pectoral"], zones: { epaules: 2, dos: 2, bras: 2, abdos: 0, jambes: 1 } },
+  { keyMoment: "📸 Premier avant/après convaincant", silhouette: "Premier vrai changement visible sur photos. Le haut du corps a clairement changé.", changes: ["V-taper perceptible de face", "Deltoïdes commencent à capper", "Dorsaux plus larges", "Veines permanentes avant-bras"], zones: { epaules: 3, dos: 3, bras: 2, abdos: 0, jambes: 2 } },
+  { keyMoment: "La séparation deltoïde/biceps apparaît", silhouette: "Même sans pump, tu parais athlétique. Le ratio épaules/taille s'améliore.", changes: ["Séparation deltoïde/bras visible", "Pectoraux prennent du volume", "Quadriceps plus dessinés", "Cou plus épais"], zones: { epaules: 3, dos: 3, bras: 3, abdos: 1, jambes: 2 } },
+  { keyMoment: "Les inconnus te demandent ton programme", silhouette: "Tu as l'air d'un gars qui s'entraîne sérieusement, pas juste en forme.", changes: ["V-taper net même en T-shirt ample", "Triceps plus découpés", "Ligne médiane abdominale", "Avant-bras vasculaires"], zones: { epaules: 4, dos: 4, bras: 3, abdos: 1, jambes: 2 } },
+  { keyMoment: "Le dos commence à parler en photo", silhouette: "Phase de remplissage — les muscles prennent de la densité et de la qualité.", changes: ["Dorsaux créent un vrai flare", "Pectoraux se séparent du deltoïde", "Fessiers plus proéminents", "Avant-bras rattrapent"], zones: { epaules: 4, dos: 4, bras: 3, abdos: 1, jambes: 3 } },
+  { keyMoment: "📸 Transformation claire sur photos", silhouette: "Le physique a une vraie présence. À 1m96, tu remplis une pièce.", changes: ["Séparation épaule/bras au repos", "Stries pectorales visibles", "Tour de cou +1.5 cm", "Mollets proportionnels"], zones: { epaules: 4, dos: 4, bras: 4, abdos: 1, jambes: 3 } },
+  { keyMoment: "Les abdos supérieurs pointent", silhouette: "En T-shirt ajusté, physique clairement musclé et athlétique.", changes: ["V-taper prononcé", "Biceps peak en flexion", "Abdos supérieurs se dessinent", "Trapèzes imposants"], zones: { epaules: 5, dos: 5, bras: 4, abdos: 2, jambes: 3 } },
+  { keyMoment: "Les veines des bras sont permanentes", silhouette: "La définition se superpose au volume. Phase la plus gratifiante.", changes: ["Séparation triceps 3 chefs", "Christmas tree bas du dos", "Veines bicipitales permanentes", "Quadriceps sweep visible"], zones: { epaules: 5, dos: 5, bras: 4, abdos: 2, jambes: 4 } },
+  { keyMoment: "Le physique tourne les têtes à la salle", silhouette: "Physique d'athlète qui force le respect.", changes: ["Stries deltoïdes visibles", "Ligne abdominale nette", "Avant-bras épaissis par farmer's walk", "Obliques découpés"], zones: { epaules: 5, dos: 5, bras: 5, abdos: 2, jambes: 4 } },
+  { keyMoment: "🏆 Photo finale — méconnaissable", silhouette: "Transformation complète. À 1m96, physique qui impressionne même habillé.", changes: ["V-taper imposant", "Séparation musculaire haut du corps", "4 abdos supérieurs visibles", "Look de puissance installé"], zones: { epaules: 5, dos: 5, bras: 5, abdos: 3, jambes: 4 } },
+];
+const zoneLabels = { epaules: "Épaules", dos: "Dos", bras: "Bras", abdos: "Abdos", jambes: "Jambes" };
+
 // ─── MAIN APP ───────────────────────────────────────────────────
-export default function EvolutionTracker() {
+function App() {
   const [state, setState] = useState(null);
   const [activeWeek, setActiveWeek] = useState(0);
-  const [tab, setTab] = useState("track"); // "track" | "evolution"
+  const [tab, setTab] = useState("track");
   const [saving, setSaving] = useState(false);
   const [timerActive, setTimerActive] = useState(false);
   const [restDuration, setRestDuration] = useState(90);
 
-  // Keep screen awake when on track tab
   useWakeLock(tab === "track");
 
   // Load on mount
   useEffect(() => {
-    loadData().then((saved) => {
-      if (saved && saved.weekData) {
-        // Merge with defaults to handle new exercises
-        const merged = getDefaultState();
-        Object.keys(saved.weekData).forEach((wk) => {
-          if (merged.weekData[wk]) {
-            merged.weekData[wk] = { ...merged.weekData[wk], ...saved.weekData[wk] };
-            // Ensure all exercises exist
-            defaultExercises.forEach((ex) => {
-              if (!merged.weekData[wk].exercises[ex.id]) {
-                merged.weekData[wk].exercises[ex.id] = getEmptyWeekData().exercises[ex.id];
-              }
-            });
-          }
-        });
-        merged.currentWeek = saved.currentWeek || 1;
-        setState(merged);
-        setActiveWeek(merged.currentWeek - 1);
-      } else {
-        setState(getDefaultState());
-      }
-    });
+    const saved = loadData();
+    if (saved && saved.weekData) {
+      const merged = getDefaultState();
+      Object.keys(saved.weekData).forEach((wk) => {
+        if (merged.weekData[wk]) {
+          merged.weekData[wk] = Object.assign({}, merged.weekData[wk], saved.weekData[wk]);
+          defaultExercises.forEach((ex) => {
+            if (!merged.weekData[wk].exercises[ex.id]) {
+              merged.weekData[wk].exercises[ex.id] = getEmptyWeekData().exercises[ex.id];
+            }
+          });
+        }
+      });
+      merged.currentWeek = saved.currentWeek || 1;
+      setState(merged);
+      setActiveWeek(merged.currentWeek - 1);
+    } else {
+      setState(getDefaultState());
+      setActiveWeek(1); // Start on S2 since S1 is pre-filled
+    }
   }, []);
 
   // Auto-save
-  const doSave = useCallback(async (s) => {
-    setSaving(true);
-    await saveData(s);
-    setTimeout(() => setSaving(false), 500);
-  }, []);
-
   useEffect(() => {
     if (state) {
-      const t = setTimeout(() => doSave(state), 800);
+      const t = setTimeout(() => {
+        setSaving(true);
+        saveData(state);
+        setTimeout(() => setSaving(false), 500);
+      }, 800);
       return () => clearTimeout(t);
     }
-  }, [state, doSave]);
+  }, [state]);
 
   if (!state) {
     return (
@@ -797,6 +854,7 @@ export default function EvolutionTracker() {
   const weekData = state.weekData[weekNum];
   const prevWeekData = weekNum > 1 ? state.weekData[weekNum - 1] : null;
   const proj = bicepsProjection[weekIdx];
+  const evo = evolutionData[weekIdx];
 
   function updateExercise(exId, field, value) {
     setState((prev) => {
@@ -804,7 +862,7 @@ export default function EvolutionTracker() {
       const ex = next.weekData[weekNum].exercises[exId];
       if (field === "targetWeight" || field === "targetReps") {
         ex[field] = value;
-      } else if (field.startsWith("set_")) {
+      } else if (field.indexOf("set_") === 0) {
         const parts = field.split("_");
         const si = parseInt(parts[1]);
         const prop = parts[2];
@@ -822,37 +880,10 @@ export default function EvolutionTracker() {
     });
   }
 
-  // ─── Evolution data (reuse from original) ─────────────────────
-  const evolutionData = [
-    { keyMoment: "Premier vrai pump satisfaisant", silhouette: "Quasi identique — le changement est interne. Tes séances vont devenir plus fluides.", changes: ["Pump post-séance plus prononcé", "Muscles plus gonflés au réveil", "Veines des avant-bras plus apparentes"], zones: { epaules: 1, dos: 1, bras: 1, abdos: 0, jambes: 1 } },
-    { keyMoment: "Premier compliment 'tu fais de la muscu ?'", silhouette: "Les gens proches peuvent remarquer que tu as l'air plus large.", changes: ["Deltoïdes légèrement plus ronds", "Haut du dos plus plein en T-shirt", "Rétention d'eau musculaire visible"], zones: { epaules: 2, dos: 2, bras: 1, abdos: 0, jambes: 1 } },
-    { keyMoment: "Tes anciens T-shirts serrent aux épaules", silhouette: "De face, tes épaules commencent à déborder. L'ébauche du V-taper se devine.", changes: ["Trapèzes visiblement plus épais", "Bras plus tendus dans les manches", "Début de tonus pectoral"], zones: { epaules: 2, dos: 2, bras: 2, abdos: 0, jambes: 1 } },
-    { keyMoment: "📸 Premier avant/après convaincant", silhouette: "Premier vrai changement visible sur photos. Le haut du corps a clairement changé.", changes: ["V-taper perceptible de face", "Deltoïdes commencent à capper", "Dorsaux plus larges", "Veines permanentes avant-bras"], zones: { epaules: 3, dos: 3, bras: 2, abdos: 0, jambes: 2 } },
-    { keyMoment: "La séparation deltoïde/biceps apparaît", silhouette: "Même sans pump, tu parais athlétique. Le ratio épaules/taille s'améliore.", changes: ["Séparation deltoïde/bras visible", "Pectoraux prennent du volume", "Quadriceps plus dessinés", "Cou plus épais"], zones: { epaules: 3, dos: 3, bras: 3, abdos: 1, jambes: 2 } },
-    { keyMoment: "Les inconnus te demandent ton programme", silhouette: "Tu as l'air d'un gars qui s'entraîne sérieusement, pas juste en forme.", changes: ["V-taper net même en T-shirt ample", "Triceps plus découpés", "Ligne médiane abdominale", "Avant-bras vasculaires"], zones: { epaules: 4, dos: 4, bras: 3, abdos: 1, jambes: 2 } },
-    { keyMoment: "Le dos commence à parler en photo", silhouette: "Phase de remplissage — les muscles prennent de la densité et de la qualité.", changes: ["Dorsaux créent un vrai flare", "Pectoraux se séparent du deltoïde", "Fessiers plus proéminents", "Avant-bras rattrapent"], zones: { epaules: 4, dos: 4, bras: 3, abdos: 1, jambes: 3 } },
-    { keyMoment: "📸 Transformation claire sur photos", silhouette: "Le physique a une vraie présence. À 1m96, tu remplis une pièce.", changes: ["Séparation épaule/bras au repos", "Stries pectorales visibles", "Tour de cou +1.5 cm", "Mollets proportionnels"], zones: { epaules: 4, dos: 4, bras: 4, abdos: 1, jambes: 3 } },
-    { keyMoment: "Les abdos supérieurs pointent", silhouette: "En T-shirt ajusté, physique clairement musclé et athlétique.", changes: ["V-taper prononcé", "Biceps peak en flexion", "Abdos supérieurs se dessinent", "Trapèzes imposants"], zones: { epaules: 5, dos: 5, bras: 4, abdos: 2, jambes: 3 } },
-    { keyMoment: "Les veines des bras sont permanentes", silhouette: "La définition se superpose au volume. Phase la plus gratifiante.", changes: ["Séparation triceps 3 chefs", "Christmas tree bas du dos", "Veines bicipitales permanentes", "Quadriceps sweep visible"], zones: { epaules: 5, dos: 5, bras: 4, abdos: 2, jambes: 4 } },
-    { keyMoment: "Le physique tourne les têtes à la salle", silhouette: "Physique d'athlète qui force le respect.", changes: ["Stries deltoïdes visibles", "Ligne abdominale nette", "Avant-bras épaissis par farmer's walk", "Obliques découpés"], zones: { epaules: 5, dos: 5, bras: 5, abdos: 2, jambes: 4 } },
-    { keyMoment: "🏆 Photo finale — méconnaissable", silhouette: "Transformation complète. À 1m96, physique qui impressionne même habillé.", changes: ["V-taper imposant", "Séparation musculaire haut du corps", "4 abdos supérieurs visibles", "Look de puissance installé"], zones: { epaules: 5, dos: 5, bras: 5, abdos: 3, jambes: 4 } },
-  ];
-  const evo = evolutionData[weekIdx];
-  const zoneLabels = { epaules: "Épaules", dos: "Dos", bras: "Bras", abdos: "Abdos", jambes: "Jambes" };
-
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        background: "#08080d",
-        color: "#fff",
-        fontFamily: "'DM Sans', 'Segoe UI', sans-serif",
-        padding: "20px 14px 40px",
-      }}
-    >
-      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <div style={{ minHeight: "100vh", background: "#08080d", color: "#fff", fontFamily: "'DM Sans', 'Segoe UI', sans-serif", padding: "20px 14px 40px" }}>
 
-      {/* ── HEADER ────────────────────────────────────────── */}
+      {/* HEADER */}
       <div style={{ textAlign: "center", marginBottom: 20, position: "relative" }}>
         <div style={{ display: "inline-block", padding: "4px 14px", borderRadius: 20, background: "rgba(255,255,255,0.05)", fontSize: 10, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", color: "rgba(255,255,255,0.4)", marginBottom: 8 }}>
           Projection 12 semaines · Début 29 janvier 2026
@@ -860,9 +891,7 @@ export default function EvolutionTracker() {
         <h1 style={{ fontSize: 24, fontWeight: 800, margin: 0, letterSpacing: -0.5, background: "linear-gradient(135deg, #fff 0%, rgba(255,255,255,0.5) 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
           Évolution & Suivi
         </h1>
-        <p style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", margin: "4px 0 0" }}>
-          1m96 · 95 kg · 38 ans · 4000 kcal · PPL 6×/sem
-        </p>
+        <p style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", margin: "4px 0 0" }}>1m96 · 95 kg · 38 ans · 4000 kcal · PPL 6×/sem</p>
         {saving && (
           <div style={{ position: "absolute", top: 4, right: 10, fontSize: 10, color: "#10B981", fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}>
             <div style={{ width: 5, height: 5, borderRadius: "50%", background: "#10B981" }} /> Sauvegardé
@@ -870,65 +899,47 @@ export default function EvolutionTracker() {
         )}
       </div>
 
-      {/* ── TABS ──────────────────────────────────────────── */}
+      {/* TABS */}
       <div style={{ display: "flex", justifyContent: "center", gap: 8, marginBottom: 20 }}>
-        <Pill color="#fff" active={tab === "track"} onClick={() => setTab("track")}>
-          🎯 Suivi & Objectifs
-        </Pill>
-        <Pill color="#fff" active={tab === "evolution"} onClick={() => setTab("evolution")}>
-          📈 Évolution Physique
-        </Pill>
+        <Pill color="#fff" active={tab === "track"} onClick={() => setTab("track")}>🎯 Suivi & Objectifs</Pill>
+        <Pill color="#fff" active={tab === "evolution"} onClick={() => setTab("evolution")}>📈 Évolution Physique</Pill>
       </div>
 
-      {/* ── WEEK SELECTOR ─────────────────────────────────── */}
+      {/* WEEK SELECTOR */}
       <div style={{ display: "flex", gap: 5, justifyContent: "center", marginBottom: 20, flexWrap: "wrap" }}>
         {phases.map((p, i) => (
           <button
             key={i}
             onClick={() => setActiveWeek(i)}
             style={{
-              width: 42,
-              height: 42,
-              borderRadius: 10,
-              border: activeWeek === i ? `2px solid ${p.color}` : "2px solid rgba(255,255,255,0.06)",
-              background: activeWeek === i ? `${p.color}20` : "rgba(255,255,255,0.02)",
+              width: 42, height: 42, borderRadius: 10,
+              border: activeWeek === i ? "2px solid " + p.color : "2px solid rgba(255,255,255,0.06)",
+              background: activeWeek === i ? p.color + "20" : "rgba(255,255,255,0.02)",
               color: activeWeek === i ? "#fff" : "rgba(255,255,255,0.35)",
-              fontSize: 12,
-              fontWeight: 700,
-              fontFamily: "'JetBrains Mono', monospace",
-              cursor: "pointer",
-              transition: "all 0.2s",
-              position: "relative",
+              fontSize: 12, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace",
+              cursor: "pointer", transition: "all 0.2s", position: "relative",
             }}
           >
             S{p.week}
-            {/* Dot if data exists */}
-            {state.weekData[p.week] && defaultExercises.some((ex) => state.weekData[p.week].exercises[ex.id]?.sets.some((s) => s.done)) && (
+            {state.weekData[p.week] && defaultExercises.some((ex) => state.weekData[p.week].exercises[ex.id] && state.weekData[p.week].exercises[ex.id].sets.some((s) => s.done)) && (
               <div style={{ position: "absolute", bottom: 2, left: "50%", transform: "translateX(-50%)", width: 4, height: 4, borderRadius: "50%", background: p.color }} />
             )}
           </button>
         ))}
       </div>
 
-      {/* ── PHASE BADGE ───────────────────────────────────── */}
+      {/* PHASE BADGE */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, marginBottom: 20 }}>
-        <div style={{ padding: "5px 14px", borderRadius: 8, background: phase.color, fontSize: 12, fontWeight: 700 }}>
-          SEMAINE {weekNum}
-        </div>
+        <div style={{ padding: "5px 14px", borderRadius: 8, background: phase.color, fontSize: 12, fontWeight: 700 }}>SEMAINE {weekNum}</div>
         <span style={{ fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.5)" }}>{phase.phase}</span>
         <span style={{ fontSize: 12, color: "rgba(255,255,255,0.25)" }}>{phase.date}</span>
       </div>
 
       <div style={{ maxWidth: 700, margin: "0 auto" }}>
-        {/* ═══════════════════════════════════════════════════ */}
-        {/* ── TRACK TAB ──────────────────────────────────── */}
-        {/* ═══════════════════════════════════════════════════ */}
+        {/* ═══ TRACK TAB ═══ */}
         {tab === "track" && (
-          <>
-            {/* Previous week recap */}
+          <React.Fragment>
             <PrevWeekRecap prevWeekData={prevWeekData} color={phase.color} />
-
-            {/* Week progress summary */}
             <WeekProgress weekData={weekData} color={phase.color} />
 
             {/* Biceps measurements */}
@@ -936,33 +947,25 @@ export default function EvolutionTracker() {
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <span style={{ fontSize: 16 }}>📐</span>
-                  <span style={{ fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: "rgba(255,255,255,0.5)" }}>
-                    Mesures biceps (jeudi)
-                  </span>
+                  <span style={{ fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: "rgba(255,255,255,0.5)" }}>Mesures biceps (jeudi)</span>
                 </div>
-                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.25)" }}>
-                  Objectif: {proj.contracte} cm contracté
-                </div>
+                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.25)" }}>Objectif: {proj.contracte} cm contracté</div>
               </div>
               <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
                 <div style={{ flex: 1, minWidth: 140 }}>
                   <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 6 }}>Contracté</div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <InputField value={weekData.bicepsContracte} onChange={(v) => updateWeekField("bicepsContracte", v)} placeholder={`${proj.contracte}`} width={70} />
+                    <InputField value={weekData.bicepsContracte} onChange={(v) => updateWeekField("bicepsContracte", v)} placeholder={String(proj.contracte)} width={70} />
                     <span style={{ fontSize: 12, color: "rgba(255,255,255,0.3)" }}>cm</span>
-                    {prevWeekData?.bicepsContracte && weekData.bicepsContracte && (
-                      <Delta current={weekData.bicepsContracte} previous={prevWeekData.bicepsContracte} unit="cm" />
-                    )}
+                    {prevWeekData && prevWeekData.bicepsContracte && weekData.bicepsContracte && <Delta current={weekData.bicepsContracte} previous={prevWeekData.bicepsContracte} unit="cm" />}
                   </div>
                 </div>
                 <div style={{ flex: 1, minWidth: 140 }}>
                   <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 6 }}>Au repos</div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <InputField value={weekData.bicepsRepos} onChange={(v) => updateWeekField("bicepsRepos", v)} placeholder={`${proj.repos}`} width={70} />
+                    <InputField value={weekData.bicepsRepos} onChange={(v) => updateWeekField("bicepsRepos", v)} placeholder={String(proj.repos)} width={70} />
                     <span style={{ fontSize: 12, color: "rgba(255,255,255,0.3)" }}>cm</span>
-                    {prevWeekData?.bicepsRepos && weekData.bicepsRepos && (
-                      <Delta current={weekData.bicepsRepos} previous={prevWeekData.bicepsRepos} unit="cm" />
-                    )}
+                    {prevWeekData && prevWeekData.bicepsRepos && weekData.bicepsRepos && <Delta current={weekData.bicepsRepos} previous={prevWeekData.bicepsRepos} unit="cm" />}
                   </div>
                 </div>
                 <div style={{ flex: 1, minWidth: 140 }}>
@@ -973,12 +976,20 @@ export default function EvolutionTracker() {
                   </div>
                 </div>
               </div>
-              {/* Mini sparkline */}
               <div style={{ marginTop: 14, borderTop: "1px solid rgba(255,255,255,0.04)", paddingTop: 12 }}>
                 <div style={{ fontSize: 10, color: "rgba(255,255,255,0.25)", marginBottom: 6 }}>
                   Progression biceps contracté — <span style={{ color: "rgba(255,255,255,0.15)" }}>- - -</span> projection &nbsp; <span style={{ color: "#10B981" }}>—</span> réel
                 </div>
                 <BicepsSparkline allWeekData={state.weekData} currentWeek={weekNum} />
+              </div>
+            </div>
+
+            {/* Progression system */}
+            <div style={{ marginBottom: 12, padding: "10px 16px", borderRadius: 12, background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.04)" }}>
+              <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1.2, color: "rgba(255,255,255,0.3)", marginBottom: 6 }}>⚡ Double progression (10→12 reps)</div>
+              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.25)", lineHeight: 1.6 }}>
+                Toutes séries à 12 reps → <span style={{ color: "#10B981", fontWeight: 600 }}>+2.5kg barre / +1kg haltère</span>, retour à 10 reps
+                <br/>Reps non atteintes → <span style={{ color: phase.color, fontWeight: 600 }}>même poids, +1 rep</span>
               </div>
             </div>
 
@@ -994,15 +1005,11 @@ export default function EvolutionTracker() {
                     key={p}
                     onClick={() => setRestDuration(p)}
                     style={{
-                      padding: "4px 8px",
-                      borderRadius: 6,
-                      border: restDuration === p ? `1px solid ${phase.color}50` : "1px solid rgba(255,255,255,0.06)",
-                      background: restDuration === p ? `${phase.color}15` : "transparent",
+                      padding: "4px 8px", borderRadius: 6,
+                      border: restDuration === p ? "1px solid " + phase.color + "50" : "1px solid rgba(255,255,255,0.06)",
+                      background: restDuration === p ? phase.color + "15" : "transparent",
                       color: restDuration === p ? phase.color : "rgba(255,255,255,0.3)",
-                      fontSize: 11,
-                      fontWeight: 600,
-                      fontFamily: "'JetBrains Mono', monospace",
-                      cursor: "pointer",
+                      fontSize: 11, fontWeight: 600, fontFamily: "'JetBrains Mono', monospace", cursor: "pointer",
                     }}
                   >
                     {Math.floor(p / 60)}:{(p % 60).toString().padStart(2, "0")}
@@ -1013,55 +1020,42 @@ export default function EvolutionTracker() {
 
             {/* Exercise cards */}
             <div style={{ display: "flex", flexDirection: "column", gap: 12, paddingBottom: timerActive ? 260 : 0, transition: "padding 0.3s" }}>
-              {defaultExercises.map((ex) => (
-                <ExerciseCard
-                  key={ex.id}
-                  exercise={ex}
-                  data={weekData.exercises[ex.id]}
-                  prevData={prevWeekData?.exercises[ex.id]}
-                  color={phase.color}
-                  onChange={(field, value) => updateExercise(ex.id, field, value)}
-                  onSetDone={() => setTimerActive(true)}
-                />
-              ))}
+              {defaultExercises.map((ex) => {
+                var prevExData = prevWeekData ? prevWeekData.exercises[ex.id] : null;
+                var autoObj = prevExData ? computeNextWeekObjective(ex, prevExData) : null;
+                return (
+                  <ExerciseCard
+                    key={ex.id}
+                    exercise={ex}
+                    data={weekData.exercises[ex.id]}
+                    prevData={prevExData}
+                    color={phase.color}
+                    onChange={(field, value) => updateExercise(ex.id, field, value)}
+                    onSetDone={() => setTimerActive(true)}
+                    autoObjective={autoObj}
+                  />
+                );
+              })}
             </div>
 
             {/* Notes */}
             <div style={{ marginTop: 16, borderRadius: 14, background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.06)", padding: "16px 18px" }}>
-              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>
-                📝 Notes / Ressenti de la semaine
-              </div>
+              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>📝 Notes / Ressenti de la semaine</div>
               <textarea
                 value={weekData.notes}
                 onChange={(e) => updateWeekField("notes", e.target.value)}
                 placeholder="Comment tu t'es senti cette semaine ? Sommeil, énergie, pump..."
                 rows={3}
-                style={{
-                  width: "100%",
-                  padding: "10px 12px",
-                  borderRadius: 10,
-                  border: "1px solid rgba(255,255,255,0.08)",
-                  background: "rgba(255,255,255,0.03)",
-                  color: "#fff",
-                  fontSize: 13,
-                  fontFamily: "inherit",
-                  lineHeight: 1.5,
-                  resize: "vertical",
-                  outline: "none",
-                  boxSizing: "border-box",
-                }}
+                style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", color: "#fff", fontSize: 13, fontFamily: "inherit", lineHeight: 1.5, resize: "vertical", outline: "none", boxSizing: "border-box" }}
               />
             </div>
-          </>
+          </React.Fragment>
         )}
 
-        {/* ═══════════════════════════════════════════════════ */}
-        {/* ── EVOLUTION TAB ──────────────────────────────── */}
-        {/* ═══════════════════════════════════════════════════ */}
+        {/* ═══ EVOLUTION TAB ═══ */}
         {tab === "evolution" && (
-          <>
-            {/* Key moment */}
-            <div style={{ padding: "14px 18px", borderRadius: 14, background: `${phase.color}0a`, border: `1px solid ${phase.color}25`, marginBottom: 16, display: "flex", alignItems: "center", gap: 10 }}>
+          <React.Fragment>
+            <div style={{ padding: "14px 18px", borderRadius: 14, background: phase.color + "0a", border: "1px solid " + phase.color + "25", marginBottom: 16, display: "flex", alignItems: "center", gap: 10 }}>
               <span style={{ fontSize: 20 }}>🎯</span>
               <div>
                 <div style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", fontWeight: 600, textTransform: "uppercase", letterSpacing: 1 }}>Moment clé</div>
@@ -1069,13 +1063,11 @@ export default function EvolutionTracker() {
               </div>
             </div>
 
-            {/* Silhouette */}
             <div style={{ padding: "16px 18px", borderRadius: 14, background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.06)", marginBottom: 16 }}>
               <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>🪞 Ce que tu verras dans le miroir</div>
               <p style={{ fontSize: 14, lineHeight: 1.65, color: "rgba(255,255,255,0.75)", margin: 0 }}>{evo.silhouette}</p>
             </div>
 
-            {/* Changements visibles */}
             <div style={{ padding: "16px 18px", borderRadius: 14, background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.06)", marginBottom: 16 }}>
               <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>Changements visibles</div>
               {evo.changes.map((c, i) => (
@@ -1086,7 +1078,6 @@ export default function EvolutionTracker() {
               ))}
             </div>
 
-            {/* Zone progress */}
             <div style={{ padding: "16px 18px", borderRadius: 14, background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.06)" }}>
               <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 14 }}>Progression par zone musculaire</div>
               {Object.entries(evo.zones).map(([key, val]) => (
@@ -1100,18 +1091,18 @@ export default function EvolutionTracker() {
                 </div>
               ))}
             </div>
-          </>
+          </React.Fragment>
         )}
       </div>
 
-      {/* ── FOOTER ────────────────────────────────────────── */}
+      {/* FOOTER */}
       <div style={{ textAlign: "center", marginTop: 30, maxWidth: 500, margin: "30px auto 0" }}>
         <p style={{ fontSize: 10, color: "rgba(255,255,255,0.2)", lineHeight: 1.5, margin: 0 }}>
           Données sauvegardées automatiquement · Écran maintenu actif en mode suivi · Projection basée sur mémoire musculaire, 4000 kcal/j, PPL 6×/sem
         </p>
       </div>
 
-      {/* ── REST TIMER OVERLAY ────────────────────────────── */}
+      {/* REST TIMER OVERLAY */}
       {timerActive && (
         <RestTimer
           seconds={restDuration}
@@ -1124,3 +1115,8 @@ export default function EvolutionTracker() {
     </div>
   );
 }
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
