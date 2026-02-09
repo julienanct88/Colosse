@@ -30,56 +30,57 @@ const{useState,useEffect,useRef,useCallback}=React;
 function useWakeLock(on){const r=useRef(null);useEffect(()=>{if(!on||!("wakeLock"in navigator))return;let ok=true;const q=async()=>{try{r.current=await navigator.wakeLock.request("screen");r.current.addEventListener("release",()=>{if(ok)q()})}catch(e){}};q();const v=()=>{if(document.visibilityState==="visible"&&ok)q()};document.addEventListener("visibilitychange",v);return()=>{ok=false;document.removeEventListener("visibilitychange",v);if(r.current)r.current.release().catch(()=>{})};},[on]);}
 
 /* ═══ PROGRAMME VALIDÉ ═══ */
+const YT="https://www.youtube.com/results?search_query=";
 const DAYS=[
   {id:0,key:"pushA",name:"Push A",label:"Pecs focus",day:"Lundi",color:"#EF4444",icon:"🔴",exs:[
-    {id:"pa1",name:"Développé couché barre",tp:"barbell",sets:4,rLo:8,rHi:10},
-    {id:"pa2",name:"Développé incliné haltères",tp:"dumbbell",sets:4,rLo:10,rHi:12},
-    {id:"pa3",name:"Dips lestés",tp:"barbell",sets:3,rLo:8,rHi:10},
-    {id:"pa4",name:"Écartés poulie haute",tp:"cable",sets:3,rLo:12,rHi:15},
-    {id:"pa5",name:"Barre au front (skullcrusher)",tp:"barbell",sets:3,rLo:10,rHi:12},
-    {id:"pa6",name:"Extensions triceps poulie",tp:"cable",sets:3,rLo:12,rHi:15},
+    {id:"pa1",name:"Développé couché barre",tp:"barbell",sets:4,rLo:8,rHi:10,lk:true,yt:"développé+couché+barre+technique+musculation"},
+    {id:"pa2",name:"Développé incliné haltères",tp:"dumbbell",sets:4,rLo:10,rHi:12,lk:true,yt:"développé+incliné+haltères+technique"},
+    {id:"pa3",name:"Dips lestés",tp:"barbell",sets:3,rLo:8,rHi:10,lk:true,yt:"dips+lestés+pectoraux+technique"},
+    {id:"pa4",name:"Écartés poulie haute",tp:"cable",sets:3,rLo:12,rHi:15,yt:"écarté+poulie+vis+à+vis+cable+fly"},
+    {id:"pa5",name:"Barre au front (skullcrusher)",tp:"barbell",sets:3,rLo:10,rHi:12,yt:"barre+au+front+skullcrusher+triceps+technique"},
+    {id:"pa6",name:"Extensions triceps poulie",tp:"cable",sets:3,rLo:12,rHi:15,yt:"extension+triceps+poulie+haute+technique"},
   ]},
   {id:1,key:"pullA",name:"Pull A",label:"Dos épaisseur",day:"Mardi",color:"#3B82F6",icon:"🔵",exs:[
-    {id:"la1",name:"Soulevé de terre",tp:"barbell",sets:4,rLo:5,rHi:8},
-    {id:"la2",name:"Rowing barre pronation",tp:"barbell",sets:4,rLo:8,rHi:10},
-    {id:"la3",name:"Rowing 1 bras haltère",tp:"dumbbell",sets:3,rLo:10,rHi:12},
-    {id:"la4",name:"Curl barre EZ",tp:"barbell",sets:3,rLo:10,rHi:12},
-    {id:"la5",name:"Curl marteau",tp:"dumbbell",sets:3,rLo:10,rHi:12},
-    {id:"la6",name:"Curl inversé EZ",tp:"barbell",sets:3,rLo:12,rHi:15},
+    {id:"la1",name:"Soulevé de terre",tp:"barbell",sets:4,rLo:5,rHi:8,lk:true,yt:"soulevé+de+terre+conventionnel+technique+deadlift"},
+    {id:"la2",name:"Rowing barre pronation",tp:"barbell",sets:4,rLo:8,rHi:10,lk:true,yt:"rowing+barre+pronation+bent+over+row+technique"},
+    {id:"la3",name:"Rowing 1 bras haltère",tp:"dumbbell",sets:3,rLo:10,rHi:12,lk:true,yt:"rowing+un+bras+haltère+one+arm+dumbbell+row"},
+    {id:"la4",name:"Curl barre EZ",tp:"barbell",sets:3,rLo:10,rHi:12,yt:"curl+barre+EZ+biceps+technique"},
+    {id:"la5",name:"Curl marteau",tp:"dumbbell",sets:3,rLo:10,rHi:12,yt:"curl+marteau+hammer+curl+technique"},
+    {id:"la6",name:"Curl inversé EZ",tp:"barbell",sets:3,rLo:12,rHi:15,yt:"reverse+curl+barre+EZ+avant+bras+technique"},
   ]},
   {id:2,key:"legsA",name:"Legs A",label:"Quads focus",day:"Mercredi",color:"#10B981",icon:"🟢",exs:[
-    {id:"qa1",name:"Back squat",tp:"barbell",sets:4,rLo:6,rHi:8},
-    {id:"qa2",name:"Presse jambes",tp:"machine",sets:4,rLo:10,rHi:12},
-    {id:"qa3",name:"Leg extension",tp:"machine",sets:3,rLo:12,rHi:15},
-    {id:"qa4",name:"RDL (Romanian DL)",tp:"barbell",sets:3,rLo:10,rHi:12},
-    {id:"qa5",name:"Mollets debout",tp:"machine",sets:4,rLo:12,rHi:15},
-    {id:"qa6",name:"Crunch poulie haute",tp:"cable",sets:3,rLo:12,rHi:15},
-    {id:"qa7",name:"Relevés jambes suspendus",tp:"barbell",sets:3,rLo:10,rHi:12},
+    {id:"qa1",name:"Back squat",tp:"barbell",sets:4,rLo:6,rHi:8,lk:true,yt:"back+squat+barre+technique+musculation"},
+    {id:"qa2",name:"Presse jambes",tp:"machine",sets:4,rLo:10,rHi:12,lk:true,yt:"presse+jambes+leg+press+technique"},
+    {id:"qa3",name:"Leg extension",tp:"machine",sets:3,rLo:12,rHi:15,yt:"leg+extension+quadriceps+technique"},
+    {id:"qa4",name:"RDL (Romanian DL)",tp:"barbell",sets:3,rLo:10,rHi:12,yt:"romanian+deadlift+RDL+technique+ischio"},
+    {id:"qa5",name:"Mollets debout",tp:"machine",sets:4,rLo:12,rHi:15,yt:"mollets+debout+machine+standing+calf+raise"},
+    {id:"qa6",name:"Crunch poulie haute",tp:"cable",sets:3,rLo:12,rHi:15,yt:"crunch+poulie+haute+cable+crunch+abdos"},
+    {id:"qa7",name:"Relevés jambes suspendus",tp:"barbell",sets:3,rLo:10,rHi:12,yt:"relevé+jambes+suspendu+hanging+leg+raise+abdos"},
   ]},
   {id:3,key:"pushB",name:"Push B",label:"Épaules focus",day:"Jeudi",color:"#EF4444",icon:"🔴",exs:[
-    {id:"pb1",name:"Développé militaire barre",tp:"barbell",sets:4,rLo:8,rHi:10},
-    {id:"pb2",name:"Développé couché haltères",tp:"dumbbell",sets:4,rLo:10,rHi:12},
-    {id:"pb3",name:"Élévations latérales",tp:"dumbbell",sets:4,rLo:12,rHi:15},
-    {id:"pb4",name:"Push press",tp:"barbell",sets:3,rLo:6,rHi:8},
-    {id:"pb5",name:"Ext. triceps overhead",tp:"cable",sets:3,rLo:10,rHi:12},
-    {id:"pb6",name:"Kickbacks câble",tp:"cable",sets:3,rLo:12,rHi:15},
+    {id:"pb1",name:"Développé militaire barre",tp:"barbell",sets:4,rLo:8,rHi:10,lk:true,yt:"développé+militaire+barre+overhead+press+technique"},
+    {id:"pb2",name:"Développé couché haltères",tp:"dumbbell",sets:4,rLo:10,rHi:12,lk:true,yt:"développé+couché+haltères+dumbbell+bench+press"},
+    {id:"pb3",name:"Élévations latérales",tp:"dumbbell",sets:4,rLo:12,rHi:15,yt:"élévations+latérales+haltères+lateral+raise+technique"},
+    {id:"pb4",name:"Push press",tp:"barbell",sets:3,rLo:6,rHi:8,lk:true,yt:"push+press+barre+technique+épaules"},
+    {id:"pb5",name:"Ext. triceps overhead",tp:"cable",sets:3,rLo:10,rHi:12,yt:"extension+triceps+overhead+poulie+technique"},
+    {id:"pb6",name:"Kickbacks câble",tp:"cable",sets:3,rLo:12,rHi:15,yt:"kickback+triceps+câble+technique"},
   ]},
   {id:4,key:"pullB",name:"Pull B",label:"Dos largeur",day:"Vendredi",color:"#3B82F6",icon:"🔵",exs:[
-    {id:"lb1",name:"Tractions lestées",tp:"barbell",sets:4,rLo:6,rHi:10},
-    {id:"lb2",name:"Tirage vertical large",tp:"cable",sets:4,rLo:10,rHi:12},
-    {id:"lb3",name:"Rowing T-bar",tp:"machine",sets:4,rLo:8,rHi:10},
-    {id:"lb4",name:"Curl incliné 45°",tp:"dumbbell",sets:3,rLo:10,rHi:12},
-    {id:"lb5",name:"Curl concentré",tp:"dumbbell",sets:3,rLo:10,rHi:12},
-    {id:"lb6",name:"Wrist curls",tp:"barbell",sets:3,rLo:15,rHi:20},
+    {id:"lb1",name:"Tractions lestées",tp:"barbell",sets:4,rLo:6,rHi:10,lk:true,yt:"tractions+lestées+pull+ups+weighted+technique"},
+    {id:"lb2",name:"Tirage vertical large",tp:"cable",sets:4,rLo:10,rHi:12,lk:true,yt:"tirage+vertical+prise+large+lat+pulldown+technique"},
+    {id:"lb3",name:"Rowing T-bar",tp:"machine",sets:4,rLo:8,rHi:10,lk:true,yt:"rowing+t-bar+technique+dos+épaisseur"},
+    {id:"lb4",name:"Curl incliné 45°",tp:"dumbbell",sets:3,rLo:10,rHi:12,yt:"curl+incliné+45+degrés+haltères+biceps+technique"},
+    {id:"lb5",name:"Curl concentré",tp:"dumbbell",sets:3,rLo:10,rHi:12,yt:"curl+concentré+concentration+curl+technique"},
+    {id:"lb6",name:"Wrist curls",tp:"barbell",sets:3,rLo:15,rHi:20,yt:"wrist+curl+avant+bras+forearm+technique"},
   ]},
   {id:5,key:"legsB",name:"Legs B",label:"Ischios/fessiers",day:"Samedi",color:"#10B981",icon:"🟢",exs:[
-    {id:"qb1",name:"Front squat",tp:"barbell",sets:4,rLo:8,rHi:10},
-    {id:"qb2",name:"Hip thrust barre",tp:"barbell",sets:4,rLo:10,rHi:12},
-    {id:"qb3",name:"Leg curl allongé",tp:"machine",sets:3,rLo:10,rHi:12},
-    {id:"qb4",name:"Split squat bulgare",tp:"dumbbell",sets:3,rLo:10,rHi:12},
-    {id:"qb5",name:"Mollets assis",tp:"machine",sets:4,rLo:15,rHi:20},
-    {id:"qb6",name:"Planche lestée",tp:"barbell",sets:3,rLo:1,rHi:1},
-    {id:"qb7",name:"Ab wheel rollout",tp:"barbell",sets:3,rLo:10,rHi:12},
+    {id:"qb1",name:"Front squat",tp:"barbell",sets:4,rLo:8,rHi:10,lk:true,yt:"front+squat+barre+technique+quadriceps"},
+    {id:"qb2",name:"Hip thrust barre",tp:"barbell",sets:4,rLo:10,rHi:12,lk:true,yt:"hip+thrust+barre+technique+fessiers"},
+    {id:"qb3",name:"Leg curl allongé",tp:"machine",sets:3,rLo:10,rHi:12,yt:"leg+curl+allongé+lying+leg+curl+ischio"},
+    {id:"qb4",name:"Split squat bulgare",tp:"dumbbell",sets:3,rLo:10,rHi:12,yt:"split+squat+bulgare+bulgarian+split+squat+technique"},
+    {id:"qb5",name:"Mollets assis",tp:"machine",sets:4,rLo:15,rHi:20,yt:"mollets+assis+seated+calf+raise+technique"},
+    {id:"qb6",name:"Planche lestée",tp:"barbell",sets:3,rLo:1,rHi:1,yt:"planche+lestée+weighted+plank+abdos+technique"},
+    {id:"qb7",name:"Ab wheel rollout",tp:"barbell",sets:3,rLo:10,rHi:12,yt:"ab+wheel+rollout+roue+abdominale+technique"},
   ]},
 ];
 
@@ -164,7 +165,7 @@ function buildS1(){
   return w;
 }
 
-function init(){var wk={};for(var i=1;i<=12;i++)wk[i]=emptyW();wk[1]=buildS1();return{wk:wk,cw:2}}
+function init(){var wk={};for(var i=1;i<=12;i++)wk[i]=emptyW();wk[1]=buildS1();var ord={};DAYS.forEach(function(d){ord[d.key]=d.exs.map(function(e){return e.id})});return{wk:wk,cw:2,ord:ord}}
 
 /* ═══ PROGRESSION ═══ */
 function compObj(exDef,prev){
@@ -178,6 +179,19 @@ function compObj(exDef,prev){
   var inc=INC[exDef.tp]||2.5;
   if(minR>=exDef.rHi)return{w:String(best+inc),r:String(exDef.rLo)};
   return{w:String(best),r:String(Math.min(minR+1,exDef.rHi))};
+}
+
+/* ═══ EXERCISE ORDER ═══ */
+function getOrderedExs(dayDef, order) {
+  if (!order) return dayDef.exs;
+  var locked = dayDef.exs.filter(function(e) { return e.lk; });
+  var free = dayDef.exs.filter(function(e) { return !e.lk; });
+  // Sort free by saved order
+  var freeOrder = order.filter(function(id) { return free.some(function(e) { return e.id === id; }); });
+  // Add any missing (new exercises)
+  free.forEach(function(e) { if (freeOrder.indexOf(e.id) === -1) freeOrder.push(e.id); });
+  var sortedFree = freeOrder.map(function(id) { return free.find(function(e) { return e.id === id; }); }).filter(Boolean);
+  return locked.concat(sortedFree);
 }
 
 /* ═══ COMPONENTS ═══ */
@@ -228,7 +242,7 @@ function Timer({sec,c,onEnd,onSkip,onDC}){
 }
 
 /* ═══ EXERCISE CARD ═══ */
-function ExCard({ex,data,prev,color,upd,onDone}){
+function ExCard({ex,data,prev,color,upd,onDone,isLk,canUp,canDn,onUp,onDn}){
   var ao=prev?compObj(ex,prev):null;
   var dW=data.tw||(ao?ao.w:""),dR=data.tr||(ao?ao.r:"");
   var tW=parseFloat(dW)||0,tR=parseInt(dR)||0;
@@ -243,12 +257,19 @@ function ExCard({ex,data,prev,color,upd,onDone}){
     {/* BANNER */}
     <div style={{padding:"12px 14px",background:allH?"rgba(16,185,129,.1)":color+"08",borderBottom:"1px solid "+(allH?"rgba(16,185,129,.2)":color+"15"),display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,flexWrap:"wrap"}}>
       <div style={{flex:1,minWidth:0}}>
-        <div style={{fontSize:14,fontWeight:700,color:"#fff"}}>{ex.name}</div>
+        <div style={{fontSize:14,fontWeight:700,color:"#fff"}}>{isLk&&<span style={{fontSize:10,color:"rgba(255,255,255,.15)",marginRight:4}}>🔒</span>}{ex.name}
+          {ex.yt&&<a href={YT+ex.yt} target="_blank" rel="noopener" style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:22,height:22,borderRadius:6,background:"rgba(255,0,0,.12)",border:"1px solid rgba(255,0,0,.2)",color:"#FF4444",fontSize:10,fontWeight:700,textDecoration:"none",marginLeft:6,verticalAlign:"middle",lineHeight:1}}>▶</a>}
+        </div>
         <div style={{fontSize:10,color:"rgba(255,255,255,.3)",marginTop:2}}>
           {ex.sets}×{ex.rLo===ex.rHi?ex.rLo:(ex.rLo+"-"+ex.rHi)} reps · {ex.tp}
           {pB>0&&<span style={{marginLeft:6}}>| Préc: {pB}kg×{pBR}</span>}
         </div>
       </div>
+      {/* REORDER ARROWS */}
+      {!isLk&&<div style={{display:"flex",flexDirection:"column",gap:2,marginRight:6}}>
+        <button onClick={onUp} disabled={!canUp} style={{width:22,height:18,borderRadius:4,border:"none",background:canUp?"rgba(255,255,255,.08)":"transparent",color:canUp?"rgba(255,255,255,.5)":"rgba(255,255,255,.1)",fontSize:10,cursor:canUp?"pointer":"default",display:"flex",alignItems:"center",justifyContent:"center",padding:0}}>▲</button>
+        <button onClick={onDn} disabled={!canDn} style={{width:22,height:18,borderRadius:4,border:"none",background:canDn?"rgba(255,255,255,.08)":"transparent",color:canDn?"rgba(255,255,255,.5)":"rgba(255,255,255,.1)",fontSize:10,cursor:canDn?"pointer":"default",display:"flex",alignItems:"center",justifyContent:"center",padding:0}}>▼</button>
+      </div>}
       <div style={{display:"flex",alignItems:"baseline",gap:3,flexShrink:0}}>
         {tW>0?<React.Fragment>
           <span style={{fontSize:9,fontWeight:700,color:allH?"#10B981":color,letterSpacing:1,marginRight:3}}>{allH?"✓ FAIT":"🎯 OBJ"}</span>
@@ -298,12 +319,15 @@ function App(){
   // Auto-detect today
   useEffect(function(){
     var s=load();
-    if(s&&s.wk){setSt(s);setWk((s.cw||2)-1)}
+    if(s&&s.wk){
+      // Ensure ord exists
+      if(!s.ord){s.ord={};DAYS.forEach(function(d){s.ord[d.key]=d.exs.map(function(e){return e.id})})}
+      setSt(s);setWk((s.cw||2)-1)
+    }
     else{var d=init();setSt(d);setWk(1)}
-    // Set today's day
-    var dow=new Date().getDay(); // 0=Sun,1=Mon...6=Sat
-    if(dow>=1&&dow<=6)setDayI(dow-1); // Mon=0...Sat=5
-    else setDayI(0); // Dimanche → montre lundi
+    var dow=new Date().getDay();
+    if(dow>=1&&dow<=6)setDayI(dow-1);
+    else setDayI(0);
   },[]);
 
   useEffect(function(){
@@ -328,6 +352,29 @@ function App(){
   }
   function upM(k,v){setSt(function(p){var n=JSON.parse(JSON.stringify(p));n.wk[wN].ms[k]=v;return n})}
   function upN(v){setSt(function(p){var n=JSON.parse(JSON.stringify(p));n.wk[wN].nt=v;return n})}
+
+  function reorder(dayKey,exId,dir){
+    setSt(function(p){
+      var n=JSON.parse(JSON.stringify(p));
+      if(!n.ord)n.ord={};
+      if(!n.ord[dayKey]){var dd=DAYS.find(function(d){return d.key===dayKey});n.ord[dayKey]=dd.exs.map(function(e){return e.id})}
+      var free=n.ord[dayKey].filter(function(id){var dd=DAYS.find(function(d){return d.key===dayKey});return dd.exs.some(function(e){return e.id===id&&!e.lk})});
+      var idx=free.indexOf(exId);
+      if(idx===-1)return n;
+      var swapIdx=dir==="up"?idx-1:idx+1;
+      if(swapIdx<0||swapIdx>=free.length)return n;
+      var tmp=free[idx];free[idx]=free[swapIdx];free[swapIdx]=tmp;
+      // Rebuild full order: locked first, then reordered free
+      var dd=DAYS.find(function(d){return d.key===dayKey});
+      var locked=dd.exs.filter(function(e){return e.lk}).map(function(e){return e.id});
+      n.ord[dayKey]=locked.concat(free);
+      return n;
+    });
+  }
+
+  // Get ordered exercises
+  var orderedExs=getOrderedExs(day,st.ord?st.ord[day.key]:null);
+  var freeExs=orderedExs.filter(function(e){return!e.lk});
 
   // Stats
   var dDone=0,dTot=0;
@@ -392,8 +439,9 @@ function App(){
 
     {/* EXERCISES */}
     <div style={{paddingBottom:tmr?240:0}}>
-      {day.exs.map(function(ex){
-        return<ExCard key={ex.id} ex={ex} data={dData[ex.id]} prev={pDData?pDData[ex.id]:null} color={day.color} upd={function(f,v){upEx(ex.id,f,v)}} onDone={function(){setTmr(true)}}/>;
+      {orderedExs.map(function(ex){
+        var fI=freeExs.indexOf(ex);
+        return<ExCard key={ex.id} ex={ex} data={dData[ex.id]} prev={pDData?pDData[ex.id]:null} color={day.color} upd={function(f,v){upEx(ex.id,f,v)}} onDone={function(){setTmr(true)}} isLk={!!ex.lk} canUp={!ex.lk&&fI>0} canDn={!ex.lk&&fI>=0&&fI<freeExs.length-1} onUp={function(){reorder(day.key,ex.id,"up")}} onDn={function(){reorder(day.key,ex.id,"down")}}/>;
       })}
     </div>
 
