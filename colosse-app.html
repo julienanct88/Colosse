@@ -5,6 +5,11 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
   <meta name="apple-mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="Colosse"/>
+  <meta name="theme-color" content="#08080d"/>
+  <meta name="description" content="Colosse — Programme PPL 12 semaines"/>
+  <link rel="manifest" href="manifest.json"/>
+  <link rel="apple-touch-icon" href="icon-192.png"/>
   <title>Colosse — Coach PPL</title>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet"/>
@@ -162,6 +167,34 @@ const SK="colosse-coach-v2";
 function load(){try{var r=localStorage.getItem(SK);return r?JSON.parse(r):null}catch(e){return null}}
 function save(d){try{localStorage.setItem(SK,JSON.stringify(d))}catch(e){}}
 
+/* ═══ DATA MIGRATION — ensure all exercises exist in saved data ═══ */
+function migrateData(st){
+  if(!st||!st.wk)return st;
+  var changed=false;
+  Object.keys(st.wk).forEach(function(wNum){
+    var wd=st.wk[wNum];if(!wd||!wd.ds)return;
+    DAYS.forEach(function(day){
+      if(!wd.ds[day.key])wd.ds[day.key]={};
+      day.exs.forEach(function(ex){
+        if(!wd.ds[day.key][ex.id]){
+          wd.ds[day.key][ex.id]={s:mkS(ex.sets),tw:"",tr:""};
+          changed=true;
+        }
+        // Also fix if sets count changed
+        var cur=wd.ds[day.key][ex.id];
+        if(cur.s.length<ex.sets){while(cur.s.length<ex.sets)cur.s.push({w:"",r:"",d:false});changed=true}
+      });
+    });
+    if(!wd.ms){wd.ms={};MEAS.forEach(function(m){wd.ms[m.id]=""});changed=true}
+    if(typeof wd.nt==="undefined"){wd.nt="";changed=true}
+  });
+  // Ensure ord exists
+  if(!st.ord){st.ord={};DAYS.forEach(function(d){st.ord[d.key]=d.exs.map(function(e){return e.id})});changed=true}
+  else{DAYS.forEach(function(d){if(!st.ord[d.key])st.ord[d.key]=d.exs.map(function(e){return e.id});else{d.exs.forEach(function(e){if(st.ord[d.key].indexOf(e.id)===-1){st.ord[d.key].push(e.id);changed=true}})}})}
+  if(changed)save(st);
+  return st;
+}
+
 function mkS(n){var a=[];for(var i=0;i<n;i++)a.push({w:"",r:"",d:false});return a}
 
 function emptyW(){
@@ -266,6 +299,7 @@ function Timer({sec,c,onEnd,onSkip,onDC}){
 
 /* ═══ EXERCISE CARD ═══ */
 function ExCard({ex,data,prev,color,upd,onDone,isLk,canUp,canDn,onUp,onDn,phaseName}){
+  if(!data||!data.s)return null; // safety guard
   var rng=getRepRange(ex,phaseName);
   var ao=prev?compObj(ex,prev,rng):null;
   var dW=data.tw||(ao?ao.w:""),dR=data.tr||(ao?ao.r:"");
@@ -344,8 +378,7 @@ function App(){
   useEffect(function(){
     var s=load();
     if(s&&s.wk){
-      // Ensure ord exists
-      if(!s.ord){s.ord={};DAYS.forEach(function(d){s.ord[d.key]=d.exs.map(function(e){return e.id})})}
+      s=migrateData(s);
       setSt(s);var cw=(s.cw||2)-1;setWk(cw);setRd(getPhaseRest(PHASES[cw].p))
     }
     else{var d=init();setSt(d);setWk(1);setRd(getPhaseRest(PHASES[1].p))}
@@ -364,6 +397,8 @@ function App(){
 
   var wN=wk+1,ph=PHASES[wk],day=DAYS[dayI],wd=st.wk[wN],pw=wN>1?st.wk[wN-1]:null;
   var dData=wd.ds[day.key],pDData=pw?pw.ds[day.key]:null;
+  // Safety: ensure exercise data exists (belt-and-suspenders)
+  day.exs.forEach(function(ex){if(!dData[ex.id])dData[ex.id]={s:mkS(ex.sets),tw:"",tr:""}});
 
   function upEx(eid,f,v){
     setSt(function(p){
@@ -469,7 +504,7 @@ function App(){
     <div style={{paddingBottom:tmr?240:0}}>
       {orderedExs.map(function(ex){
         var fI=freeExs.indexOf(ex);
-        return<ExCard key={ex.id} ex={ex} data={dData[ex.id]} prev={pDData?pDData[ex.id]:null} color={day.color} upd={function(f,v){upEx(ex.id,f,v)}} onDone={function(){setTmr(true)}} isLk={!!ex.lk} canUp={!ex.lk&&fI>0} canDn={!ex.lk&&fI>=0&&fI<freeExs.length-1} onUp={function(){reorder(day.key,ex.id,"up")}} onDn={function(){reorder(day.key,ex.id,"down")}} phaseName={ph.p}/>;
+        return<ExCard key={ex.id} ex={ex} data={dData[ex.id]} prev={pDData&&pDData[ex.id]?pDData[ex.id]:null} color={day.color} upd={function(f,v){upEx(ex.id,f,v)}} onDone={function(){setTmr(true)}} isLk={!!ex.lk} canUp={!ex.lk&&fI>0} canDn={!ex.lk&&fI>=0&&fI<freeExs.length-1} onUp={function(){reorder(day.key,ex.id,"up")}} onDn={function(){reorder(day.key,ex.id,"down")}} phaseName={ph.p}/>;
       })}
     </div>
 
@@ -505,6 +540,30 @@ function App(){
 }
 
 ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+<!-- PWA: Service Worker Registration + Update Banner -->
+<script>
+if('serviceWorker' in navigator){
+  window.addEventListener('load',function(){
+    navigator.serviceWorker.register('sw.js').then(function(reg){
+      // Check for updates every 30 minutes
+      setInterval(function(){reg.update()},30*60*1000);
+      reg.addEventListener('updatefound',function(){
+        var nw=reg.installing;
+        nw.addEventListener('statechange',function(){
+          if(nw.state==='installed'&&navigator.serviceWorker.controller){
+            // New version available — show reload banner
+            var b=document.createElement('div');
+            b.style.cssText='position:fixed;top:0;left:0;right:0;z-index:99999;background:#10B981;color:#fff;text-align:center;padding:12px 16px;font-family:DM Sans,sans-serif;font-size:13px;font-weight:700;cursor:pointer;';
+            b.textContent='🔄 Nouvelle version disponible — Appuyer pour mettre à jour';
+            b.onclick=function(){nw.postMessage({type:'SKIP_WAITING'});window.location.reload()};
+            document.body.appendChild(b);
+          }
+        });
+      });
+    }).catch(function(e){console.log('SW registration failed:',e)});
+  });
+}
 </script>
 </body>
 </html>
