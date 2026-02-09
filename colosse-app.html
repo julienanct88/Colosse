@@ -47,6 +47,7 @@ const DAYS=[
     {id:"la4",name:"Curl barre EZ",tp:"barbell",sets:3,rLo:10,rHi:12,yt:"curl+barre+EZ+biceps+technique"},
     {id:"la5",name:"Curl marteau",tp:"dumbbell",sets:3,rLo:10,rHi:12,yt:"curl+marteau+hammer+curl+technique"},
     {id:"la6",name:"Curl inversé EZ",tp:"barbell",sets:3,rLo:12,rHi:15,yt:"reverse+curl+barre+EZ+avant+bras+technique"},
+    {id:"la7",name:"Face pulls poulie",tp:"cable",sets:3,rLo:12,rHi:15,yt:"face+pull+poulie+deltoide+posterieur+technique"},
   ]},
   {id:2,key:"legsA",name:"Legs A",label:"Quads focus",day:"Mercredi",color:"#10B981",icon:"🟢",exs:[
     {id:"qa1",name:"Back squat",tp:"barbell",sets:4,rLo:6,rHi:8,lk:true,yt:"back+squat+barre+technique+musculation"},
@@ -63,7 +64,8 @@ const DAYS=[
     {id:"pb3",name:"Élévations latérales",tp:"dumbbell",sets:4,rLo:12,rHi:15,yt:"élévations+latérales+haltères+lateral+raise+technique"},
     {id:"pb4",name:"Push press",tp:"barbell",sets:3,rLo:6,rHi:8,lk:true,yt:"push+press+barre+technique+épaules"},
     {id:"pb5",name:"Ext. triceps overhead",tp:"cable",sets:3,rLo:10,rHi:12,yt:"extension+triceps+overhead+poulie+technique"},
-    {id:"pb6",name:"Kickbacks câble",tp:"cable",sets:3,rLo:12,rHi:15,yt:"kickback+triceps+câble+technique"},
+    {id:"pb6",name:"Dips prise serrée",tp:"barbell",sets:3,rLo:8,rHi:10,lk:true,yt:"dips+prise+serrée+triceps+masse+technique"},
+    {id:"pb7",name:"Écartés inclinés haltères",tp:"dumbbell",sets:3,rLo:10,rHi:12,yt:"écarté+incliné+haltères+pectoraux+technique"},
   ]},
   {id:4,key:"pullB",name:"Pull B",label:"Dos largeur",day:"Vendredi",color:"#3B82F6",icon:"🔵",exs:[
     {id:"lb1",name:"Tractions lestées",tp:"barbell",sets:4,rLo:6,rHi:10,lk:true,yt:"tractions+lestées+pull+ups+weighted+technique"},
@@ -72,6 +74,7 @@ const DAYS=[
     {id:"lb4",name:"Curl incliné 45°",tp:"dumbbell",sets:3,rLo:10,rHi:12,yt:"curl+incliné+45+degrés+haltères+biceps+technique"},
     {id:"lb5",name:"Curl concentré",tp:"dumbbell",sets:3,rLo:10,rHi:12,yt:"curl+concentré+concentration+curl+technique"},
     {id:"lb6",name:"Wrist curls",tp:"barbell",sets:3,rLo:15,rHi:20,yt:"wrist+curl+avant+bras+forearm+technique"},
+    {id:"lb7",name:"Oiseau inversé haltères",tp:"dumbbell",sets:3,rLo:12,rHi:15,yt:"oiseau+inversé+reverse+fly+deltoide+posterieur+technique"},
   ]},
   {id:5,key:"legsB",name:"Legs B",label:"Ischios/fessiers",day:"Samedi",color:"#10B981",icon:"🟢",exs:[
     {id:"qb1",name:"Front squat",tp:"barbell",sets:4,rLo:8,rHi:10,lk:true,yt:"front+squat+barre+technique+quadriceps"},
@@ -92,6 +95,26 @@ const PHASES=[
   {w:9,p:"Maturation",c:"#10B981",d:"26 mars"},{w:10,p:"Maturation",c:"#10B981",d:"2 avr"},
   {w:11,p:"Maturation",c:"#10B981",d:"9 avr"},{w:12,p:"Résultat",c:"#3B82F6",d:"16 avr"},
 ];
+
+/* ═══ PHASE CONFIG — rep ranges & rest ═══ */
+const PCFG={
+  "Réactivation":{cLo:10,cHi:12,iLo:12,iHi:15,rest:90,desc:"Léger, technique, réveiller les muscles"},
+  "Hypertrophie":{cLo:8,cHi:10,iLo:10,iHi:12,rest:120,desc:"Lourd, volume max, casser les fibres"},
+  "Consolidation":{cLo:6,cHi:8,iLo:8,iHi:10,rest:150,desc:"Très lourd, peu de reps, force pure"},
+  "Maturation":{cLo:8,cHi:10,iLo:10,iHi:12,rest:120,desc:"Lourd + maîtrisé, densité musculaire"},
+  "Résultat":{cLo:8,cHi:10,iLo:10,iHi:12,rest:120,desc:"Semaine test — mesure tes résultats"},
+};
+
+function getRepRange(ex,phaseName){
+  var cfg=PCFG[phaseName]||PCFG["Hypertrophie"];
+  if(ex.lk) return {lo:cfg.cLo,hi:cfg.cHi}; // composé
+  return {lo:cfg.iLo,hi:cfg.iHi}; // isolation
+}
+
+function getPhaseRest(phaseName){
+  var cfg=PCFG[phaseName];
+  return cfg?cfg.rest:120;
+}
 
 const MEAS=[
   {id:"poids",nm:"Poids corps",u:"kg",ic:"⚖️"},
@@ -168,8 +191,8 @@ function buildS1(){
 function init(){var wk={};for(var i=1;i<=12;i++)wk[i]=emptyW();wk[1]=buildS1();var ord={};DAYS.forEach(function(d){ord[d.key]=d.exs.map(function(e){return e.id})});return{wk:wk,cw:2,ord:ord}}
 
 /* ═══ PROGRESSION ═══ */
-function compObj(exDef,prev){
-  if(!prev)return null;
+function compObj(exDef,prev,rng){
+  if(!prev||!rng)return null;
   var dn=prev.s.filter(function(s){return s.d&&s.w&&parseFloat(s.w)>0});
   if(dn.length===0)return null;
   var best=0;dn.forEach(function(s){var v=parseFloat(s.w)||0;if(v>best)best=v});
@@ -177,8 +200,8 @@ function compObj(exDef,prev){
   var atB=dn.filter(function(s){return(parseFloat(s.w)||0)===best});
   var minR=9999;atB.forEach(function(s){var v=parseInt(s.r)||0;if(v<minR)minR=v});
   var inc=INC[exDef.tp]||2.5;
-  if(minR>=exDef.rHi)return{w:String(best+inc),r:String(exDef.rLo)};
-  return{w:String(best),r:String(Math.min(minR+1,exDef.rHi))};
+  if(minR>=rng.hi)return{w:String(best+inc),r:String(rng.lo)};
+  return{w:String(best),r:String(Math.min(minR+1,rng.hi))};
 }
 
 /* ═══ EXERCISE ORDER ═══ */
@@ -242,8 +265,9 @@ function Timer({sec,c,onEnd,onSkip,onDC}){
 }
 
 /* ═══ EXERCISE CARD ═══ */
-function ExCard({ex,data,prev,color,upd,onDone,isLk,canUp,canDn,onUp,onDn}){
-  var ao=prev?compObj(ex,prev):null;
+function ExCard({ex,data,prev,color,upd,onDone,isLk,canUp,canDn,onUp,onDn,phaseName}){
+  var rng=getRepRange(ex,phaseName);
+  var ao=prev?compObj(ex,prev,rng):null;
   var dW=data.tw||(ao?ao.w:""),dR=data.tr||(ao?ao.r:"");
   var tW=parseFloat(dW)||0,tR=parseInt(dR)||0;
   var isA=!data.tw&&!data.tr&&ao&&ao.w;
@@ -261,7 +285,7 @@ function ExCard({ex,data,prev,color,upd,onDone,isLk,canUp,canDn,onUp,onDn}){
           {ex.yt&&<a href={YT+ex.yt} target="_blank" rel="noopener" style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:22,height:22,borderRadius:6,background:"rgba(255,0,0,.12)",border:"1px solid rgba(255,0,0,.2)",color:"#FF4444",fontSize:10,fontWeight:700,textDecoration:"none",marginLeft:6,verticalAlign:"middle",lineHeight:1}}>▶</a>}
         </div>
         <div style={{fontSize:10,color:"rgba(255,255,255,.3)",marginTop:2}}>
-          {ex.sets}×{ex.rLo===ex.rHi?ex.rLo:(ex.rLo+"-"+ex.rHi)} reps · {ex.tp}
+          {ex.sets}×{rng.lo===rng.hi?rng.lo:(rng.lo+"-"+rng.hi)} reps · {ex.tp}
           {pB>0&&<span style={{marginLeft:6}}>| Préc: {pB}kg×{pBR}</span>}
         </div>
       </div>
@@ -301,7 +325,7 @@ function ExCard({ex,data,prev,color,upd,onDone,isLk,canUp,canDn,onUp,onDn}){
           {set.d&&w>0&&!hit&&tW>0&&<span style={{fontSize:9,color:"rgba(255,255,255,.18)"}}>{w<tW?"↗ "+((tW-w).toFixed(1))+"kg":r+"/"+tR+" reps"}</span>}
         </div>
       })}
-      {allH&&<div style={{marginTop:8,padding:"8px 12px",borderRadius:8,background:"rgba(16,185,129,.08)",border:"1px solid rgba(16,185,129,.12)",fontSize:11,color:"#10B981",fontWeight:600}}>🚀 Semaine prochaine → {(tW+inc).toFixed(1)}kg × {ex.rLo} reps</div>}
+      {allH&&<div style={{marginTop:8,padding:"8px 12px",borderRadius:8,background:"rgba(16,185,129,.08)",border:"1px solid rgba(16,185,129,.12)",fontSize:11,color:"#10B981",fontWeight:600}}>🚀 Semaine prochaine → {(tW+inc).toFixed(1)}kg × {rng.lo} reps</div>}
     </div>
   </div>;
 }
@@ -322,9 +346,9 @@ function App(){
     if(s&&s.wk){
       // Ensure ord exists
       if(!s.ord){s.ord={};DAYS.forEach(function(d){s.ord[d.key]=d.exs.map(function(e){return e.id})})}
-      setSt(s);setWk((s.cw||2)-1)
+      setSt(s);var cw=(s.cw||2)-1;setWk(cw);setRd(getPhaseRest(PHASES[cw].p))
     }
-    else{var d=init();setSt(d);setWk(1)}
+    else{var d=init();setSt(d);setWk(1);setRd(getPhaseRest(PHASES[1].p))}
     var dow=new Date().getDay();
     if(dow>=1&&dow<=6)setDayI(dow-1);
     else setDayI(0);
@@ -390,14 +414,18 @@ function App(){
 
     {/* WEEK PILLS */}
     <div style={{display:"flex",gap:3,justifyContent:"center",marginBottom:10,flexWrap:"wrap"}}>
-      {PHASES.map(function(p,i){return<button key={i} onClick={function(){setWk(i)}} style={{width:32,height:32,borderRadius:8,border:wk===i?"2px solid "+p.c:"1px solid rgba(255,255,255,.05)",background:wk===i?p.c+"20":"transparent",color:wk===i?"#fff":"rgba(255,255,255,.25)",fontSize:10,fontWeight:700,fontFamily:"'JetBrains Mono',monospace",cursor:"pointer"}}>S{p.w}</button>})}
+      {PHASES.map(function(p,i){return<button key={i} onClick={function(){setWk(i);setRd(getPhaseRest(p.p))}} style={{width:32,height:32,borderRadius:8,border:wk===i?"2px solid "+p.c:"1px solid rgba(255,255,255,.05)",background:wk===i?p.c+"20":"transparent",color:wk===i?"#fff":"rgba(255,255,255,.25)",fontSize:10,fontWeight:700,fontFamily:"'JetBrains Mono',monospace",cursor:"pointer"}}>S{p.w}</button>})}
     </div>
 
     {/* PHASE */}
-    <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginBottom:12}}>
-      <span style={{padding:"3px 10px",borderRadius:6,background:ph.c,fontSize:10,fontWeight:700}}>SEM {wN}</span>
-      <span style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,.4)"}}>{ph.p}</span>
-      <span style={{fontSize:10,color:"rgba(255,255,255,.18)"}}>{ph.d}</span>
+    <div style={{textAlign:"center",marginBottom:12}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginBottom:4}}>
+        <span style={{padding:"3px 10px",borderRadius:6,background:ph.c,fontSize:10,fontWeight:700}}>SEM {wN}</span>
+        <span style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,.4)"}}>{ph.p}</span>
+        <span style={{fontSize:10,color:"rgba(255,255,255,.18)"}}>{ph.d}</span>
+      </div>
+      <div style={{fontSize:10,color:"rgba(255,255,255,.2)",fontStyle:"italic"}}>{(PCFG[ph.p]||{}).desc||""}</div>
+      <div style={{fontSize:9,color:"rgba(255,255,255,.15)",marginTop:2}}>Composés {(PCFG[ph.p]||{}).cLo}-{(PCFG[ph.p]||{}).cHi} reps · Isolation {(PCFG[ph.p]||{}).iLo}-{(PCFG[ph.p]||{}).iHi} reps · Repos {(PCFG[ph.p]||{}).rest}s</div>
     </div>
 
     {/* DAY SELECTOR */}
@@ -441,7 +469,7 @@ function App(){
     <div style={{paddingBottom:tmr?240:0}}>
       {orderedExs.map(function(ex){
         var fI=freeExs.indexOf(ex);
-        return<ExCard key={ex.id} ex={ex} data={dData[ex.id]} prev={pDData?pDData[ex.id]:null} color={day.color} upd={function(f,v){upEx(ex.id,f,v)}} onDone={function(){setTmr(true)}} isLk={!!ex.lk} canUp={!ex.lk&&fI>0} canDn={!ex.lk&&fI>=0&&fI<freeExs.length-1} onUp={function(){reorder(day.key,ex.id,"up")}} onDn={function(){reorder(day.key,ex.id,"down")}}/>;
+        return<ExCard key={ex.id} ex={ex} data={dData[ex.id]} prev={pDData?pDData[ex.id]:null} color={day.color} upd={function(f,v){upEx(ex.id,f,v)}} onDone={function(){setTmr(true)}} isLk={!!ex.lk} canUp={!ex.lk&&fI>0} canDn={!ex.lk&&fI>=0&&fI<freeExs.length-1} onUp={function(){reorder(day.key,ex.id,"up")}} onDn={function(){reorder(day.key,ex.id,"down")}} phaseName={ph.p}/>;
       })}
     </div>
 
