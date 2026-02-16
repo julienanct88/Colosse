@@ -31,8 +31,38 @@
 <script type="text/babel">
 const{useState,useEffect,useRef,useCallback}=React;
 
-/* ═══ WAKE LOCK ═══ */
-function useWakeLock(on){const r=useRef(null);useEffect(()=>{if(!on||!("wakeLock"in navigator))return;let ok=true;const q=async()=>{try{r.current=await navigator.wakeLock.request("screen");r.current.addEventListener("release",()=>{if(ok)q()})}catch(e){}};q();const v=()=>{if(document.visibilityState==="visible"&&ok)q()};document.addEventListener("visibilitychange",v);return()=>{ok=false;document.removeEventListener("visibilitychange",v);if(r.current)r.current.release().catch(()=>{})};},[on]);}
+/* ═══ WAKE LOCK (with iOS fallback) ═══ */
+function useWakeLock(on){
+  const wl=useRef(null);
+  const vid=useRef(null);
+  useEffect(()=>{
+    if(!on)return;
+    let ok=true;
+    // Native Wake Lock API (Chrome, Edge, Android)
+    if("wakeLock"in navigator){
+      const req=async()=>{try{wl.current=await navigator.wakeLock.request("screen");wl.current.addEventListener("release",()=>{if(ok)req()})}catch(e){}};
+      req();
+      const vis=()=>{if(document.visibilityState==="visible"&&ok)req()};
+      document.addEventListener("visibilitychange",vis);
+      return()=>{ok=false;document.removeEventListener("visibilitychange",vis);if(wl.current)wl.current.release().catch(()=>{})};
+    }
+    // iOS fallback: tiny looping silent video keeps screen awake
+    try{
+      var v=document.createElement("video");
+      v.setAttribute("playsinline","");v.setAttribute("muted","");v.muted=true;v.setAttribute("loop","");
+      v.style.cssText="position:fixed;top:-1px;left:-1px;width:1px;height:1px;opacity:0.01;pointer-events:none;z-index:-1";
+      // Minimal silent MP4 (base64)
+      v.src="data:video/mp4;base64,AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAAIZnJlZQAAAFxtZGF0AAAAMGWIhAAV//73ye/Apuv5LYQAM8KJMo/5FhkTwQ0GHjBhAHvgAAAPaGliZXJ0AAAADmRhdGEAAAAA5wAAAAAbsp+AEcARwE+ACcBvgFEAAAAOZGF0YQAAAADGAAAA";
+      document.body.appendChild(v);
+      var playAttempt=function(){v.play().catch(function(){})};
+      playAttempt();
+      document.addEventListener("touchstart",playAttempt,{once:true});
+      document.addEventListener("click",playAttempt,{once:true});
+      vid.current=v;
+      return()=>{ok=false;if(vid.current){vid.current.pause();vid.current.remove();vid.current=null}};
+    }catch(e){}
+  },[on]);
+}
 
 /* ═══ PROGRAMME VALIDÉ ═══ */
 const YT="https://www.youtube.com/results?search_query=";
@@ -415,8 +445,31 @@ function App(){
 
   if(!st)return<div style={{minHeight:"100vh",background:"#08080d",display:"flex",alignItems:"center",justifyContent:"center",color:"rgba(255,255,255,.4)"}}>Chargement...</div>;
 
-  var wN=wk+1,ph=PHASES[wk],day=DAYS[dayI],wd=st.wk[wN],pw=wN>1?st.wk[wN-1]:null;
+  var wN=wk+1,ph=PHASES[wk],day=DAYS[dayI],wd=st.wk[wN];
+  // Find last week with actual completed data for this day (not just wN-1)
+  var pw=null;
+  for(var _pw=wN-1;_pw>=1;_pw--){
+    var _wd=st.wk[_pw];
+    if(!_wd||!_wd.ds||!_wd.ds[day.key])continue;
+    var _dd=_wd.ds[day.key];
+    var hasData=false;
+    day.exs.forEach(function(ex){
+      if(_dd[ex.id]&&_dd[ex.id].s){
+        _dd[ex.id].s.forEach(function(s){if(s.d&&s.w&&parseFloat(s.w)>0)hasData=true});
+      }
+    });
+    if(hasData){pw=_wd;break}
+  }
   var dData=wd.ds[day.key],pDData=pw?pw.ds[day.key]:null;
+  // Find last week with measurements
+  var pmw=null;
+  for(var _pm=wN-1;_pm>=1;_pm--){
+    var _mw=st.wk[_pm];
+    if(!_mw||!_mw.ms)continue;
+    var hasMeas=false;
+    MEAS.forEach(function(m){if(_mw.ms[m.id]&&_mw.ms[m.id]!=="")hasMeas=true});
+    if(hasMeas){pmw=_mw;break}
+  }
   // Safety: ensure exercise data exists (belt-and-suspenders)
   day.exs.forEach(function(ex){if(!dData[ex.id])dData[ex.id]={s:mkS(ex.sets),tw:"",tr:""}});
 
@@ -469,7 +522,7 @@ function App(){
 
     {/* WEEK PILLS */}
     <div style={{display:"flex",gap:3,justifyContent:"center",marginBottom:10,flexWrap:"wrap"}}>
-      {PHASES.map(function(p,i){return<button key={i} onClick={function(){setWk(i);setRd(getPhaseRest(p.p))}} style={{width:32,height:32,borderRadius:8,border:wk===i?"2px solid "+p.c:"1px solid rgba(255,255,255,.05)",background:wk===i?p.c+"20":"transparent",color:wk===i?"#fff":"rgba(255,255,255,.25)",fontSize:10,fontWeight:700,fontFamily:"'JetBrains Mono',monospace",cursor:"pointer"}}>S{p.w}</button>})}
+      {PHASES.map(function(p,i){return<button key={i} onClick={function(){setWk(i);setRd(getPhaseRest(p.p));setSt(function(prev){var n=JSON.parse(JSON.stringify(prev));n.cw=i+1;return n})}} style={{width:32,height:32,borderRadius:8,border:wk===i?"2px solid "+p.c:"1px solid rgba(255,255,255,.05)",background:wk===i?p.c+"20":"transparent",color:wk===i?"#fff":"rgba(255,255,255,.25)",fontSize:10,fontWeight:700,fontFamily:"'JetBrains Mono',monospace",cursor:"pointer"}}>S{p.w}</button>})}
     </div>
 
     {/* PHASE */}
@@ -533,7 +586,7 @@ function App(){
       <div style={{fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:1.2,color:"rgba(255,255,255,.35)",marginBottom:10}}>📐 Mensurations — chaque Jeudi</div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:10}}>
         {MEAS.map(function(m){
-          var pv=pw?pw.ms[m.id]:"",cv=wd.ms[m.id];
+          var pv=pmw?pmw.ms[m.id]:"",cv=wd.ms[m.id];
           var df=cv&&pv?(parseFloat(cv)-parseFloat(pv)):null;
           return<div key={m.id}>
             <div style={{fontSize:9,color:"rgba(255,255,255,.25)",fontWeight:600,marginBottom:3}}>{m.ic} {m.nm}</div>
