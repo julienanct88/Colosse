@@ -424,15 +424,25 @@ function App(){
   const[rd,setRd]=useState(90);
   useWakeLock(true);
 
-  // Auto-detect today
+  // Auto-detect today's week and day
   useEffect(function(){
     var s=load();
     if(s&&s.wk){
       s=migrateData(s);
-      setSt(s);var cw=(s.cw||2)-1;setWk(cw);setRd(getPhaseRest(PHASES[cw].p))
+      setSt(s);
     }
-    else{var d=init();setSt(d);setWk(1);setRd(getPhaseRest(PHASES[1].p))}
-    var dow=new Date().getDay();
+    else{var d=init();setSt(d)}
+    // Compute current week from date (S1 started Jan 29 2026)
+    var s1Start=new Date(2026,0,29); // Jan 29, 2026
+    var now=new Date();
+    var diffDays=Math.floor((now-s1Start)/(1000*60*60*24));
+    var autoWeek=Math.floor(diffDays/7); // 0-indexed
+    if(autoWeek<0)autoWeek=0;
+    if(autoWeek>11)autoWeek=11;
+    setWk(autoWeek);
+    setRd(getPhaseRest(PHASES[autoWeek].p));
+    // Auto-detect day of week
+    var dow=now.getDay();
     if(dow>=1&&dow<=6)setDayI(dow-1);
     else setDayI(0);
   },[]);
