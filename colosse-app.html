@@ -417,6 +417,26 @@ function ExCard({ex,data,prev,color,upd,onDone,isLk,canUp,canDn,onUp,onDn,phaseN
   </div>;
 }
 
+/* ═══ ERROR BOUNDARY ═══ */
+class ErrorBoundary extends React.Component{
+  constructor(props){super(props);this.state={hasError:false,error:null}}
+  static getDerivedStateFromError(error){return{hasError:true,error:error}}
+  componentDidCatch(error,info){console.error("Colosse Error:",error,info)}
+  render(){
+    if(this.state.hasError){
+      var self=this;
+      return React.createElement("div",{style:{minHeight:"100vh",background:"#08080d",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24,color:"#fff",fontFamily:"'DM Sans',sans-serif",textAlign:"center"}},
+        React.createElement("div",{style:{fontSize:40,marginBottom:16}},"⚠️"),
+        React.createElement("div",{style:{fontSize:18,fontWeight:700,marginBottom:8}},"Erreur Colosse"),
+        React.createElement("div",{style:{fontSize:13,color:"rgba(255,255,255,.4)",marginBottom:20,maxWidth:300}},String(this.state.error)),
+        React.createElement("button",{onClick:function(){self.setState({hasError:false,error:null})},style:{padding:"10px 24px",borderRadius:10,border:"1px solid #10B981",background:"rgba(16,185,129,.15)",color:"#10B981",fontSize:14,fontWeight:700,cursor:"pointer",marginBottom:10}},"🔄 Réessayer"),
+        React.createElement("button",{onClick:function(){if(confirm("Cela va vider le cache de l'app. Tes données localStorage seront conservées.")){caches.keys().then(function(names){names.forEach(function(n){caches.delete(n)})}).then(function(){window.location.reload()})}},style:{padding:"10px 24px",borderRadius:10,border:"1px solid rgba(255,255,255,.1)",background:"rgba(255,255,255,.05)",color:"rgba(255,255,255,.5)",fontSize:12,fontWeight:600,cursor:"pointer"}},"🗑 Vider le cache & recharger")
+      );
+    }
+    return this.props.children;
+  }
+}
+
 /* ═══ MAIN APP ═══ */
 function App(){
   const[st,setSt]=useState(null);
@@ -459,7 +479,15 @@ function App(){
 
   if(!st)return<div style={{minHeight:"100vh",background:"#08080d",display:"flex",alignItems:"center",justifyContent:"center",color:"rgba(255,255,255,.4)"}}>Chargement...</div>;
 
-  var wN=wk+1,ph=PHASES[wk],day=DAYS[dayI],wd=st.wk[wN];
+  var wN=wk+1,ph=PHASES[wk],day=DAYS[dayI];
+  // Safety: create missing week data to prevent black screen crash
+  if(!st.wk[wN]){var _n=JSON.parse(JSON.stringify(st));_n.wk[wN]=emptyW();setSt(_n);return<div style={{minHeight:"100vh",background:"#08080d",display:"flex",alignItems:"center",justifyContent:"center",color:"rgba(255,255,255,.4)"}}>Chargement S{wN}...</div>}
+  var wd=st.wk[wN];
+  // Safety: ensure sub-objects exist
+  if(!wd.ds){wd.ds={}}
+  if(!wd.ds[day.key]){wd.ds[day.key]={};day.exs.forEach(function(ex){wd.ds[day.key][ex.id]={s:mkS(ex.sets),tw:"",tr:""}})}
+  if(!wd.ms){wd.ms={};MEAS.forEach(function(m){wd.ms[m.id]=""})}
+  if(typeof wd.nt==="undefined")wd.nt="";
   // Find last week with actual completed data for this day (not just wN-1)
   var pw=null;
   for(var _pw=wN-1;_pw>=1;_pw--){
@@ -656,7 +684,22 @@ function App(){
   </div>;
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+ReactDOM.createRoot(document.getElementById("root")).render(<ErrorBoundary><App/></ErrorBoundary>);
+</script>
+<!-- Fallback: if Babel/React fail to load, show error after 5s -->
+<script>
+setTimeout(function(){
+  var root=document.getElementById("root");
+  if(root&&root.children.length===0){
+    root.innerHTML='<div style="min-height:100vh;background:#08080d;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;color:#fff;font-family:sans-serif;text-align:center">'
+      +'<div style="font-size:40px;margin-bottom:16px">📡</div>'
+      +'<div style="font-size:18px;font-weight:700;margin-bottom:8px">Chargement échoué</div>'
+      +'<div style="font-size:13px;color:rgba(255,255,255,.4);margin-bottom:20px;max-width:300px">Les scripts n\'ont pas pu se charger. Vérifie ta connexion ou vide le cache.</div>'
+      +'<button onclick="caches.keys().then(function(n){n.forEach(function(k){caches.delete(k)})}).then(function(){location.reload()})" style="padding:10px 24px;border-radius:10px;border:1px solid #EF4444;background:rgba(239,68,68,.15);color:#EF4444;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:10px">🗑 Vider le cache & recharger</button>'
+      +'<button onclick="location.reload()" style="padding:10px 24px;border-radius:10px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.05);color:rgba(255,255,255,.5);font-size:12px;font-weight:600;cursor:pointer">🔄 Recharger</button>'
+      +'</div>';
+  }
+},5000);
 </script>
 <!-- PWA: Service Worker Registration + Update Banner -->
 <script>
