@@ -22,13 +22,74 @@
     @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
     ::-webkit-scrollbar{display:none}
   </style>
-  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
-  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+  <script>
+  // Robust CDN loader with fallbacks
+  function loadScript(urls, check, name) {
+    return new Promise(function(resolve, reject) {
+      var i = 0;
+      function tryNext() {
+        if (i >= urls.length) { reject(new Error(name + ' failed from all CDNs')); return; }
+        var s = document.createElement('script');
+        s.crossOrigin = 'anonymous';
+        s.src = urls[i];
+        s.onload = function() {
+          if (check()) { resolve(); } else { i++; tryNext(); }
+        };
+        s.onerror = function() { i++; tryNext(); };
+        document.head.appendChild(s);
+      }
+      tryNext();
+    });
+  }
+
+  loadScript([
+    'https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js',
+    'https://unpkg.com/react@18.2.0/umd/react.production.min.js',
+    'https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.production.min.js'
+  ], function() { return typeof React !== 'undefined'; }, 'React')
+  .then(function() {
+    return loadScript([
+      'https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js',
+      'https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js',
+      'https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.production.min.js'
+    ], function() { return typeof ReactDOM !== 'undefined'; }, 'ReactDOM');
+  })
+  .then(function() {
+    return loadScript([
+      'https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js',
+      'https://unpkg.com/@babel/standalone@7.23.9/babel.min.js',
+      'https://cdn.jsdelivr.net/npm/@babel/standalone@7.23.9/babel.min.js'
+    ], function() { return typeof Babel !== 'undefined'; }, 'Babel');
+  })
+  .then(function() {
+    // All loaded — now execute the app script
+    var appScript = document.getElementById('colosse-app-source');
+    if (appScript) {
+      var code = Babel.transform(appScript.textContent, { presets: ['react'] }).code;
+      var exec = document.createElement('script');
+      exec.textContent = code;
+      document.body.appendChild(exec);
+    }
+  })
+  .catch(function(err) {
+    console.error('CDN load failed:', err);
+    var root = document.getElementById('root');
+    if (root) {
+      root.innerHTML = '<div style="min-height:100vh;background:#08080d;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;color:#fff;font-family:sans-serif;text-align:center">'
+        +'<div style="font-size:40px;margin-bottom:16px">📡</div>'
+        +'<div style="font-size:18px;font-weight:700;margin-bottom:8px">Chargement échoué</div>'
+        +'<div style="font-size:13px;color:rgba(255,255,255,.4);margin-bottom:8px;max-width:300px">'+err.message+'</div>'
+        +'<div style="font-size:11px;color:rgba(255,255,255,.25);margin-bottom:20px;max-width:300px">Vérifie ta connexion internet. Les 3 CDN (Cloudflare, unpkg, jsDelivr) sont inaccessibles.</div>'
+        +'<button onclick="caches.keys().then(function(n){n.forEach(function(k){caches.delete(k)})}).then(function(){location.reload()})" style="padding:10px 24px;border-radius:10px;border:1px solid #EF4444;background:rgba(239,68,68,.15);color:#EF4444;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:10px">🗑 Vider le cache & recharger</button>'
+        +'<button onclick="location.reload()" style="padding:10px 24px;border-radius:10px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.05);color:rgba(255,255,255,.5);font-size:12px;font-weight:600;cursor:pointer">🔄 Recharger</button>'
+        +'</div>';
+    }
+  });
+  </script>
 </head>
 <body>
 <div id="root"></div>
-<script type="text/babel">
+<script type="text/plain" id="colosse-app-source">
 const{useState,useEffect,useRef,useCallback}=React;
 
 /* ═══ WAKE LOCK (with iOS fallback) ═══ */
@@ -410,7 +471,6 @@ function ExCard({ex,data,prev,color,upd,onDone,isLk,canUp,canDn,onUp,onDn,phaseN
           {set.d&&hit&&<span style={{fontSize:12,color:"#10B981",fontWeight:700}}>✓</span>}
           {set.d&&w>0&&!hit&&tW>0&&<span style={{fontSize:9,color:"rgba(255,255,255,.18)"}}>{w<tW?"↗ "+((tW-w).toFixed(1))+"kg":r+"/"+tR+(ex.isTimer?" sec":" reps")}</span>}
         </div>
-        </div>
       })}
       {allH&&<div style={{marginTop:8,padding:"8px 12px",borderRadius:8,background:"rgba(16,185,129,.08)",border:"1px solid rgba(16,185,129,.12)",fontSize:11,color:"#10B981",fontWeight:600}}>{ex.isTimer?"🚀 Semaine prochaine → +5 sec ou + poids":"🚀 Semaine prochaine → "+(tW+inc).toFixed(1)+"kg × "+rng.lo+" reps"}</div>}
     </div>
@@ -685,21 +745,6 @@ function App(){
 }
 
 ReactDOM.createRoot(document.getElementById("root")).render(<ErrorBoundary><App/></ErrorBoundary>);
-</script>
-<!-- Fallback: if Babel/React fail to load, show error after 5s -->
-<script>
-setTimeout(function(){
-  var root=document.getElementById("root");
-  if(root&&root.children.length===0){
-    root.innerHTML='<div style="min-height:100vh;background:#08080d;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;color:#fff;font-family:sans-serif;text-align:center">'
-      +'<div style="font-size:40px;margin-bottom:16px">📡</div>'
-      +'<div style="font-size:18px;font-weight:700;margin-bottom:8px">Chargement échoué</div>'
-      +'<div style="font-size:13px;color:rgba(255,255,255,.4);margin-bottom:20px;max-width:300px">Les scripts n\'ont pas pu se charger. Vérifie ta connexion ou vide le cache.</div>'
-      +'<button onclick="caches.keys().then(function(n){n.forEach(function(k){caches.delete(k)})}).then(function(){location.reload()})" style="padding:10px 24px;border-radius:10px;border:1px solid #EF4444;background:rgba(239,68,68,.15);color:#EF4444;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:10px">🗑 Vider le cache & recharger</button>'
-      +'<button onclick="location.reload()" style="padding:10px 24px;border-radius:10px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.05);color:rgba(255,255,255,.5);font-size:12px;font-weight:600;cursor:pointer">🔄 Recharger</button>'
-      +'</div>';
-  }
-},5000);
 </script>
 <!-- PWA: Service Worker Registration + Update Banner -->
 <script>
