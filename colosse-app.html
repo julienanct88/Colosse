@@ -165,7 +165,7 @@ const DAYS=[
   ]},
   {id:4,key:"pullB",name:"Pull B",label:"Dos largeur",day:"Vendredi",color:"#3B82F6",icon:"🔵",exs:[
     {id:"lb1",name:"Tractions lestées",tp:"barbell",sets:4,rLo:6,rHi:10,lk:true,rest:180,yt:"tractions+lestées+pull+ups+weighted+technique"},
-    {id:"lb2",name:"Tirage vertical large",tp:"cable",sets:4,rLo:10,rHi:12,lk:true,rest:120,yt:"tirage+vertical+prise+large+lat+pulldown+technique"},
+    {id:"lb2",name:"Pull Down machine",tp:"machine",sets:4,rLo:10,rHi:12,lk:true,rest:120,yt:"lat+pulldown+machine+technogym+technique"},
     {id:"lb3",name:"Rowing T-bar",tp:"machine",sets:4,rLo:8,rHi:10,lk:true,rest:150,yt:"rowing+t-bar+technique+dos+épaisseur"},
     {id:"lb4",name:"Curl incliné 45°",tp:"dumbbell",sets:3,rLo:10,rHi:12,rest:90,yt:"curl+incliné+45+degrés+haltères+biceps+technique"},
     {id:"lb5",name:"Curl concentré",tp:"dumbbell",sets:3,rLo:10,rHi:12,rest:90,yt:"curl+concentré+concentration+curl+technique"},
@@ -184,12 +184,12 @@ const DAYS=[
 ];
 
 const PHASES=[
-  {w:1,p:"Réactivation",c:"#F59E0B",d:"29 jan"},{w:2,p:"Réactivation",c:"#F59E0B",d:"5 fév"},
-  {w:3,p:"Réactivation",c:"#F59E0B",d:"12 fév"},{w:4,p:"Hypertrophie",c:"#EF4444",d:"19 fév"},
-  {w:5,p:"Hypertrophie",c:"#EF4444",d:"26 fév"},{w:6,p:"Hypertrophie",c:"#EF4444",d:"5 mars"},
-  {w:7,p:"Consolidation",c:"#8B5CF6",d:"12 mars"},{w:8,p:"Consolidation",c:"#8B5CF6",d:"19 mars"},
-  {w:9,p:"Maturation",c:"#10B981",d:"26 mars"},{w:10,p:"Maturation",c:"#10B981",d:"2 avr"},
-  {w:11,p:"Maturation",c:"#10B981",d:"9 avr"},{w:12,p:"Résultat",c:"#3B82F6",d:"16 avr"},
+  {w:1,p:"Réactivation",c:"#F59E0B",d:"26 jan"},{w:2,p:"Réactivation",c:"#F59E0B",d:"2 fév"},
+  {w:3,p:"Réactivation",c:"#F59E0B",d:"9 fév"},{w:4,p:"Hypertrophie",c:"#EF4444",d:"16 fév"},
+  {w:5,p:"Hypertrophie",c:"#EF4444",d:"23 fév"},{w:6,p:"Hypertrophie",c:"#EF4444",d:"2 mars"},
+  {w:7,p:"Consolidation",c:"#8B5CF6",d:"9 mars"},{w:8,p:"Consolidation",c:"#8B5CF6",d:"16 mars"},
+  {w:9,p:"Maturation",c:"#10B981",d:"23 mars"},{w:10,p:"Maturation",c:"#10B981",d:"30 mars"},
+  {w:11,p:"Maturation",c:"#10B981",d:"6 avr"},{w:12,p:"Résultat",c:"#3B82F6",d:"13 avr"},
 ];
 
 /* ═══ PHASE CONFIG — rep ranges & rest ═══ */
@@ -314,18 +314,20 @@ function buildS1(){
 
 function init(){var wk={};for(var i=1;i<=12;i++)wk[i]=emptyW();wk[1]=buildS1();var ord={};DAYS.forEach(function(d){ord[d.key]=d.exs.map(function(e){return e.id})});return{wk:wk,cw:2,ord:ord}}
 
-/* ═══ PROGRESSION ═══ */
+/* ═══ PROGRESSION (dernière série = référence) ═══ */
 function compObj(exDef,prev,rng){
   if(!prev||!rng)return null;
   var dn=prev.s.filter(function(s){return s.d&&s.w&&parseFloat(s.w)>0});
   if(dn.length===0)return null;
-  var best=0;dn.forEach(function(s){var v=parseFloat(s.w)||0;if(v>best)best=v});
-  if(best===0)return null;
-  var atB=dn.filter(function(s){return(parseFloat(s.w)||0)===best});
-  var minR=9999;atB.forEach(function(s){var v=parseInt(s.r)||0;if(v<minR)minR=v});
+  // Utiliser la DERNIÈRE série complétée comme référence
+  var last=dn[dn.length-1];
+  var lastW=parseFloat(last.w)||0,lastR=parseInt(last.r)||0;
+  if(lastW===0)return null;
   var inc=INC[exDef.tp]||2.5;
-  if(minR>=rng.hi)return{w:String(best+inc),r:String(rng.lo)};
-  return{w:String(best),r:String(Math.min(minR+1,rng.hi))};
+  // Augmenter le poids SEULEMENT si la dernière série atteint le haut de la fourchette
+  if(lastR>=rng.hi)return{w:String(lastW+inc),r:String(rng.lo)};
+  // Sinon garder le même poids, viser +1 rep
+  return{w:String(lastW),r:String(Math.min(lastR+1,rng.hi))};
 }
 
 /* ═══ EXERCISE ORDER ═══ */
@@ -419,7 +421,7 @@ function ExCard({ex,data,prev,color,upd,onDone,isLk,canUp,canDn,onUp,onDn,phaseN
   var allH=tW>0&&tR>0&&dc>=Math.max(tc-1,1)&&dn.every(function(s){return(parseFloat(s.w)||0)>=tW&&(parseInt(s.r)||0)>=tR});
   var inc=INC[ex.tp]||2.5;
   var pB=0,pBR=0;
-  if(prev){prev.s.filter(function(s){return s.d&&s.w&&parseFloat(s.w)>0}).forEach(function(s){var w=parseFloat(s.w)||0;if(w>pB)pB=w});if(pB>0){var aW=prev.s.filter(function(s){return s.d&&(parseFloat(s.w)||0)===pB});pBR=999;aW.forEach(function(s){var r=parseInt(s.r)||0;if(r<pBR)pBR=r});if(pBR===999)pBR=0}}
+  if(prev){var prevDn=prev.s.filter(function(s){return s.d&&s.w&&parseFloat(s.w)>0});if(prevDn.length>0){var prevLast=prevDn[prevDn.length-1];pB=parseFloat(prevLast.w)||0;pBR=parseInt(prevLast.r)||0}}
 
   return<div style={{borderRadius:14,background:"rgba(255,255,255,.025)",border:"1px solid rgba(255,255,255,.06)",overflow:"hidden",marginBottom:10}}>
     {/* BANNER */}
@@ -472,7 +474,7 @@ function ExCard({ex,data,prev,color,upd,onDone,isLk,canUp,canDn,onUp,onDn,phaseN
           {set.d&&w>0&&!hit&&tW>0&&<span style={{fontSize:9,color:"rgba(255,255,255,.18)"}}>{w<tW?"↗ "+((tW-w).toFixed(1))+"kg":r+"/"+tR+(ex.isTimer?" sec":" reps")}</span>}
         </div>
       })}
-      {allH&&<div style={{marginTop:8,padding:"8px 12px",borderRadius:8,background:"rgba(16,185,129,.08)",border:"1px solid rgba(16,185,129,.12)",fontSize:11,color:"#10B981",fontWeight:600}}>{ex.isTimer?"🚀 Semaine prochaine → +5 sec ou + poids":"🚀 Semaine prochaine → "+(tW+inc).toFixed(1)+"kg × "+rng.lo+" reps"}</div>}
+      {allH&&(function(){var lastDn=dn[dn.length-1],lastR2=parseInt(lastDn?lastDn.r:0)||0,goUp=lastR2>=rng.hi;return<div style={{marginTop:8,padding:"8px 12px",borderRadius:8,background:"rgba(16,185,129,.08)",border:"1px solid rgba(16,185,129,.12)",fontSize:11,color:"#10B981",fontWeight:600}}>{ex.isTimer?"🚀 Semaine prochaine → +5 sec ou + poids":goUp?"🚀 Semaine prochaine → "+(tW+inc).toFixed(1)+"kg × "+rng.lo+" reps":"💪 Semaine prochaine → "+tW.toFixed(1)+"kg × "+Math.min(lastR2+1,rng.hi)+" reps (on garde le poids)"}</div>})()}
     </div>
   </div>;
 }
@@ -517,7 +519,7 @@ function App(){
     }
     else{var d=init();setSt(d)}
     // Compute current week from date (S1 started Jan 29 2026)
-    var s1Start=new Date(2026,0,29); // Jan 29, 2026
+    var s1Start=new Date(2026,0,26); // Mon Jan 26, 2026 (aligned to Monday)
     var now=new Date();
     var diffDays=Math.floor((now-s1Start)/(1000*60*60*24));
     var autoWeek=Math.floor(diffDays/7); // 0-indexed
