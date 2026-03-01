@@ -258,10 +258,63 @@ const SK="colosse-coach-v2";
 function load(){try{var r=localStorage.getItem(SK);return r?JSON.parse(r):null}catch(e){return null}}
 function save(d){try{localStorage.setItem(SK,JSON.stringify(d))}catch(e){}}
 
+/* ═══ WEEK DATES — real calendar dates for each day ═══ */
+function getWeekDates(weekNum){
+  var base=new Date(2026,0,26); // Mon Jan 26 = S1
+  var monday=new Date(base.getTime()+(weekNum-1)*7*24*60*60*1000);
+  var mois=["jan","fév","mars","avr","mai","juin","juil","août","sept","oct","nov","déc"];
+  var dates=[];
+  for(var i=0;i<6;i++){
+    var d=new Date(monday.getTime()+i*24*60*60*1000);
+    dates.push(d.getDate()+" "+mois[d.getMonth()]);
+  }
+  return dates;
+}
+
 /* ═══ DATA MIGRATION — ensure all exercises exist in saved data ═══ */
 function migrateData(st){
   if(!st||!st.wk)return st;
   var changed=false;
+
+  /* --- Migration V2: fix week alignment (s1Start Thu Jan 29 → Mon Jan 26) ---
+     Mon/Tue/Wed sessions (pushA, pullA, legsA) were saved in wk[N] but
+     actually belong in wk[N+1] because the old start date was a Thursday.
+     Move them to the correct week. Process in reverse to avoid overwriting. */
+  if(!st.migV2){
+    var monWedKeys=["pushA","pullA","legsA"];
+    function dayHasData(ds,dk){
+      if(!ds||!ds[dk])return false;
+      var found=false;
+      Object.keys(ds[dk]).forEach(function(eid){
+        var ex=ds[dk][eid];
+        if(ex&&ex.s){ex.s.forEach(function(s){if(s.d&&s.w&&parseFloat(s.w)>0)found=true})}
+      });
+      return found;
+    }
+    for(var n=11;n>=1;n--){
+      var src=st.wk[n];
+      if(!src||!src.ds)continue;
+      if(!st.wk[n+1])st.wk[n+1]=emptyW();
+      var dst=st.wk[n+1];
+      if(!dst.ds)dst.ds={};
+      monWedKeys.forEach(function(dk){
+        if(!dayHasData(src.ds,dk))return;
+        // Only move if destination has no real data (don't overwrite)
+        if(dayHasData(dst.ds,dk))return;
+        dst.ds[dk]=JSON.parse(JSON.stringify(src.ds[dk]));
+        // Clear source (was in wrong week)
+        var dayDef=DAYS.find(function(d){return d.key===dk});
+        if(dayDef){
+          src.ds[dk]={};
+          dayDef.exs.forEach(function(ex){src.ds[dk][ex.id]={s:mkS(ex.sets),tw:"",tr:""}});
+        }
+        changed=true;
+      });
+    }
+    st.migV2=true;
+    changed=true;
+  }
+
   Object.keys(st.wk).forEach(function(wNum){
     var wd=st.wk[wNum];if(!wd||!wd.ds)return;
     DAYS.forEach(function(day){
@@ -641,15 +694,16 @@ function App(){
     </div>
 
     {/* DAY SELECTOR */}
-    <div style={{display:"flex",gap:3,marginBottom:14,overflowX:"auto"}}>
+    {(function(){var wDates=getWeekDates(wN);return<div style={{display:"flex",gap:3,marginBottom:14,overflowX:"auto"}}>
       {DAYS.map(function(d,i){
         var active=dayI===i;
-        return<button key={i} onClick={function(){setDayI(i)}} style={{flex:"1 1 0",padding:"8px 2px 6px",borderRadius:10,border:active?"2px solid "+d.color:"1px solid rgba(255,255,255,.04)",background:active?d.color+"15":"transparent",cursor:"pointer",textAlign:"center",minWidth:48,position:"relative"}}>
+        return<button key={i} onClick={function(){setDayI(i)}} style={{flex:"1 1 0",padding:"6px 2px 5px",borderRadius:10,border:active?"2px solid "+d.color:"1px solid rgba(255,255,255,.04)",background:active?d.color+"15":"transparent",cursor:"pointer",textAlign:"center",minWidth:48,position:"relative"}}>
           <div style={{fontSize:9,color:active?d.color:"rgba(255,255,255,.2)",fontWeight:700}}>{d.day.substring(0,3).toUpperCase()}</div>
-          <div style={{fontSize:10,color:active?"#fff":"rgba(255,255,255,.3)",fontWeight:700,marginTop:2}}>{d.name}</div>
+          <div style={{fontSize:8,color:active?d.color+"99":"rgba(255,255,255,.12)",fontWeight:600,marginTop:1}}>{wDates[i]}</div>
+          <div style={{fontSize:10,color:active?"#fff":"rgba(255,255,255,.3)",fontWeight:700,marginTop:1}}>{d.name}</div>
         </button>
       })}
-    </div>
+    </div>})()}
 
     {/* TODAY BADGE */}
     {isToday&&<div style={{textAlign:"center",marginBottom:10}}>
