@@ -143,13 +143,6 @@ const PHASES=[
   {w:11,p:"Maturation",c:"#10B981",d:"9 avr"},{w:12,p:"Résultat",c:"#3B82F6",d:"16 avr"},
 ];
 
-const FULL_CYCLE=[
-  {label:"Testo+Turi",short:"T+T",wS:1,wE:8,color:"#EF4444"},
-  {label:"Testo seule",short:"TEST",wS:9,wE:12,color:"#F59E0B"},
-  {label:"PCT",short:"PCT",wS:13,wE:16,color:"#8B5CF6"},
-  {label:"Cut",short:"CUT",wS:17,wE:25,color:"#10B981"},
-  {label:"Peak",short:"PEAK",wS:26,wE:30,color:"#3B82F6"},
-];
 
 const PCFG={
   "Réactivation":{cLo:10,cHi:12,iLo:12,iHi:15,rest:90,desc:"Technique parfaite. Réveille les muscles."},
@@ -313,42 +306,6 @@ function Chk({on,toggle,c}){
   </button>;
 }
 
-/* ═══ CYCLE ROADMAP BAR ═══ */
-function CycleBar({wN}){
-  var total=30,pct=Math.min(wN/total*100,100);
-  var cp=FULL_CYCLE[0];
-  FULL_CYCLE.forEach(function(p){if(wN>=p.wS&&wN<=p.wE)cp=p});
-  if(wN>12){var found=null;FULL_CYCLE.forEach(function(p){if(!found&&wN<=p.wE&&p.wS>12)found=p});if(found)cp=found}
-  var weeksLeft=cp.wE-wN+1;
-  return<div style={{marginBottom:14,padding:"14px 16px",borderRadius:16,background:"rgba(255,255,255,.025)",border:"1px solid rgba(255,255,255,.06)"}}>
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
-      <div>
-        <div style={{fontSize:9,fontWeight:700,letterSpacing:2,textTransform:"uppercase",color:"rgba(255,255,255,.3)",marginBottom:4}}>TRANSFORMATION 2026</div>
-        <div style={{display:"flex",alignItems:"center",gap:8}}>
-          <span style={{padding:"3px 10px",borderRadius:20,background:cp.color+"22",border:"1px solid "+cp.color+"55",fontSize:11,fontWeight:800,color:cp.color}}>{cp.label}</span>
-          <span style={{fontSize:10,color:"rgba(255,255,255,.3)"}}>{weeksLeft} sem. restantes</span>
-        </div>
-      </div>
-      <div style={{textAlign:"right"}}>
-        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:24,fontWeight:900,color:cp.color,lineHeight:1}}>{wN}<span style={{fontSize:11,color:"rgba(255,255,255,.3)",fontWeight:400}}>/30</span></div>
-        <div style={{fontSize:9,color:"rgba(255,255,255,.2)"}}>semaines</div>
-      </div>
-    </div>
-    <div style={{display:"flex",gap:2,height:7,borderRadius:8,overflow:"hidden",marginBottom:5}}>
-      {FULL_CYCLE.map(function(p){
-        var segW=((p.wE-p.wS+1)/total)*100;
-        var filled=wN>p.wE?100:wN>=p.wS?((wN-p.wS+1)/(p.wE-p.wS+1))*100:0;
-        var isActive=wN>=p.wS&&wN<=p.wE;
-        return<div key={p.label} style={{flex:segW,background:"rgba(255,255,255,.05)",borderRadius:4,overflow:"hidden",position:"relative",boxShadow:isActive?"0 0 8px "+p.color+"44":"none"}}>
-          <div style={{position:"absolute",inset:0,background:p.color,width:filled+"%",transition:"width .5s",opacity:wN>=p.wS?1:.25}}/>
-        </div>;
-      })}
-    </div>
-    <div style={{display:"flex",justifyContent:"space-between"}}>
-      {FULL_CYCLE.map(function(p){var isA=wN>=p.wS&&wN<=p.wE;return<div key={p.label} style={{fontSize:8,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",color:isA?p.color:wN>p.wE?p.color+"66":"rgba(255,255,255,.18)"}}>{p.short}</div>})}
-    </div>
-  </div>;
-}
 
 /* ═══ TIMER REPOS ═══ */
 function Timer({sec,c,onEnd,onSkip,onDC}){
@@ -648,8 +605,7 @@ function App(){
       </div>
     </div>
 
-    {/* CYCLE ROADMAP */}
-    <CycleBar wN={wN}/>
+    {/* CYCLE ROADMAP — désactivé */}
 
     {/* WEEK SELECTOR */}
     <div style={{marginBottom:12}}>
