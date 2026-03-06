@@ -135,12 +135,12 @@ const DAYS=[
 ];
 
 const PHASES=[
-  {w:1,p:"Réactivation",c:"#F59E0B",d:"29 jan"},{w:2,p:"Réactivation",c:"#F59E0B",d:"5 fév"},
-  {w:3,p:"Réactivation",c:"#F59E0B",d:"12 fév"},{w:4,p:"Hypertrophie",c:"#EF4444",d:"19 fév"},
-  {w:5,p:"Hypertrophie",c:"#EF4444",d:"26 fév"},{w:6,p:"Hypertrophie",c:"#EF4444",d:"5 mars"},
-  {w:7,p:"Consolidation",c:"#8B5CF6",d:"12 mars"},{w:8,p:"Consolidation",c:"#8B5CF6",d:"19 mars"},
-  {w:9,p:"Maturation",c:"#10B981",d:"26 mars"},{w:10,p:"Maturation",c:"#10B981",d:"2 avr"},
-  {w:11,p:"Maturation",c:"#10B981",d:"9 avr"},{w:12,p:"Résultat",c:"#3B82F6",d:"16 avr"},
+  {w:1,p:"Réactivation",c:"#F59E0B",d:"26 jan",partial:true},{w:2,p:"Réactivation",c:"#F59E0B",d:"2 fév"},
+  {w:3,p:"Réactivation",c:"#F59E0B",d:"9 fév"},{w:4,p:"Hypertrophie",c:"#EF4444",d:"16 fév"},
+  {w:5,p:"Hypertrophie",c:"#EF4444",d:"23 fév"},{w:6,p:"Hypertrophie",c:"#EF4444",d:"2 mars"},
+  {w:7,p:"Consolidation",c:"#8B5CF6",d:"9 mars"},{w:8,p:"Consolidation",c:"#8B5CF6",d:"16 mars"},
+  {w:9,p:"Maturation",c:"#10B981",d:"23 mars"},{w:10,p:"Maturation",c:"#10B981",d:"30 mars"},
+  {w:11,p:"Maturation",c:"#10B981",d:"6 avr"},{w:12,p:"Résultat",c:"#3B82F6",d:"13 avr"},
 ];
 
 
@@ -188,9 +188,8 @@ function load(){try{var r=localStorage.getItem(SK);return r?JSON.parse(r):null}c
 function save(d){try{localStorage.setItem(SK,JSON.stringify(d))}catch(e){}}
 
 function getWeekDates(wNum){
-  var s1Thu=new Date(2026,0,29);
-  var thu=new Date(s1Thu.getTime()+(wNum-1)*7*24*60*60*1000);
-  var mon=new Date(thu.getTime()-3*24*60*60*1000);
+  var s1Mon=new Date(2026,0,26);
+  var mon=new Date(s1Mon.getTime()+(wNum-1)*7*24*60*60*1000);
   var mo=["jan","fév","mars","avr","mai","juin","juil","août","sept","oct","nov","déc"];
   var out=[];
   for(var i=0;i<6;i++){var d=new Date(mon.getTime()+i*24*60*60*1000);out.push(d.getDate()+" "+mo[d.getMonth()])}
@@ -515,12 +514,15 @@ function App(){
   useEffect(function(){
     var s=load();
     if(s&&s.wk){s=migrateData(s);setSt(s)}else{var d=init();setSt(d)}
-    // Epoch JEUDI 29 jan — semaine change le jeudi
-    var s1Thu=new Date(2026,0,29),now=new Date();
-    var aw=Math.floor((now-s1Thu)/(7*24*60*60*1000));
+    // Epoch LUNDI 26 jan — semaine commence le lundi
+    var s1Mon=new Date(2026,0,26),now=new Date();
+    var aw=Math.floor((now-s1Mon)/(7*24*60*60*1000));
     if(aw<0)aw=0;if(aw>11)aw=11;
     setWk(aw);setRd(getPhaseRest(PHASES[aw].p));
-    var dow=now.getDay();if(dow>=1&&dow<=6)setDayI(dow-1);else setDayI(0);
+    var dow=now.getDay();
+    if(aw===0&&dow>=1&&dow<=3){setDayI(3)} // S1: pas de lun/mar/mer → jeudi
+    else if(dow>=1&&dow<=6){setDayI(dow-1)}
+    else{setDayI(aw===0?3:0)}
   },[]);
 
   useEffect(function(){
@@ -634,14 +636,15 @@ function App(){
       return<div style={{display:"flex",gap:3,marginBottom:12,overflowX:"auto"}}>
         {DAYS.map(function(d,i){
           var active=dayI===i;
+          var locked=wN===1&&i<3; // S1: lun/mar/mer désactivés (programme commencé jeudi)
           var dd=wd.ds[d.key];var dc2=false;
           if(dd){var any=false,all=true;d.exs.forEach(function(ex){if(!dd[ex.id])return;if(dd[ex.id].s.some(function(s){return s.d}))any=true;else all=false});dc2=any&&all}
-          return<button key={i} onClick={function(){setDayI(i)}} style={{flex:"1 1 0",padding:"6px 2px 6px",borderRadius:12,border:active?"2px solid "+d.color:"1px solid rgba(255,255,255,.05)",background:active?d.color+"15":"transparent",cursor:"pointer",textAlign:"center",minWidth:44,position:"relative",transition:"all .15s"}}>
-            {dc2&&!active&&<div style={{position:"absolute",top:4,right:4,width:5,height:5,borderRadius:"50%",background:"#10B981"}}/>}
-            <div style={{fontSize:8,color:active?d.color:"rgba(255,255,255,.2)",fontWeight:800,letterSpacing:.3}}>{d.day.substring(0,3).toUpperCase()}</div>
-            <div style={{fontSize:8,color:active?d.color+"99":"rgba(255,255,255,.12)",marginTop:1}}>{wd2[i]}</div>
-            <div style={{fontSize:10,color:active?"#fff":"rgba(255,255,255,.3)",fontWeight:800,marginTop:1}}>{d.name}</div>
-            <div style={{fontSize:7,color:active?d.color+"80":"rgba(255,255,255,.1)",marginTop:1}}>{d.label.split(" ")[0]}</div>
+          return<button key={i} onClick={function(){if(!locked)setDayI(i)}} style={{flex:"1 1 0",padding:"6px 2px 6px",borderRadius:12,border:active&&!locked?"2px solid "+d.color:"1px solid rgba(255,255,255,.05)",background:locked?"rgba(255,255,255,.01)":(active?d.color+"15":"transparent"),cursor:locked?"not-allowed":"pointer",textAlign:"center",minWidth:44,position:"relative",transition:"all .15s",opacity:locked?.3:1}}>
+            {dc2&&!active&&!locked&&<div style={{position:"absolute",top:4,right:4,width:5,height:5,borderRadius:"50%",background:"#10B981"}}/>}
+            <div style={{fontSize:8,color:locked?"rgba(255,255,255,.1)":(active?d.color:"rgba(255,255,255,.2)"),fontWeight:800,letterSpacing:.3}}>{d.day.substring(0,3).toUpperCase()}</div>
+            <div style={{fontSize:8,color:locked?"rgba(255,255,255,.06)":(active?d.color+"99":"rgba(255,255,255,.12)"),marginTop:1}}>{wd2[i]}</div>
+            <div style={{fontSize:10,color:locked?"rgba(255,255,255,.12)":(active?"#fff":"rgba(255,255,255,.3)"),fontWeight:800,marginTop:1}}>{locked?"—":d.name}</div>
+            <div style={{fontSize:7,color:locked?"rgba(255,255,255,.06)":(active?d.color+"80":"rgba(255,255,255,.1)"),marginTop:1}}>{locked?"":d.label.split(" ")[0]}</div>
           </button>;
         })}
       </div>;
