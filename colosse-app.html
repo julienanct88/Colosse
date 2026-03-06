@@ -135,12 +135,12 @@ const DAYS=[
 ];
 
 const PHASES=[
-  {w:1,p:"Réactivation",c:"#F59E0B",d:"26 jan",partial:true},{w:2,p:"Réactivation",c:"#F59E0B",d:"2 fév"},
-  {w:3,p:"Réactivation",c:"#F59E0B",d:"9 fév"},{w:4,p:"Hypertrophie",c:"#EF4444",d:"16 fév"},
-  {w:5,p:"Hypertrophie",c:"#EF4444",d:"23 fév"},{w:6,p:"Hypertrophie",c:"#EF4444",d:"2 mars"},
-  {w:7,p:"Consolidation",c:"#8B5CF6",d:"9 mars"},{w:8,p:"Consolidation",c:"#8B5CF6",d:"16 mars"},
-  {w:9,p:"Maturation",c:"#10B981",d:"23 mars"},{w:10,p:"Maturation",c:"#10B981",d:"30 mars"},
-  {w:11,p:"Maturation",c:"#10B981",d:"6 avr"},{w:12,p:"Résultat",c:"#3B82F6",d:"13 avr"},
+  {w:1,p:"Réactivation",c:"#F59E0B",d:"2 fév"},{w:2,p:"Réactivation",c:"#F59E0B",d:"9 fév"},
+  {w:3,p:"Réactivation",c:"#F59E0B",d:"16 fév"},{w:4,p:"Hypertrophie",c:"#EF4444",d:"23 fév"},
+  {w:5,p:"Hypertrophie",c:"#EF4444",d:"2 mars"},{w:6,p:"Hypertrophie",c:"#EF4444",d:"9 mars"},
+  {w:7,p:"Consolidation",c:"#8B5CF6",d:"16 mars"},{w:8,p:"Consolidation",c:"#8B5CF6",d:"23 mars"},
+  {w:9,p:"Maturation",c:"#10B981",d:"30 mars"},{w:10,p:"Maturation",c:"#10B981",d:"6 avr"},
+  {w:11,p:"Maturation",c:"#10B981",d:"13 avr"},{w:12,p:"Résultat",c:"#3B82F6",d:"20 avr"},
 ];
 
 
@@ -188,7 +188,7 @@ function load(){try{var r=localStorage.getItem(SK);return r?JSON.parse(r):null}c
 function save(d){try{localStorage.setItem(SK,JSON.stringify(d))}catch(e){}}
 
 function getWeekDates(wNum){
-  var s1Mon=new Date(2026,0,26);
+  var s1Mon=new Date(2026,1,2);
   var mon=new Date(s1Mon.getTime()+(wNum-1)*7*24*60*60*1000);
   var mo=["jan","fév","mars","avr","mai","juin","juil","août","sept","oct","nov","déc"];
   var out=[];
@@ -226,6 +226,23 @@ function migrateData(st){
     for(var n=11;n>=1;n--){var src=st.wk[n];if(!src||!src.ds)continue;if(!st.wk[n+1])st.wk[n+1]=emptyW();var dst=st.wk[n+1];if(!dst.ds)dst.ds={};
       mwk.forEach(function(dk){if(!dhd(src.ds,dk))return;if(dhd(dst.ds,dk))return;dst.ds[dk]=JSON.parse(JSON.stringify(src.ds[dk]));var dd=DAYS.find(function(d){return d.key===dk});if(dd){src.ds[dk]={};dd.exs.forEach(function(ex){src.ds[dk][ex.id]={s:mkS(ex.sets),tw:"",tr:""}})}changed=true})}
     st.migV2=true;changed=true;
+  }
+  if(!st.migV3){
+    // Décalage epoch 26 jan → 2 fév : ancien wk[N+1] → nouveau wk[N]
+    var old1=st.wk[1]?JSON.parse(JSON.stringify(st.wk[1])):null;
+    for(var n=1;n<=11;n++){st.wk[n]=st.wk[n+1]?JSON.parse(JSON.stringify(st.wk[n+1])):emptyW()}
+    st.wk[12]=emptyW();
+    // Fusionner ancien wk[1] (pushB/pullB/legsB) dans nouveau wk[1]
+    if(old1&&old1.ds&&st.wk[1]&&st.wk[1].ds){
+      ["pushB","pullB","legsB"].forEach(function(dk){
+        if(!old1.ds[dk])return;
+        var hd=false;Object.keys(old1.ds[dk]).forEach(function(eid){var ex=old1.ds[dk][eid];if(ex&&ex.s)ex.s.forEach(function(s){if(s.d&&s.w&&parseFloat(s.w)>0)hd=true})});
+        if(!hd)return;
+        var nhd=false;if(st.wk[1].ds[dk])Object.keys(st.wk[1].ds[dk]).forEach(function(eid){var ex=st.wk[1].ds[dk][eid];if(ex&&ex.s)ex.s.forEach(function(s){if(s.d&&s.w&&parseFloat(s.w)>0)nhd=true})});
+        if(!nhd)st.wk[1].ds[dk]=JSON.parse(JSON.stringify(old1.ds[dk]));
+      });
+    }
+    st.migV3=true;changed=true;
   }
   Object.keys(st.wk).forEach(function(wn){
     var wd=st.wk[wn];if(!wd||!wd.ds)return;
@@ -514,15 +531,14 @@ function App(){
   useEffect(function(){
     var s=load();
     if(s&&s.wk){s=migrateData(s);setSt(s)}else{var d=init();setSt(d)}
-    // Epoch LUNDI 26 jan — semaine commence le lundi
-    var s1Mon=new Date(2026,0,26),now=new Date();
+    // Epoch LUNDI 2 fév — semaine commence le lundi
+    var s1Mon=new Date(2026,1,2),now=new Date();
     var aw=Math.floor((now-s1Mon)/(7*24*60*60*1000));
     if(aw<0)aw=0;if(aw>11)aw=11;
     setWk(aw);setRd(getPhaseRest(PHASES[aw].p));
     var dow=now.getDay();
-    if(aw===0&&dow>=1&&dow<=3){setDayI(3)} // S1: pas de lun/mar/mer → jeudi
-    else if(dow>=1&&dow<=6){setDayI(dow-1)}
-    else{setDayI(aw===0?3:0)}
+    if(dow>=1&&dow<=6){setDayI(dow-1)}
+    else{setDayI(0)}
   },[]);
 
   useEffect(function(){
@@ -636,15 +652,14 @@ function App(){
       return<div style={{display:"flex",gap:3,marginBottom:12,overflowX:"auto"}}>
         {DAYS.map(function(d,i){
           var active=dayI===i;
-          var locked=wN===1&&i<3; // S1: lun/mar/mer désactivés (programme commencé jeudi)
           var dd=wd.ds[d.key];var dc2=false;
           if(dd){var any=false,all=true;d.exs.forEach(function(ex){if(!dd[ex.id])return;if(dd[ex.id].s.some(function(s){return s.d}))any=true;else all=false});dc2=any&&all}
-          return<button key={i} onClick={function(){if(!locked)setDayI(i)}} style={{flex:"1 1 0",padding:"6px 2px 6px",borderRadius:12,border:active&&!locked?"2px solid "+d.color:"1px solid rgba(255,255,255,.05)",background:locked?"rgba(255,255,255,.01)":(active?d.color+"15":"transparent"),cursor:locked?"not-allowed":"pointer",textAlign:"center",minWidth:44,position:"relative",transition:"all .15s",opacity:locked?.3:1}}>
-            {dc2&&!active&&!locked&&<div style={{position:"absolute",top:4,right:4,width:5,height:5,borderRadius:"50%",background:"#10B981"}}/>}
-            <div style={{fontSize:8,color:locked?"rgba(255,255,255,.1)":(active?d.color:"rgba(255,255,255,.2)"),fontWeight:800,letterSpacing:.3}}>{d.day.substring(0,3).toUpperCase()}</div>
-            <div style={{fontSize:8,color:locked?"rgba(255,255,255,.06)":(active?d.color+"99":"rgba(255,255,255,.12)"),marginTop:1}}>{wd2[i]}</div>
-            <div style={{fontSize:10,color:locked?"rgba(255,255,255,.12)":(active?"#fff":"rgba(255,255,255,.3)"),fontWeight:800,marginTop:1}}>{locked?"—":d.name}</div>
-            <div style={{fontSize:7,color:locked?"rgba(255,255,255,.06)":(active?d.color+"80":"rgba(255,255,255,.1)"),marginTop:1}}>{locked?"":d.label.split(" ")[0]}</div>
+          return<button key={i} onClick={function(){setDayI(i)}} style={{flex:"1 1 0",padding:"6px 2px 6px",borderRadius:12,border:active?"2px solid "+d.color:"1px solid rgba(255,255,255,.05)",background:active?d.color+"15":"transparent",cursor:"pointer",textAlign:"center",minWidth:44,position:"relative",transition:"all .15s"}}>
+            {dc2&&!active&&<div style={{position:"absolute",top:4,right:4,width:5,height:5,borderRadius:"50%",background:"#10B981"}}/>}
+            <div style={{fontSize:8,color:active?d.color:"rgba(255,255,255,.2)",fontWeight:800,letterSpacing:.3}}>{d.day.substring(0,3).toUpperCase()}</div>
+            <div style={{fontSize:8,color:active?d.color+"99":"rgba(255,255,255,.12)",marginTop:1}}>{wd2[i]}</div>
+            <div style={{fontSize:10,color:active?"#fff":"rgba(255,255,255,.3)",fontWeight:800,marginTop:1}}>{d.name}</div>
+            <div style={{fontSize:7,color:active?d.color+"80":"rgba(255,255,255,.1)",marginTop:1}}>{d.label.split(" ")[0]}</div>
           </button>;
         })}
       </div>;
