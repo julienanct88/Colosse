@@ -135,21 +135,36 @@ const DAYS=[
 ];
 
 const PHASES=[
-  {w:1,p:"Réactivation",c:"#F59E0B",d:"2 fév"},{w:2,p:"Réactivation",c:"#F59E0B",d:"9 fév"},
-  {w:3,p:"Réactivation",c:"#F59E0B",d:"16 fév"},{w:4,p:"Hypertrophie",c:"#EF4444",d:"23 fév"},
-  {w:5,p:"Hypertrophie",c:"#EF4444",d:"2 mars"},{w:6,p:"Hypertrophie",c:"#EF4444",d:"9 mars"},
-  {w:7,p:"Consolidation",c:"#8B5CF6",d:"16 mars"},{w:8,p:"Consolidation",c:"#8B5CF6",d:"23 mars"},
-  {w:9,p:"Maturation",c:"#10B981",d:"30 mars"},{w:10,p:"Maturation",c:"#10B981",d:"6 avr"},
-  {w:11,p:"Maturation",c:"#10B981",d:"13 avr"},{w:12,p:"Résultat",c:"#3B82F6",d:"20 avr"},
+  /* S1-S3 Réactivation */
+  {w:1,p:"Réactivation",c:"#F59E0B",d:"2 fév",cal:3800},{w:2,p:"Réactivation",c:"#F59E0B",d:"9 fév",cal:3800},
+  {w:3,p:"Réactivation",c:"#F59E0B",d:"16 fév",cal:3800},
+  /* S4-S6 Hypertrophie */
+  {w:4,p:"Hypertrophie",c:"#EF4444",d:"23 fév",cal:3800},{w:5,p:"Hypertrophie",c:"#EF4444",d:"2 mars",cal:3800},
+  {w:6,p:"Hypertrophie",c:"#EF4444",d:"9 mars",cal:3800},
+  /* S7-S9 Force Max — dernière poussée, intensité maximale */
+  {w:7,p:"Force Max",c:"#DC2626",d:"16 mars",cal:3800},{w:8,p:"Force Max",c:"#DC2626",d:"23 mars",cal:3800},
+  {w:9,p:"Force Max",c:"#DC2626",d:"30 mars",cal:3800},
+  /* S10-S12 Transition — maintien des charges */
+  {w:10,p:"Transition",c:"#8B5CF6",d:"6 avr",cal:3800},{w:11,p:"Transition",c:"#8B5CF6",d:"13 avr",cal:3800},
+  {w:12,p:"Transition",c:"#8B5CF6",d:"20 avr",cal:3800},
+  /* S13-S16 Maintien — récupération, conserve les gains */
+  {w:13,p:"Maintien",c:"#F59E0B",d:"27 avr",cal:3800},{w:14,p:"Maintien",c:"#F59E0B",d:"4 mai",cal:3800},
+  {w:15,p:"Maintien",c:"#F59E0B",d:"11 mai",cal:3800},{w:16,p:"Maintien",c:"#F59E0B",d:"18 mai",cal:3800},
+  /* S17-S26 Sèche — déficit progressif */
+  {w:17,p:"Sèche",c:"#3B82F6",d:"25 mai",cal:3300},{w:18,p:"Sèche",c:"#3B82F6",d:"1 juin",cal:3300},
+  {w:19,p:"Sèche",c:"#3B82F6",d:"8 juin",cal:3000},{w:20,p:"Sèche",c:"#3B82F6",d:"15 juin",cal:3000},
+  {w:21,p:"Sèche",c:"#3B82F6",d:"22 juin",cal:3000},{w:22,p:"Sèche",c:"#3B82F6",d:"29 juin",cal:3000},
+  {w:23,p:"Sèche",c:"#3B82F6",d:"6 juil",cal:2800},{w:24,p:"Sèche",c:"#3B82F6",d:"13 juil",cal:2800},
+  {w:25,p:"Sèche",c:"#3B82F6",d:"20 juil",cal:2800},{w:26,p:"Sèche",c:"#3B82F6",d:"27 juil",cal:2800},
 ];
-
 
 const PCFG={
   "Réactivation":{cLo:10,cHi:12,iLo:12,iHi:15,rest:90,desc:"Technique parfaite. Réveille les muscles."},
   "Hypertrophie":{cLo:8,cHi:10,iLo:10,iHi:12,rest:120,desc:"Volume maximum. Casse les fibres."},
-  "Consolidation":{cLo:6,cHi:8,iLo:8,iHi:10,rest:150,desc:"Très lourd. Force pure. Densité."},
-  "Maturation":{cLo:8,cHi:10,iLo:10,iHi:12,rest:120,desc:"Lourd et maîtrisé. Le muscle se solidifie."},
-  "Résultat":{cLo:8,cHi:10,iLo:10,iHi:12,rest:120,desc:"Semaine bilan. Mesure tes progrès."},
+  "Force Max":{cLo:5,cHi:8,iLo:8,iHi:10,rest:180,desc:"Charges lourdes. PRs. Intensité maximale."},
+  "Transition":{cLo:8,cHi:10,iLo:10,iHi:12,rest:120,desc:"Maintien des charges. Écoute ton corps."},
+  "Maintien":{cLo:8,cHi:10,iLo:10,iHi:12,rest:120,desc:"Conserve tes gains. Récupération prioritaire."},
+  "Sèche":{cLo:6,cHi:8,iLo:12,iHi:15,rest:90,desc:"Déficit calorique. Garde l'intensité. Perds le gras."},
 };
 function getRepRange(ex,p){var c=PCFG[p]||PCFG["Hypertrophie"];return ex.lk?{lo:c.cLo,hi:c.cHi}:{lo:c.iLo,hi:c.iHi}}
 function getPhaseRest(p){return(PCFG[p]||{}).rest||120}
@@ -263,7 +278,7 @@ function migrateData(st){
   else{DAYS.forEach(function(d){if(!st.ord[d.key])st.ord[d.key]=d.exs.map(function(e){return e.id});else{d.exs.forEach(function(e){if(st.ord[d.key].indexOf(e.id)===-1){st.ord[d.key].push(e.id);changed=true}})}})}
   if(changed)save(st);return st;
 }
-function init(){var wk={};for(var i=1;i<=12;i++)wk[i]=emptyW();wk[1]=buildS1();var ord={};DAYS.forEach(function(d){ord[d.key]=d.exs.map(function(e){return e.id})});return{wk:wk,cw:2,ord:ord}}
+function init(){var wk={};for(var i=1;i<=26;i++)wk[i]=emptyW();wk[1]=buildS1();var ord={};DAYS.forEach(function(d){ord[d.key]=d.exs.map(function(e){return e.id})});return{wk:wk,cw:2,ord:ord}}
 
 /* ═══ PROGRESSION DOUBLE — RÉFÉRENCE = DERNIÈRE SÉRIE ═══ */
 function compObj(exDef,prev,rng){
@@ -534,7 +549,7 @@ function App(){
     // Epoch LUNDI 2 fév — semaine commence le lundi
     var s1Mon=new Date(2026,1,2),now=new Date();
     var aw=Math.floor((now-s1Mon)/(7*24*60*60*1000));
-    if(aw<0)aw=0;if(aw>11)aw=11;
+    if(aw<0)aw=0;if(aw>25)aw=25;
     setWk(aw);setRd(getPhaseRest(PHASES[aw].p));
     var dow=now.getDay();
     if(dow>=1&&dow<=6){setDayI(dow-1)}
@@ -612,7 +627,7 @@ function App(){
     <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:14}}>
       <div>
         <div style={{fontSize:24,fontWeight:900,letterSpacing:-1,lineHeight:1}}>COLOSSE</div>
-        <div style={{fontSize:9,fontWeight:700,letterSpacing:2,color:"rgba(255,255,255,.22)",textTransform:"uppercase",marginTop:2}}>3 500 kcal · PPL 12 sem.</div>
+        <div style={{fontSize:9,fontWeight:700,letterSpacing:2,color:"rgba(255,255,255,.22)",textTransform:"uppercase",marginTop:2}}>{ph.cal||3800} kcal · PPL {PHASES.length} sem.</div>
       </div>
       <div style={{display:"flex",alignItems:"center",gap:10}}>
         {sav&&<div style={{fontSize:9,color:"#10B981",fontWeight:700,display:"flex",alignItems:"center",gap:3}}><span style={{width:5,height:5,borderRadius:"50%",background:"#10B981",display:"inline-block"}}/>Sauvé</div>}
@@ -635,12 +650,12 @@ function App(){
         <span style={{fontSize:9,color:"rgba(255,255,255,.25)"}}>{(PCFG[ph.p]||{}).cLo}-{(PCFG[ph.p]||{}).cHi} compo · {(PCFG[ph.p]||{}).iLo}-{(PCFG[ph.p]||{}).iHi} iso</span>
       </div>
       <div style={{fontSize:10,color:"rgba(255,255,255,.3)",fontStyle:"italic",marginBottom:8}}>{(PCFG[ph.p]||{}).desc}</div>
-      <div style={{display:"flex",gap:3,justifyContent:"center",flexWrap:"wrap"}}>
+      <div style={{display:"flex",gap:2,justifyContent:"center",flexWrap:"wrap"}}>
         {PHASES.map(function(p,i){
           var done=i<wk;
-          return<button key={i} onClick={function(){setWk(i);setRd(getPhaseRest(p.p));setSt(function(prev){var n=JSON.parse(JSON.stringify(prev));n.cw=i+1;return n})}} style={{width:34,height:34,borderRadius:10,border:wk===i?"2px solid "+p.c:"1px solid rgba(255,255,255,.06)",background:wk===i?p.c+"20":done?"rgba(255,255,255,.04)":"transparent",color:wk===i?"#fff":done?p.c+"88":"rgba(255,255,255,.25)",fontSize:10,fontWeight:800,fontFamily:"'JetBrains Mono',monospace",cursor:"pointer",position:"relative",transition:"all .15s"}}>
-            {done&&wk!==i&&<div style={{position:"absolute",top:3,right:3,width:4,height:4,borderRadius:"50%",background:p.c+"88"}}/>}
-            S{p.w}
+          return<button key={i} onClick={function(){setWk(i);setRd(getPhaseRest(p.p));setSt(function(prev){var n=JSON.parse(JSON.stringify(prev));n.cw=i+1;return n})}} style={{width:26,height:26,borderRadius:8,border:wk===i?"2px solid "+p.c:"1px solid rgba(255,255,255,.06)",background:wk===i?p.c+"20":done?"rgba(255,255,255,.04)":"transparent",color:wk===i?"#fff":done?p.c+"88":"rgba(255,255,255,.25)",fontSize:8,fontWeight:800,fontFamily:"'JetBrains Mono',monospace",cursor:"pointer",position:"relative",transition:"all .15s",padding:0}}>
+            {done&&wk!==i&&<div style={{position:"absolute",top:2,right:2,width:3,height:3,borderRadius:"50%",background:p.c+"88"}}/>}
+            {p.w}
           </button>;
         })}
       </div>
