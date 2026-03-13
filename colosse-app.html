@@ -81,15 +81,15 @@ function useWakeLock(on){
 const YT="https://www.youtube.com/results?search_query=";
 const DAYS=[
   {id:0,key:"pushA",name:"Push A",label:"Pecs focus",day:"Lundi",color:"#EF4444",exs:[
-    {id:"pa1",name:"Développé couché machine",tp:"machine",sets:4,rLo:8,rHi:10,lk:true,rest:180,yt:"développé+couché+machine+convergente+technique"},
-    {id:"pa2",name:"Développé incliné haltères",tp:"dumbbell",sets:4,rLo:10,rHi:12,lk:true,rest:150,yt:"développé+incliné+haltères+technique"},
+    {id:"pa1",name:"Développé couché machine",tp:"machine",sets:4,rLo:8,rHi:10,lk:true,rest:180,variants:["Machine convergente","Smith","Barre"],yt:"développé+couché+machine+convergente+technique"},
+    {id:"pa2",name:"Développé incliné haltères",tp:"dumbbell",sets:4,rLo:10,rHi:12,lk:true,rest:150,variants:["Haltères","Smith","Machine"],yt:"développé+incliné+haltères+technique"},
     {id:"pa3",name:"Dips lestés",tp:"barbell",sets:3,rLo:8,rHi:10,lk:true,rest:150,yt:"dips+lestés+pectoraux+technique"},
     {id:"pa4",name:"Écartés poulie haute",tp:"cable",sets:3,rLo:12,rHi:15,rest:90,yt:"écarté+poulie+vis+à+vis+cable+fly"},
-    {id:"pa5",name:"Barre au front (skullcrusher)",tp:"barbell",sets:3,rLo:10,rHi:12,rest:90,yt:"barre+au+front+skullcrusher+triceps+technique"},
+    {id:"pa5",name:"Barre au front (skullcrusher)",tp:"barbell",sets:3,rLo:10,rHi:12,rest:90,variants:["Barre EZ","Haltères"],yt:"barre+au+front+skullcrusher+triceps+technique"},
     {id:"pa6",name:"Extensions triceps poulie",tp:"cable",sets:3,rLo:12,rHi:15,rest:90,yt:"extension+triceps+poulie+haute+technique"},
   ]},
   {id:1,key:"pullA",name:"Pull A",label:"Dos épaisseur+largeur",day:"Mardi",color:"#3B82F6",exs:[
-    {id:"la1",name:"Soulevé de terre",tp:"barbell",sets:4,rLo:5,rHi:8,lk:true,rest:180,yt:"soulevé+de+terre+conventionnel+technique+deadlift"},
+    {id:"la1",name:"Soulevé de terre",tp:"barbell",sets:4,rLo:5,rHi:8,lk:true,rest:180,variants:["Conventionnel","Sumo","Trap bar"],yt:"soulevé+de+terre+conventionnel+technique+deadlift"},
     {id:"la_ld",name:"Lat Pulldown supination",tp:"machine",sets:4,rLo:10,rHi:12,lk:true,rest:120,yt:"lat+pulldown+supination+prise+serrée+largeur+dos+technique"},
     {id:"la2",name:"Rowing barre pronation",tp:"barbell",sets:4,rLo:8,rHi:10,lk:true,rest:150,yt:"rowing+barre+pronation+bent+over+row+technique"},
     {id:"la3",name:"Rowing 1 bras haltère",tp:"dumbbell",sets:3,rLo:10,rHi:12,lk:true,rest:120,yt:"rowing+un+bras+haltère+one+arm+dumbbell+row"},
@@ -107,7 +107,7 @@ const DAYS=[
     {id:"qa7",name:"Relevés jambes suspendus",tp:"barbell",sets:3,rLo:10,rHi:12,rest:60,yt:"relevé+jambes+suspendu+hanging+leg+raise+abdos"},
   ]},
   {id:3,key:"pushB",name:"Push B",label:"Épaules focus",day:"Jeudi",color:"#EF4444",exs:[
-    {id:"pb1",name:"Développé militaire barre",tp:"barbell",sets:4,rLo:8,rHi:10,lk:true,rest:180,yt:"développé+militaire+barre+overhead+press+technique"},
+    {id:"pb1",name:"Développé militaire barre",tp:"barbell",sets:4,rLo:8,rHi:10,lk:true,rest:180,variants:["Barre","Haltères","Smith"],yt:"développé+militaire+barre+overhead+press+technique"},
     {id:"pb3",name:"Élévations latérales haltères",tp:"dumbbell",sets:4,rLo:12,rHi:15,rest:90,yt:"élévations+latérales+haltères+lateral+raise+technique"},
     {id:"pb_lat_c",name:"Élévations latérales câble bas",tp:"cable",sets:3,rLo:15,rHi:20,rest:60,yt:"élévation+latérale+câble+poulie+basse+deltoide+médian+constante"},
     {id:"pb6",name:"Dips prise serrée",tp:"barbell",sets:3,rLo:8,rHi:10,lk:true,rest:150,yt:"dips+prise+serrée+triceps+masse+technique"},
@@ -117,7 +117,7 @@ const DAYS=[
   {id:4,key:"pullB",name:"Pull B",label:"Dos largeur",day:"Vendredi",color:"#3B82F6",exs:[
     {id:"lb1",name:"Tractions lestées",tp:"barbell",sets:4,rLo:6,rHi:10,lk:true,rest:180,yt:"tractions+lestées+pull+ups+weighted+technique"},
     {id:"lb2",name:"Pull Down machine",tp:"machine",sets:4,rLo:10,rHi:12,lk:true,rest:120,yt:"lat+pulldown+machine+technogym+technique"},
-    {id:"lb3",name:"Rowing T-bar",tp:"machine",sets:4,rLo:8,rHi:10,lk:true,rest:150,yt:"rowing+t-bar+technique+dos+épaisseur"},
+    {id:"lb3",name:"Rowing T-bar",tp:"machine",sets:4,rLo:8,rHi:10,lk:true,rest:150,variants:["T-bar","Machine Hammer"],yt:"rowing+t-bar+technique+dos+épaisseur"},
     {id:"lb4",name:"Curl incliné 45°",tp:"dumbbell",sets:3,rLo:10,rHi:12,rest:90,yt:"curl+incliné+45+degrés+haltères+biceps+technique"},
     {id:"lb5",name:"Curl concentré",tp:"dumbbell",sets:3,rLo:10,rHi:12,rest:90,yt:"curl+concentré+concentration+curl+technique"},
     {id:"lb6",name:"Curl inversé EZ (avant-bras)",tp:"barbell",sets:3,rLo:12,rHi:15,rest:60,yt:"curl+inversé+EZ+reverse+curl+avant-bras+technique"},
@@ -125,7 +125,7 @@ const DAYS=[
   ]},
   {id:5,key:"legsB",name:"Legs B",label:"Ischios / Fessiers",day:"Samedi",color:"#10B981",exs:[
     {id:"qb1",name:"Front squat",tp:"barbell",sets:4,rLo:8,rHi:10,lk:true,rest:180,variants:["Barre libre","Smith","Machine hack","Leg press pieds hauts"],yt:"front+squat+barre+technique+quadriceps"},
-    {id:"qb2",name:"Hip thrust barre",tp:"barbell",sets:4,rLo:10,rHi:12,lk:true,rest:150,yt:"hip+thrust+barre+technique+fessiers"},
+    {id:"qb2",name:"Hip thrust barre",tp:"barbell",sets:4,rLo:10,rHi:12,lk:true,rest:150,variants:["Barre","Smith","Machine"],yt:"hip+thrust+barre+technique+fessiers"},
     {id:"qb3",name:"Leg curl allongé",tp:"machine",sets:3,rLo:10,rHi:12,rest:90,yt:"leg+curl+allongé+lying+leg+curl+ischio"},
     {id:"qb4",name:"Split squat bulgare",tp:"dumbbell",sets:3,rLo:10,rHi:12,rest:120,yt:"split+squat+bulgare+bulgarian+split+squat+technique"},
     {id:"qb5",name:"Mollets assis",tp:"machine",sets:4,rLo:15,rHi:20,rest:60,yt:"mollets+assis+seated+calf+raise+technique"},
@@ -180,6 +180,45 @@ const MEAS=[
 ];
 
 const INC={barbell:2.5,dumbbell:1,machine:2.5,cable:1.25};
+const VTYPE={
+  "Barre":"barbell","Barre libre":"barbell","Barre EZ":"barbell",
+  "Conventionnel":"barbell","Sumo":"barbell","Trap bar":"barbell",
+  "Haltères":"dumbbell",
+  "Smith":"machine","Machine":"machine","Machine convergente":"machine",
+  "Machine hack":"machine","Machine Hammer":"machine",
+  "T-bar":"machine","Leg press pieds hauts":"machine"
+};
+function getVariantTp(exDef,variant){if(!variant||!VTYPE[variant])return exDef.tp;return VTYPE[variant]}
+
+function findPrevForVariant(exId,dayKey,wkNum,allWks,variant){
+  for(var pw=wkNum-1;pw>=1;pw--){
+    var wd=allWks[pw];if(!wd||!wd.ds||!wd.ds[dayKey]||!wd.ds[dayKey][exId])continue;
+    var exData=wd.ds[dayKey][exId];
+    var hasDone=exData.s&&exData.s.some(function(s){return s.d&&s.w&&parseFloat(s.w)>0});
+    if(!hasDone)continue;
+    if(variant){if(exData.variant===variant)return exData}
+    else{return exData}
+  }
+  return null;
+}
+
+function getLatestVTaper(allWks,upToWkNum){
+  for(var w=upToWkNum;w>=1;w--){
+    var wd=allWks[w];if(!wd||!wd.ms)continue;
+    var ep=parseFloat(wd.ms.epaules||""),ta=parseFloat(wd.ms.taille||"");
+    if(ep>0&&ta>0){var r=(ep/ta).toFixed(2);return{ratio:r,num:parseFloat(r),week:w,ep:ep,ta:ta}}
+  }
+  return null;
+}
+
+function getWeekSessionCount(wkData){
+  if(!wkData||!wkData.ds)return 0;var done=0;
+  DAYS.forEach(function(d){var dd=wkData.ds[d.key];if(!dd)return;var any=false,all=true;
+    d.exs.forEach(function(ex){if(!dd[ex.id])return;if(dd[ex.id].s.some(function(s){return s.d}))any=true;else all=false});
+    if(any&&all)done++});
+  return done;
+}
+
 const REST_P=[60,90,120,150,180];
 
 const S1={
@@ -281,13 +320,13 @@ function migrateData(st){
 function init(){var wk={};for(var i=1;i<=26;i++)wk[i]=emptyW();wk[1]=buildS1();var ord={};DAYS.forEach(function(d){ord[d.key]=d.exs.map(function(e){return e.id})});return{wk:wk,cw:2,ord:ord}}
 
 /* ═══ PROGRESSION DOUBLE — RÉFÉRENCE = DERNIÈRE SÉRIE ═══ */
-function compObj(exDef,prev,rng){
+function compObj(exDef,prev,rng,tpOverride){
   if(!prev||!rng)return null;
   var dn=prev.s.filter(function(s){return s.d&&s.w&&parseFloat(s.w)>0});
   if(!dn.length)return null;
   var last=dn[dn.length-1],lW=parseFloat(last.w)||0,lR=parseInt(last.r)||0;
   if(!lW)return null;
-  var inc=INC[exDef.tp]||2.5;
+  var inc=INC[tpOverride||exDef.tp]||2.5;
   if(lR>=rng.hi)return{w:String(lW+inc),r:String(rng.lo)};
   return{w:String(lW),r:String(Math.min(lR+1,rng.hi))};
 }
@@ -380,18 +419,23 @@ function Timer({sec,c,onEnd,onSkip,onDC}){
 }
 
 /* ═══ EXERCISE CARD ═══ */
-function ExCard({ex,data,prev,color,upd,onDone,isLk,canUp,canDn,onUp,onDn,phaseName,atb}){
+function ExCard({ex,data,prev,color,upd,onDone,isLk,canUp,canDn,onUp,onDn,phaseName,atb,allWks,wkNum,dayKey}){
   if(!data||!data.s)return null;
   var rng=getRepRange(ex,phaseName);
-  var ao=prev?compObj(ex,prev,rng):null;
+  /* Variant-aware progression */
+  var curVar=data.variant||null;
+  var hasVar=ex.variants&&ex.variants.length>0;
+  var effPrev=(hasVar&&curVar)?findPrevForVariant(ex.id,dayKey,wkNum,allWks,curVar):prev;
+  var varTp=(hasVar&&curVar)?getVariantTp(ex,curVar):null;
+  var ao=effPrev?compObj(ex,effPrev,rng,varTp):null;
   var dW=data.tw||(ao?ao.w:""),dR=data.tr||(ao?ao.r:"");
   var tW=parseFloat(dW)||0,tR=parseInt(dR)||0;
   var isAuto=!data.tw&&!data.tr&&ao&&ao.w;
   var dn=data.s.filter(function(s){return s.d}),dc=dn.length,tc=data.s.length;
   var allH=tW>0&&tR>0&&dc>=Math.max(tc-1,1)&&dn.every(function(s){return(parseFloat(s.w)||0)>=tW&&(parseInt(s.r)||0)>=tR});
-  var inc=INC[ex.tp]||2.5;
+  var inc=INC[varTp||ex.tp]||2.5;
   var pB=0,pBR=0;
-  if(prev){var pd=prev.s.filter(function(s){return s.d&&s.w&&parseFloat(s.w)>0});if(pd.length){var pl=pd[pd.length-1];pB=parseFloat(pl.w)||0;pBR=parseInt(pl.r)||0}}
+  if(effPrev){var pd=effPrev.s.filter(function(s){return s.d&&s.w&&parseFloat(s.w)>0});if(pd.length){var pl=pd[pd.length-1];pB=parseFloat(pl.w)||0;pBR=parseInt(pl.r)||0}}
   var isPR=atb>0&&tW>atb;
   var sessVol=0;dn.forEach(function(s){sessVol+=(parseFloat(s.w)||0)*(parseInt(s.r)||0)});
 
@@ -511,6 +555,118 @@ function MeasCard({wd,pmw,upM}){
         </div>
       </div>:<div style={{fontSize:11,color:"rgba(255,255,255,.25)"}}>Entre les mesures épaules + taille pour calculer</div>}
     </div>}
+  </div>;
+}
+
+/* ═══ WEEK CAROUSEL ═══ */
+function WeekCarousel({phases,wk,setWk,st,setRd,setSt}){
+  const ref=useRef(null);
+  const startX=useRef(0);const startY=useRef(0);const swiping=useRef(false);
+  const[offX,setOffX]=useState(0);const[anim,setAnim]=useState(true);
+
+  useEffect(function(){
+    var el=ref.current;if(!el)return;
+    function ts(e){startX.current=e.touches[0].clientX;startY.current=e.touches[0].clientY;swiping.current=false;setAnim(false)}
+    function tm(e){
+      var dx=e.touches[0].clientX-startX.current;
+      var dy=e.touches[0].clientY-startY.current;
+      if(!swiping.current&&Math.abs(dx)>Math.abs(dy)&&Math.abs(dx)>8){swiping.current=true}
+      if(swiping.current){e.preventDefault();setOffX(dx*0.4)}
+    }
+    function te(e){
+      var dx=e.changedTouches[0].clientX-startX.current;
+      setAnim(true);setOffX(0);
+      if(Math.abs(dx)>50){
+        var nw=dx<0?Math.min(wk+1,phases.length-1):Math.max(wk-1,0);
+        setWk(nw);setRd(getPhaseRest(phases[nw].p));
+        setSt(function(p){var n=JSON.parse(JSON.stringify(p));n.cw=nw+1;return n});
+      }
+      swiping.current=false;
+    }
+    el.addEventListener("touchstart",ts,{passive:true});
+    el.addEventListener("touchmove",tm,{passive:false});
+    el.addEventListener("touchend",te,{passive:true});
+    return function(){el.removeEventListener("touchstart",ts);el.removeEventListener("touchmove",tm);el.removeEventListener("touchend",te)};
+  },[wk,phases.length]);
+
+  var ph=phases[wk],wN=wk+1;
+  var pc=PCFG[ph.p]||PCFG["Hypertrophie"];
+  var wd2=getWeekDates(wN);
+  var wkData=st.wk[wN];
+  var sc=wkData?getWeekSessionCount(wkData):0;
+  var vt=getLatestVTaper(st.wk,wN);
+  var vtColor=vt?(vt.num>=1.45?"#10B981":vt.num>=1.35?"#F59E0B":"#EF4444"):null;
+
+  function go(dir){
+    var nw=dir>0?Math.min(wk+1,phases.length-1):Math.max(wk-1,0);
+    setWk(nw);setRd(getPhaseRest(phases[nw].p));
+    setSt(function(p){var n=JSON.parse(JSON.stringify(p));n.cw=nw+1;return n});
+  }
+
+  return<div style={{marginBottom:12}}>
+    <div ref={ref} style={{position:"relative",overflow:"hidden",borderRadius:16,cursor:"grab"}}>
+      <div style={{transform:"translateX("+offX+"px)",transition:anim?"transform .3s ease":"none",
+        background:"linear-gradient(135deg,"+ph.c+"18,"+ph.c+"08)",
+        border:"1px solid "+ph.c+"30",borderRadius:16,padding:"16px 18px 14px"}}>
+
+        {/* Row 1: Week + Phase + Calories */}
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:28,fontWeight:900,color:ph.c}}>S{wN}</span>
+            <div>
+              <div style={{fontSize:13,fontWeight:800,color:"#fff"}}>{ph.p}</div>
+              <div style={{fontSize:9,color:"rgba(255,255,255,.3)"}}>{wd2[0]} → {wd2[5]}</div>
+            </div>
+          </div>
+          <div style={{textAlign:"right"}}>
+            <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:18,fontWeight:800,color:ph.c}}>{ph.cal||3800}</div>
+            <div style={{fontSize:8,color:"rgba(255,255,255,.25)"}}>kcal/jour</div>
+          </div>
+        </div>
+
+        {/* Row 2: V-Taper + Sessions */}
+        <div style={{display:"flex",gap:10,marginBottom:8}}>
+          {vt&&<div style={{flex:1,padding:"6px 10px",borderRadius:10,background:"rgba(255,255,255,.04)",border:"1px solid rgba(255,255,255,.06)"}}>
+            <div style={{fontSize:8,fontWeight:800,color:"rgba(255,255,255,.25)",letterSpacing:.5,marginBottom:3}}>🔱 V-TAPER</div>
+            <div style={{display:"flex",alignItems:"center",gap:6}}>
+              <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:18,fontWeight:900,color:vtColor}}>{vt.ratio}</span>
+              <div style={{flex:1}}>
+                <MBar v={vt.num} mx={1.6} c={vtColor} h={4}/>
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:7,color:"rgba(255,255,255,.15)",marginTop:1}}>
+                  <span>1.0</span><span style={{color:"rgba(16,185,129,.5)",fontWeight:700}}>1.45</span><span>1.6</span>
+                </div>
+              </div>
+            </div>
+          </div>}
+          <div style={{flex:1,padding:"6px 10px",borderRadius:10,background:"rgba(255,255,255,.04)",border:"1px solid rgba(255,255,255,.06)"}}>
+            <div style={{fontSize:8,fontWeight:800,color:"rgba(255,255,255,.25)",letterSpacing:.5,marginBottom:3}}>💪 SÉANCES</div>
+            <div style={{display:"flex",alignItems:"center",gap:6}}>
+              <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:18,fontWeight:900,color:sc>=6?"#10B981":"#fff"}}>{sc}<span style={{fontSize:11,color:"rgba(255,255,255,.25)",fontWeight:400}}>/6</span></span>
+              <div style={{flex:1}}><MBar v={sc} mx={6} c={sc>=6?"#10B981":ph.c} h={4}/></div>
+            </div>
+          </div>
+        </div>
+
+        {/* Row 3: Description + Reps */}
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div style={{fontSize:10,color:"rgba(255,255,255,.35)",fontStyle:"italic",flex:1}}>{pc.desc}</div>
+          <span style={{fontSize:9,color:"rgba(255,255,255,.2)",flexShrink:0,marginLeft:8}}>{pc.cLo}-{pc.cHi} compo · {pc.iLo}-{pc.iHi} iso</span>
+        </div>
+
+        {/* Arrows */}
+        {wk>0&&<button onClick={function(){go(-1)}} style={{position:"absolute",left:4,top:"50%",transform:"translateY(-50%)",width:24,height:24,borderRadius:"50%",border:"none",background:"rgba(255,255,255,.08)",color:"rgba(255,255,255,.4)",fontSize:12,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0}}>◀</button>}
+        {wk<phases.length-1&&<button onClick={function(){go(1)}} style={{position:"absolute",right:4,top:"50%",transform:"translateY(-50%)",width:24,height:24,borderRadius:"50%",border:"none",background:"rgba(255,255,255,.08)",color:"rgba(255,255,255,.4)",fontSize:12,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0}}>▶</button>}
+      </div>
+    </div>
+
+    {/* Phase dots */}
+    <div style={{display:"flex",gap:2,justifyContent:"center",marginTop:6,flexWrap:"wrap"}}>
+      {phases.map(function(p,i){
+        var act=i===wk;
+        return<button key={i} onClick={function(){setWk(i);setRd(getPhaseRest(p.p));setSt(function(prev){var n=JSON.parse(JSON.stringify(prev));n.cw=i+1;return n})}}
+          style={{width:act?14:6,height:6,borderRadius:3,border:"none",background:act?p.c:i<wk?p.c+"55":"rgba(255,255,255,.1)",cursor:"pointer",padding:0,transition:"all .2s"}}/>;
+      })}
+    </div>
   </div>;
 }
 
@@ -638,28 +794,8 @@ function App(){
       </div>
     </div>
 
-    {/* CYCLE ROADMAP — désactivé */}
-
-    {/* WEEK SELECTOR */}
-    <div style={{marginBottom:12}}>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
-        <div style={{display:"flex",alignItems:"center",gap:8}}>
-          <span style={{padding:"3px 10px",borderRadius:20,background:ph.c+"22",border:"1px solid "+ph.c+"55",fontSize:10,fontWeight:800,color:ph.c}}>S{wN}</span>
-          <span style={{fontSize:11,fontWeight:700,color:"rgba(255,255,255,.5)"}}>{ph.p}</span>
-        </div>
-        <span style={{fontSize:9,color:"rgba(255,255,255,.25)"}}>{(PCFG[ph.p]||{}).cLo}-{(PCFG[ph.p]||{}).cHi} compo · {(PCFG[ph.p]||{}).iLo}-{(PCFG[ph.p]||{}).iHi} iso</span>
-      </div>
-      <div style={{fontSize:10,color:"rgba(255,255,255,.3)",fontStyle:"italic",marginBottom:8}}>{(PCFG[ph.p]||{}).desc}</div>
-      <div style={{display:"flex",gap:2,justifyContent:"center",flexWrap:"wrap"}}>
-        {PHASES.map(function(p,i){
-          var done=i<wk;
-          return<button key={i} onClick={function(){setWk(i);setRd(getPhaseRest(p.p));setSt(function(prev){var n=JSON.parse(JSON.stringify(prev));n.cw=i+1;return n})}} style={{width:26,height:26,borderRadius:8,border:wk===i?"2px solid "+p.c:"1px solid rgba(255,255,255,.06)",background:wk===i?p.c+"20":done?"rgba(255,255,255,.04)":"transparent",color:wk===i?"#fff":done?p.c+"88":"rgba(255,255,255,.25)",fontSize:8,fontWeight:800,fontFamily:"'JetBrains Mono',monospace",cursor:"pointer",position:"relative",transition:"all .15s",padding:0}}>
-            {done&&wk!==i&&<div style={{position:"absolute",top:2,right:2,width:3,height:3,borderRadius:"50%",background:p.c+"88"}}/>}
-            {p.w}
-          </button>;
-        })}
-      </div>
-    </div>
+    {/* WEEK CAROUSEL */}
+    <WeekCarousel phases={PHASES} wk={wk} setWk={setWk} st={st} setRd={setRd} setSt={setSt}/>
 
     {/* DAY SELECTOR */}
     {(function(){
@@ -711,7 +847,7 @@ function App(){
     <div style={{paddingBottom:tmr?240:0}}>
       {orderedExs.map(function(ex){
         var fI=freeExs.indexOf(ex);
-        return<ExCard key={ex.id} ex={ex} data={dData[ex.id]} prev={pDData&&pDData[ex.id]?pDData[ex.id]:null} color={day.color} upd={function(f,v){upEx(ex.id,f,v)}} onDone={function(){var r=ex.rest||rd;setRd(r);setTmr(true);setTmrKey(function(k){return k+1})}} isLk={!!ex.lk} canUp={!ex.lk&&fI>0} canDn={!ex.lk&&fI>=0&&fI<freeExs.length-1} onUp={function(){reorder(day.key,ex.id,"up")}} onDn={function(){reorder(day.key,ex.id,"down")}} phaseName={ph.p} atb={getAllTimeBest(ex.id,st.wk,wN)}/>;
+        return<ExCard key={ex.id} ex={ex} data={dData[ex.id]} prev={pDData&&pDData[ex.id]?pDData[ex.id]:null} color={day.color} upd={function(f,v){upEx(ex.id,f,v)}} onDone={function(){var r=ex.rest||rd;setRd(r);setTmr(true);setTmrKey(function(k){return k+1})}} isLk={!!ex.lk} canUp={!ex.lk&&fI>0} canDn={!ex.lk&&fI>=0&&fI<freeExs.length-1} onUp={function(){reorder(day.key,ex.id,"up")}} onDn={function(){reorder(day.key,ex.id,"down")}} phaseName={ph.p} atb={getAllTimeBest(ex.id,st.wk,wN)} allWks={st.wk} wkNum={wN} dayKey={day.key}/>;
       })}
     </div>
 
