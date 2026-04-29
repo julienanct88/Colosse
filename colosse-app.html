@@ -215,7 +215,7 @@ const PHASES=[
   /* S13 Maintien */
   {w:13,p:"Maintien",c:"#F59E0B",d:"27 avr",cal:3800},
 
-  /* === PROGRAMME U/L 4j (S14-S26) === */
+  /* === PROGRAMME U/L 4j (S14-S29) — Sèche 12 semaines === */
   /* S14 Reprise & Voyage Malte */
   {w:14,p:"Reprise & Voyage",c:"#7B6CF5",d:"4 mai",cal:3500},
   /* S15-S16 Transition */
@@ -223,19 +223,22 @@ const PHASES=[
   {w:16,p:"Transition U/L",c:"#4DA8FF",d:"18 mai",cal:3800},
   /* S17 Maintien U/L */
   {w:17,p:"Maintien U/L",c:"#3ECF8A",d:"25 mai",cal:3800},
-  /* S18-S20 Sèche Bloc 1 — Initiation */
+  /* S18-S21 Sèche Bloc 1 — Initiation (4 sem) */
   {w:18,p:"Sèche Bloc 1",c:"#EDB84A",d:"1 juin",cal:3000},
   {w:19,p:"Sèche Bloc 1",c:"#EDB84A",d:"8 juin",cal:3000},
   {w:20,p:"Sèche Bloc 1",c:"#EDB84A",d:"15 juin",cal:3000},
-  /* S21 Diet Break */
-  {w:21,p:"Diet Break",c:"#10B981",d:"22 juin",cal:3500},
-  /* S22-S24 Sèche Bloc 2 — Soutenue */
-  {w:22,p:"Sèche Bloc 2",c:"#DC2626",d:"29 juin",cal:2700},
+  {w:21,p:"Sèche Bloc 1",c:"#EDB84A",d:"22 juin",cal:3000},
+  /* S22 Diet Break */
+  {w:22,p:"Diet Break",c:"#10B981",d:"29 juin",cal:3500},
+  /* S23-S26 Sèche Bloc 2 — Soutenue (4 sem) */
   {w:23,p:"Sèche Bloc 2",c:"#DC2626",d:"6 juil",cal:2700},
   {w:24,p:"Sèche Bloc 2",c:"#DC2626",d:"13 juil",cal:2700},
-  /* S25-S26 Sèche Bloc 3 — Final */
-  {w:25,p:"Sèche Bloc 3",c:"#DC2626",d:"20 juil",cal:2400},
-  {w:26,p:"Sèche Bloc 3",c:"#DC2626",d:"27 juil",cal:2400},
+  {w:25,p:"Sèche Bloc 2",c:"#DC2626",d:"20 juil",cal:2700},
+  {w:26,p:"Sèche Bloc 2",c:"#DC2626",d:"27 juil",cal:2700},
+  /* S27-S29 Sèche Bloc 3 — Final Push (3 sem, objectif 14% BF / abdos visibles) */
+  {w:27,p:"Sèche Bloc 3",c:"#DC2626",d:"3 août",cal:2400},
+  {w:28,p:"Sèche Bloc 3",c:"#DC2626",d:"10 août",cal:2400},
+  {w:29,p:"Sèche Bloc 3",c:"#DC2626",d:"17 août",cal:2400},
 ];
 
 const PCFG={
@@ -411,7 +414,7 @@ function migrateData(st){
   else{ALL_DAYS.forEach(function(d){if(!st.ord[d.key])st.ord[d.key]=d.exs.map(function(e){return e.id});else{d.exs.forEach(function(e){if(st.ord[d.key].indexOf(e.id)===-1){st.ord[d.key].push(e.id);changed=true}})}})}
   if(changed)save(st);return st;
 }
-function init(){var wk={};for(var i=1;i<=26;i++)wk[i]=emptyW();wk[1]=buildS1();var ord={};ALL_DAYS.forEach(function(d){ord[d.key]=d.exs.map(function(e){return e.id})});return{wk:wk,cw:2,ord:ord}}
+function init(){var wk={};for(var i=1;i<=29;i++)wk[i]=emptyW();wk[1]=buildS1();var ord={};ALL_DAYS.forEach(function(d){ord[d.key]=d.exs.map(function(e){return e.id})});return{wk:wk,cw:2,ord:ord}}
 
 /* ═══ PROGRESSION DOUBLE — RÉFÉRENCE = DERNIÈRE SÉRIE ═══ */
 function compObj(exDef,prev,rng,tpOverride){
@@ -799,7 +802,7 @@ function App(){
     // Epoch LUNDI 2 fév — semaine commence le lundi
     var s1Mon=new Date(2026,1,2),now=new Date();
     var aw=Math.floor((now-s1Mon)/(7*24*60*60*1000));
-    if(aw<0)aw=0;if(aw>25)aw=25;
+    if(aw<0)aw=0;if(aw>28)aw=28;
     setWk(aw);setRd(getPhaseRest(PHASES[aw].p));
     var dow=now.getDay();
     setDayI(dowToDayI(aw+1, dow));
