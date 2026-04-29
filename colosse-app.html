@@ -134,37 +134,122 @@ const DAYS=[
   ]},
 ];
 
+/* ═══ DAYS U/L 4j (S14+) ═══ */
+const DAYS_UL=[
+  {id:0,key:"upperA",name:"Upper A",label:"Pec horizontal / Dos vertical / Bras",day:"Lundi",color:"#EF4444",exs:[
+    {id:"ulua1",name:"Développé couché",tp:"barbell",sets:4,rLo:8,rHi:12,lk:true,rest:120,variants:["Barre","Haltères","Smith","Machine convergente"],yt:"développé+couché+barre+technique+musculation"},
+    {id:"ulua2",name:"Tractions lestées",tp:"barbell",sets:4,rLo:8,rHi:12,lk:true,rest:120,yt:"tractions+lestées+pull+ups+weighted+technique"},
+    {id:"ulua3",name:"Développé militaire haltères assis",tp:"dumbbell",sets:3,rLo:8,rHi:12,lk:true,rest:120,variants:["Haltères","Barre","Smith"],yt:"développé+militaire+haltères+assis+seated+overhead+press"},
+    {id:"ulua4",name:"Tirage horizontal poulie",tp:"cable",sets:3,rLo:10,rHi:15,rest:90,yt:"tirage+horizontal+cable+row+technique"},
+    {id:"ulua5",name:"Extensions triceps poulie",tp:"cable",sets:3,rLo:10,rHi:15,rest:90,yt:"extension+triceps+poulie+haute+pushdown+technique"},
+    {id:"ulua6",name:"Curl barre",tp:"barbell",sets:3,rLo:10,rHi:15,rest:90,variants:["Barre","Barre EZ"],yt:"curl+barre+biceps+technique"},
+    {id:"ulua7",name:"Élévations latérales haltères",tp:"dumbbell",sets:3,rLo:12,rHi:15,rest:60,yt:"élévations+latérales+haltères+lateral+raise+technique"},
+  ]},
+  {id:1,key:"lowerA",name:"Lower A",label:"Squat focus / Ischios / Mollets",day:"Mardi",color:"#10B981",exs:[
+    {id:"ulla1",name:"Squat",tp:"barbell",sets:4,rLo:8,rHi:12,lk:true,rest:120,variants:["Barre libre","Smith","Machine hack"],yt:"back+squat+barre+technique+musculation"},
+    {id:"ulla2",name:"Soulevé de terre roumain",tp:"barbell",sets:4,rLo:8,rHi:12,lk:true,rest:120,variants:["Barre","Haltères"],yt:"soulevé+terre+roumain+RDL+technique"},
+    {id:"ulla3",name:"Presse jambes",tp:"machine",sets:3,rLo:10,rHi:15,rest:90,yt:"presse+jambes+leg+press+technique"},
+    {id:"ulla4",name:"Leg curl allongé",tp:"machine",sets:3,rLo:10,rHi:15,rest:90,yt:"leg+curl+allongé+lying+leg+curl+ischio+technique"},
+    {id:"ulla5",name:"Mollets debout",tp:"machine",sets:4,rLo:12,rHi:15,rest:60,yt:"mollets+debout+machine+standing+calf+raise"},
+    {id:"ulla6",name:"Relevés jambes suspendus",tp:"barbell",sets:3,rLo:8,rHi:12,rest:60,yt:"relevé+jambes+suspendu+hanging+leg+raise+abdos"},
+  ]},
+  {id:2,key:"upperB",name:"Upper B",label:"Pec incliné / Dos épaisseur / Épaules détail",day:"Jeudi",color:"#EF4444",exs:[
+    {id:"ulub1",name:"Développé incliné haltères",tp:"dumbbell",sets:4,rLo:8,rHi:12,lk:true,rest:120,variants:["Haltères","Barre","Smith"],yt:"développé+incliné+haltères+technique"},
+    {id:"ulub2",name:"Rowing T-bar",tp:"machine",sets:4,rLo:8,rHi:12,lk:true,rest:120,variants:["T-bar","Machine Hammer"],yt:"rowing+t-bar+technique+dos+épaisseur"},
+    {id:"ulub3",name:"Tirage vertical poulie",tp:"machine",sets:3,rLo:10,rHi:15,rest:90,yt:"lat+pulldown+poulie+haute+technique"},
+    {id:"ulub4",name:"Élévations latérales haltères",tp:"dumbbell",sets:4,rLo:12,rHi:15,rest:60,yt:"élévations+latérales+haltères+lateral+raise+technique"},
+    {id:"ulub5",name:"Oiseau inversé haltères",tp:"dumbbell",sets:3,rLo:12,rHi:15,rest:60,yt:"oiseau+inversé+reverse+fly+deltoide+posterieur+technique"},
+    {id:"ulub6",name:"Curl marteau haltères",tp:"dumbbell",sets:3,rLo:10,rHi:15,rest:90,yt:"curl+marteau+hammer+curl+technique"},
+    {id:"ulub7",name:"Extension triceps overhead poulie",tp:"cable",sets:3,rLo:10,rHi:15,rest:90,yt:"extension+triceps+overhead+poulie+technique"},
+  ]},
+  {id:3,key:"lowerB",name:"Lower B",label:"Quads accessoires / Fessiers / Ischios",day:"Vendredi",color:"#10B981",exs:[
+    {id:"ullb1",name:"Hack squat machine",tp:"machine",sets:4,rLo:8,rHi:12,lk:true,rest:120,variants:["Machine hack","Barre libre"],yt:"hack+squat+machine+technique"},
+    {id:"ullb2",name:"Hip thrust",tp:"barbell",sets:4,rLo:10,rHi:12,lk:true,rest:120,variants:["Barre","Smith","Machine"],yt:"hip+thrust+barre+technique+fessiers"},
+    {id:"ullb3",name:"Split squat bulgare",tp:"dumbbell",sets:3,rLo:10,rHi:12,rest:90,variants:["Haltères","Barre","Smith"],yt:"split+squat+bulgare+bulgarian+split+squat+technique"},
+    {id:"ullb4",name:"Leg extension",tp:"machine",sets:3,rLo:10,rHi:15,rest:60,yt:"leg+extension+quadriceps+technique"},
+    {id:"ullb5",name:"Soulevé jambes tendues",tp:"barbell",sets:3,rLo:10,rHi:12,rest:90,variants:["Barre","Haltères"],yt:"soulevé+jambes+tendues+stiff+leg+deadlift+technique"},
+    {id:"ullb6",name:"Mollets assis",tp:"machine",sets:4,rLo:12,rHi:15,rest:60,yt:"mollets+assis+seated+calf+raise+technique"},
+    {id:"ullb7",name:"Crunch poulie haute",tp:"cable",sets:3,rLo:10,rHi:15,rest:60,yt:"crunch+poulie+haute+cable+crunch+abdos"},
+  ]},
+];
+
+/* ═══ HELPERS DAYS / DOW MAPPING ═══ */
+/* À partir de la S14 (lundi 4 mai 2026), bascule sur U/L 4 jours.
+   Avant S14, programme PPL 6 jours (DAYS).
+   Note: les semaines sont 1-indexées dans le PWA (wN), mais wk est 0-indexé. */
+function getDays(wN){
+  return wN>=14 ? DAYS_UL : DAYS;
+}
+/* Tous les jours (PPL + U/L) — utile pour migration, init, recherche PR all-time. */
+const ALL_DAYS = DAYS.concat(DAYS_UL);
+/* Mapping jour de la semaine → index dans le tableau DAYS de la phase active.
+   PPL : Lun=0, Mar=1, Mer=2, Jeu=3, Ven=4, Sam=5 (6 jours).
+   U/L : Lun=0 (Upper A), Mar=1 (Lower A), Jeu=2 (Upper B), Ven=3 (Lower B). */
+function dowToDayI(wN, dow){
+  if(wN>=14){
+    /* Mapping U/L : sauts mer/sam/dim */
+    var ulMap={1:0, 2:1, 3:1, 4:2, 5:3, 6:3, 0:0};
+    return ulMap[dow]!==undefined ? ulMap[dow] : 0;
+  }
+  return (dow>=1 && dow<=6) ? dow-1 : 0;
+}
+
 const PHASES=[
+  /* === PROGRAMME PPL 6j (S1-S13) === */
   /* S1-S3 Réactivation */
   {w:1,p:"Réactivation",c:"#F59E0B",d:"2 fév",cal:3800},{w:2,p:"Réactivation",c:"#F59E0B",d:"9 fév",cal:3800},
   {w:3,p:"Réactivation",c:"#F59E0B",d:"16 fév",cal:3800},
   /* S4-S6 Hypertrophie */
   {w:4,p:"Hypertrophie",c:"#EF4444",d:"23 fév",cal:3800},{w:5,p:"Hypertrophie",c:"#EF4444",d:"2 mars",cal:3800},
   {w:6,p:"Hypertrophie",c:"#EF4444",d:"9 mars",cal:3800},
-  /* S7-S9 Force Max — dernière poussée, intensité maximale */
+  /* S7-S9 Force Max */
   {w:7,p:"Force Max",c:"#DC2626",d:"16 mars",cal:3800},{w:8,p:"Force Max",c:"#DC2626",d:"23 mars",cal:3800},
   {w:9,p:"Force Max",c:"#DC2626",d:"30 mars",cal:3800},
-  /* S10-S12 Transition — maintien des charges */
+  /* S10-S12 Transition */
   {w:10,p:"Transition",c:"#8B5CF6",d:"6 avr",cal:3800},{w:11,p:"Transition",c:"#8B5CF6",d:"13 avr",cal:3800},
   {w:12,p:"Transition",c:"#8B5CF6",d:"20 avr",cal:3800},
-  /* S13-S16 Maintien — récupération, conserve les gains */
-  {w:13,p:"Maintien",c:"#F59E0B",d:"27 avr",cal:3800},{w:14,p:"Maintien",c:"#F59E0B",d:"4 mai",cal:3800},
-  {w:15,p:"Maintien",c:"#F59E0B",d:"11 mai",cal:3800},{w:16,p:"Maintien",c:"#F59E0B",d:"18 mai",cal:3800},
-  /* S17-S26 Sèche — déficit progressif */
-  {w:17,p:"Sèche",c:"#3B82F6",d:"25 mai",cal:3300},{w:18,p:"Sèche",c:"#3B82F6",d:"1 juin",cal:3300},
-  {w:19,p:"Sèche",c:"#3B82F6",d:"8 juin",cal:3000},{w:20,p:"Sèche",c:"#3B82F6",d:"15 juin",cal:3000},
-  {w:21,p:"Sèche",c:"#3B82F6",d:"22 juin",cal:3000},{w:22,p:"Sèche",c:"#3B82F6",d:"29 juin",cal:3000},
-  {w:23,p:"Sèche",c:"#3B82F6",d:"6 juil",cal:2800},{w:24,p:"Sèche",c:"#3B82F6",d:"13 juil",cal:2800},
-  {w:25,p:"Sèche",c:"#3B82F6",d:"20 juil",cal:2800},{w:26,p:"Sèche",c:"#3B82F6",d:"27 juil",cal:2800},
+  /* S13 Maintien */
+  {w:13,p:"Maintien",c:"#F59E0B",d:"27 avr",cal:3800},
+
+  /* === PROGRAMME U/L 4j (S14-S26) === */
+  /* S14 Reprise & Voyage Malte */
+  {w:14,p:"Reprise & Voyage",c:"#7B6CF5",d:"4 mai",cal:3500},
+  /* S15-S16 Transition */
+  {w:15,p:"Transition U/L",c:"#4DA8FF",d:"11 mai",cal:3800},
+  {w:16,p:"Transition U/L",c:"#4DA8FF",d:"18 mai",cal:3800},
+  /* S17 Maintien U/L */
+  {w:17,p:"Maintien U/L",c:"#3ECF8A",d:"25 mai",cal:3800},
+  /* S18-S20 Sèche Bloc 1 — Initiation */
+  {w:18,p:"Sèche Bloc 1",c:"#EDB84A",d:"1 juin",cal:3000},
+  {w:19,p:"Sèche Bloc 1",c:"#EDB84A",d:"8 juin",cal:3000},
+  {w:20,p:"Sèche Bloc 1",c:"#EDB84A",d:"15 juin",cal:3000},
+  /* S21 Diet Break */
+  {w:21,p:"Diet Break",c:"#10B981",d:"22 juin",cal:3500},
+  /* S22-S24 Sèche Bloc 2 — Soutenue */
+  {w:22,p:"Sèche Bloc 2",c:"#DC2626",d:"29 juin",cal:2700},
+  {w:23,p:"Sèche Bloc 2",c:"#DC2626",d:"6 juil",cal:2700},
+  {w:24,p:"Sèche Bloc 2",c:"#DC2626",d:"13 juil",cal:2700},
+  /* S25-S26 Sèche Bloc 3 — Final */
+  {w:25,p:"Sèche Bloc 3",c:"#DC2626",d:"20 juil",cal:2400},
+  {w:26,p:"Sèche Bloc 3",c:"#DC2626",d:"27 juil",cal:2400},
 ];
 
 const PCFG={
+  /* PPL phases */
   "Réactivation":{cLo:10,cHi:12,iLo:12,iHi:15,rest:90,desc:"Technique parfaite. Réveille les muscles."},
   "Hypertrophie":{cLo:8,cHi:10,iLo:10,iHi:12,rest:120,desc:"Volume maximum. Casse les fibres."},
   "Force Max":{cLo:5,cHi:8,iLo:8,iHi:10,rest:180,desc:"Charges lourdes. PRs. Intensité maximale."},
   "Transition":{cLo:8,cHi:10,iLo:10,iHi:12,rest:120,desc:"Maintien des charges. Écoute ton corps."},
   "Maintien":{cLo:8,cHi:10,iLo:10,iHi:12,rest:120,desc:"Conserve tes gains. Récupération prioritaire."},
   "Sèche":{cLo:6,cHi:8,iLo:12,iHi:15,rest:90,desc:"Déficit calorique. Garde l'intensité. Perds le gras."},
+  /* U/L phases (S14+) */
+  "Reprise & Voyage":{cLo:8,cHi:12,iLo:10,iHi:15,rest:90,desc:"Reprise après pause. 2 séances en salle, 2 séances voyage allégées. Pas de PR."},
+  "Transition U/L":{cLo:8,cHi:10,iLo:10,iHi:12,rest:120,desc:"Reprise progressive. Charges 90-95% peak, RIR 2-3. Cardio LISS 2×/sem."},
+  "Maintien U/L":{cLo:6,cHi:10,iLo:10,iHi:12,rest:120,desc:"Stabilisation pré-déficit. Premiers PR autorisés."},
+  "Sèche Bloc 1":{cLo:6,cHi:10,iLo:10,iHi:12,rest:90,desc:"Initiation déficit (-800 kcal/j). Volume 14 séries/groupe. LISS 3×/sem. Protéines élevées."},
+  "Diet Break":{cLo:6,cHi:10,iLo:10,iHi:12,rest:120,desc:"Pause stratégique 1 sem (MATADOR). Calories à maintenance. Focus performance."},
+  "Sèche Bloc 2":{cLo:6,cHi:8,iLo:10,iHi:12,rest:90,desc:"Cut soutenu (-1100 kcal/j). Volume 12 séries/groupe. Charges 85-90%, RIR 2."},
+  "Sèche Bloc 3":{cLo:6,cHi:8,iLo:10,iHi:12,rest:60,desc:"Final push (-1400 kcal/j). Charges maintenues, volume réduit. Pic de définition."},
 };
 function getRepRange(ex,p){var c=PCFG[p]||PCFG["Hypertrophie"];return ex.lk?{lo:c.cLo,hi:c.cHi}:{lo:c.iLo,hi:c.iHi}}
 function getPhaseRest(p){return(PCFG[p]||{}).rest||120}
@@ -211,9 +296,11 @@ function getLatestVTaper(allWks,upToWkNum){
   return null;
 }
 
-function getWeekSessionCount(wkData){
+function getWeekSessionCount(wkData,wN){
   if(!wkData||!wkData.ds)return 0;var done=0;
-  DAYS.forEach(function(d){var dd=wkData.ds[d.key];if(!dd)return;var any=false,all=true;
+  /* Si wN fourni, n'utiliser que les jours du programme actif. Sinon, scanner tous les jours. */
+  var daysToScan = (typeof wN==="number") ? getDays(wN) : ALL_DAYS;
+  daysToScan.forEach(function(d){var dd=wkData.ds[d.key];if(!dd)return;var any=false,all=true;
     d.exs.forEach(function(ex){if(!dd[ex.id])return;if(dd[ex.id].s.some(function(s){return s.d}))any=true;else all=false});
     if(any&&all)done++});
   return done;
@@ -252,7 +339,9 @@ function getWeekDates(wNum){
 
 function mkS(n){var a=[];for(var i=0;i<n;i++)a.push({w:"",r:"",d:false});return a}
 function emptyW(){
-  var ds={};DAYS.forEach(function(day){var o={};day.exs.forEach(function(ex){o[ex.id]={s:mkS(ex.sets),tw:"",tr:""}});ds[day.key]=o});
+  /* Initialiser les 2 tableaux de jours (PPL + U/L) pour qu'une semaine puisse
+     accueillir les 2 modes selon où on se trouve dans le calendrier. */
+  var ds={};ALL_DAYS.forEach(function(day){var o={};day.exs.forEach(function(ex){o[ex.id]={s:mkS(ex.sets),tw:"",tr:""}});ds[day.key]=o});
   var ms={};MEAS.forEach(function(m){ms[m.id]=""});
   return{ds:ds,ms:ms,nt:"",mood:""};
 }
@@ -300,7 +389,8 @@ function migrateData(st){
   }
   Object.keys(st.wk).forEach(function(wn){
     var wd=st.wk[wn];if(!wd||!wd.ds)return;
-    DAYS.forEach(function(day){
+    /* Migration : on initialise tous les jours possibles (PPL + U/L) sur toutes les semaines. */
+    ALL_DAYS.forEach(function(day){
       if(!wd.ds[day.key])wd.ds[day.key]={};
       day.exs.forEach(function(ex){
         if(!wd.ds[day.key][ex.id]){wd.ds[day.key][ex.id]={s:mkS(ex.sets),tw:"",tr:""};changed=true}
@@ -313,11 +403,11 @@ function migrateData(st){
     if(typeof wd.nt==="undefined"){wd.nt="";changed=true}
     if(typeof wd.mood==="undefined"){wd.mood="";changed=true}
   });
-  if(!st.ord){st.ord={};DAYS.forEach(function(d){st.ord[d.key]=d.exs.map(function(e){return e.id})});changed=true}
-  else{DAYS.forEach(function(d){if(!st.ord[d.key])st.ord[d.key]=d.exs.map(function(e){return e.id});else{d.exs.forEach(function(e){if(st.ord[d.key].indexOf(e.id)===-1){st.ord[d.key].push(e.id);changed=true}})}})}
+  if(!st.ord){st.ord={};ALL_DAYS.forEach(function(d){st.ord[d.key]=d.exs.map(function(e){return e.id})});changed=true}
+  else{ALL_DAYS.forEach(function(d){if(!st.ord[d.key])st.ord[d.key]=d.exs.map(function(e){return e.id});else{d.exs.forEach(function(e){if(st.ord[d.key].indexOf(e.id)===-1){st.ord[d.key].push(e.id);changed=true}})}})}
   if(changed)save(st);return st;
 }
-function init(){var wk={};for(var i=1;i<=26;i++)wk[i]=emptyW();wk[1]=buildS1();var ord={};DAYS.forEach(function(d){ord[d.key]=d.exs.map(function(e){return e.id})});return{wk:wk,cw:2,ord:ord}}
+function init(){var wk={};for(var i=1;i<=26;i++)wk[i]=emptyW();wk[1]=buildS1();var ord={};ALL_DAYS.forEach(function(d){ord[d.key]=d.exs.map(function(e){return e.id})});return{wk:wk,cw:2,ord:ord}}
 
 /* ═══ PROGRESSION DOUBLE — RÉFÉRENCE = DERNIÈRE SÉRIE ═══ */
 function compObj(exDef,prev,rng,tpOverride){
@@ -336,7 +426,7 @@ function getAllTimeBest(exId,allWks,currentWkNum){
   var best=0;
   for(var i=1;i<currentWkNum;i++){
     var wd=allWks[i];if(!wd||!wd.ds)continue;
-    DAYS.forEach(function(day){
+    ALL_DAYS.forEach(function(day){
       if(!wd.ds[day.key]||!wd.ds[day.key][exId])return;
       var d=wd.ds[day.key][exId];
       if(d.s)d.s.forEach(function(s){if(s.d){var w=parseFloat(s.w||0);if(w>best)best=w}});
@@ -708,8 +798,7 @@ function App(){
     if(aw<0)aw=0;if(aw>25)aw=25;
     setWk(aw);setRd(getPhaseRest(PHASES[aw].p));
     var dow=now.getDay();
-    if(dow>=1&&dow<=6){setDayI(dow-1)}
-    else{setDayI(0)}
+    setDayI(dowToDayI(aw+1, dow));
   },[]);
 
   useEffect(function(){
@@ -722,7 +811,11 @@ function App(){
     <div style={{textAlign:"center"}}><div style={{fontSize:28,marginBottom:8}}>💪</div><div style={{fontSize:12,color:"rgba(255,255,255,.3)",fontWeight:600}}>Chargement...</div></div>
   </div>;
 
-  var wN=wk+1,ph=PHASES[wk],day=DAYS[dayI];
+  var wN=wk+1,ph=PHASES[wk];
+  var DAYS_ACT=getDays(wN);
+  /* Si dayI déborde du tableau actif (ex: bascule PPL 6j -> U/L 4j), on clamp */
+  var safeDayI=Math.min(dayI,DAYS_ACT.length-1);
+  var day=DAYS_ACT[safeDayI];
   if(!st.wk[wN]){var _n=JSON.parse(JSON.stringify(st));_n.wk[wN]=emptyW();setSt(_n);return null}
   var wd=st.wk[wN];
   if(!wd.ds)wd.ds={};
@@ -753,12 +846,12 @@ function App(){
   function reorder(dk,eid,dir){
     setSt(function(p){
       var n=JSON.parse(JSON.stringify(p));if(!n.ord)n.ord={};
-      if(!n.ord[dk]){var dd=DAYS.find(function(d){return d.key===dk});n.ord[dk]=dd.exs.map(function(e){return e.id})}
-      var free=n.ord[dk].filter(function(id){var dd=DAYS.find(function(d){return d.key===dk});return dd.exs.some(function(e){return e.id===id&&!e.lk})});
+      if(!n.ord[dk]){var dd=DAYS_ACT.find(function(d){return d.key===dk});if(!dd)return n;n.ord[dk]=dd.exs.map(function(e){return e.id})}
+      var free=n.ord[dk].filter(function(id){var dd=DAYS_ACT.find(function(d){return d.key===dk});return dd&&dd.exs.some(function(e){return e.id===id&&!e.lk})});
       var idx=free.indexOf(eid);if(idx===-1)return n;
       var si=dir==="up"?idx-1:idx+1;if(si<0||si>=free.length)return n;
       var tmp=free[idx];free[idx]=free[si];free[si]=tmp;
-      var dd=DAYS.find(function(d){return d.key===dk});
+      var dd=DAYS_ACT.find(function(d){return d.key===dk});if(!dd)return n;
       n.ord[dk]=dd.exs.filter(function(e){return e.lk}).map(function(e){return e.id}).concat(free);
       return n;
     });
@@ -773,7 +866,7 @@ function App(){
   var sessVol=calcVol(dData,day.exs);
   var isToday=(function(){var dow=new Date().getDay();return dow>=1&&dow<=6&&dayI===dow-1})();
   var weekDone=0;
-  DAYS.forEach(function(d){var dd=wd.ds[d.key];if(!dd)return;var any=false,all=true;d.exs.forEach(function(ex){if(!dd[ex.id])return;if(dd[ex.id].s.some(function(s){return s.d}))any=true;else all=false});if(any&&all)weekDone++});
+  DAYS_ACT.forEach(function(d){var dd=wd.ds[d.key];if(!dd)return;var any=false,all=true;d.exs.forEach(function(ex){if(!dd[ex.id])return;if(dd[ex.id].s.some(function(s){return s.d}))any=true;else all=false});if(any&&all)weekDone++});
 
   var MOODS=[{v:"💀",l:"Mort"},{v:"😫",l:"Épuisé"},{v:"😐",l:"Moyen"},{v:"💪",l:"Solide"},{v:"🔥",l:"ON FIRE"}];
 
@@ -783,12 +876,12 @@ function App(){
     <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:14}}>
       <div>
         <div style={{fontSize:24,fontWeight:900,letterSpacing:-1,lineHeight:1}}>COLOSSE</div>
-        <div style={{fontSize:9,fontWeight:700,letterSpacing:2,color:"rgba(255,255,255,.22)",textTransform:"uppercase",marginTop:2}}>{ph.cal||3800} kcal · PPL {PHASES.length} sem.</div>
+        <div style={{fontSize:9,fontWeight:700,letterSpacing:2,color:"rgba(255,255,255,.22)",textTransform:"uppercase",marginTop:2}}>{ph.cal||3800} kcal · {wN>=14?"U/L 4j":"PPL 6j"} · {PHASES.length} sem.</div>
       </div>
       <div style={{display:"flex",alignItems:"center",gap:10}}>
         {sav&&<div style={{fontSize:9,color:"#10B981",fontWeight:700,display:"flex",alignItems:"center",gap:3}}><span style={{width:5,height:5,borderRadius:"50%",background:"#10B981",display:"inline-block"}}/>Sauvé</div>}
         <div style={{textAlign:"right",padding:"4px 10px",borderRadius:10,background:"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.05)"}}>
-          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:16,fontWeight:800,color:weekDone>0?"#10B981":"rgba(255,255,255,.3)"}}>{weekDone}<span style={{fontSize:9,color:"rgba(255,255,255,.25)",fontWeight:400}}>/6</span></div>
+          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:16,fontWeight:800,color:weekDone>0?"#10B981":"rgba(255,255,255,.3)"}}>{weekDone}<span style={{fontSize:9,color:"rgba(255,255,255,.25)",fontWeight:400}}>/{DAYS_ACT.length}</span></div>
           <div style={{fontSize:8,color:"rgba(255,255,255,.2)",marginTop:1}}>séances S{wN}</div>
         </div>
       </div>
@@ -800,15 +893,19 @@ function App(){
     {/* DAY SELECTOR */}
     {(function(){
       var wd2=getWeekDates(wN);
+      /* Pour U/L (4 jours) : Upper A=Lun, Lower A=Mar, Upper B=Jeu, Lower B=Ven.
+         On affiche la date du jour réel correspondant (idx 0,1,3,4 dans wd2). */
+      var dateIdxUL=[0,1,3,4];
       return<div style={{display:"flex",gap:3,marginBottom:12,overflowX:"auto"}}>
-        {DAYS.map(function(d,i){
-          var active=dayI===i;
+        {DAYS_ACT.map(function(d,i){
+          var active=safeDayI===i;
           var dd=wd.ds[d.key];var dc2=false;
           if(dd){var any=false,all=true;d.exs.forEach(function(ex){if(!dd[ex.id])return;if(dd[ex.id].s.some(function(s){return s.d}))any=true;else all=false});dc2=any&&all}
+          var dateLbl = wN>=14 ? wd2[dateIdxUL[i]] : wd2[i];
           return<button key={i} onClick={function(){setDayI(i)}} style={{flex:"1 1 0",padding:"6px 2px 6px",borderRadius:12,border:active?"2px solid "+d.color:"1px solid rgba(255,255,255,.05)",background:active?d.color+"15":"transparent",cursor:"pointer",textAlign:"center",minWidth:44,position:"relative",transition:"all .15s"}}>
             {dc2&&!active&&<div style={{position:"absolute",top:4,right:4,width:5,height:5,borderRadius:"50%",background:"#10B981"}}/>}
             <div style={{fontSize:8,color:active?d.color:"rgba(255,255,255,.2)",fontWeight:800,letterSpacing:.3}}>{d.day.substring(0,3).toUpperCase()}</div>
-            <div style={{fontSize:8,color:active?d.color+"99":"rgba(255,255,255,.12)",marginTop:1}}>{wd2[i]}</div>
+            <div style={{fontSize:8,color:active?d.color+"99":"rgba(255,255,255,.12)",marginTop:1}}>{dateLbl}</div>
             <div style={{fontSize:10,color:active?"#fff":"rgba(255,255,255,.3)",fontWeight:800,marginTop:1}}>{d.name}</div>
             <div style={{fontSize:7,color:active?d.color+"80":"rgba(255,255,255,.1)",marginTop:1}}>{d.label.split(" ")[0]}</div>
           </button>;
