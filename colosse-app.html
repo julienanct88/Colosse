@@ -134,46 +134,48 @@ const DAYS=[
   ]},
 ];
 
-/* ═══ DAYS U/L 4j (S14+) ═══ */
+/* ═══ DAYS PPL+Arms 4j (S14+) ═══
+   Push / Pull / Legs / Arms+Épaules+Abdos
+   Big muscles 100% séparés, optimisé pour leviers longs (1m97). */
 const DAYS_UL=[
-  {id:0,key:"upperA",name:"Upper A",label:"Pec horizontal / Dos vertical / Bras",day:"Lundi",color:"#EF4444",exs:[
-    {id:"ulua1",name:"Développé couché",tp:"barbell",sets:4,rLo:8,rHi:12,lk:true,rest:120,variants:["Barre","Haltères","Smith","Machine convergente"],yt:"développé+couché+barre+technique+musculation"},
-    {id:"ulua2",name:"Tractions lestées",tp:"barbell",sets:4,rLo:8,rHi:12,lk:true,rest:120,yt:"tractions+lestées+pull+ups+weighted+technique"},
-    {id:"ulua3",name:"Développé militaire haltères assis",tp:"dumbbell",sets:3,rLo:8,rHi:12,lk:true,rest:120,variants:["Haltères","Barre","Smith"],yt:"développé+militaire+haltères+assis+seated+overhead+press"},
-    {id:"ulua4",name:"Tirage horizontal poulie",tp:"cable",sets:3,rLo:10,rHi:15,rest:90,yt:"tirage+horizontal+cable+row+technique"},
-    {id:"ulua5",name:"Extensions triceps poulie",tp:"cable",sets:3,rLo:10,rHi:15,rest:90,yt:"extension+triceps+poulie+haute+pushdown+technique"},
-    {id:"ulua6",name:"Curl barre",tp:"barbell",sets:3,rLo:10,rHi:15,rest:90,variants:["Barre","Barre EZ"],yt:"curl+barre+biceps+technique"},
-    {id:"ulua7",name:"Élévations latérales haltères",tp:"dumbbell",sets:3,rLo:12,rHi:15,rest:60,yt:"élévations+latérales+haltères+lateral+raise+technique"},
+  {id:0,key:"pushDay",name:"Push",label:"Pec / Épaules / Triceps / Abdos",day:"Lundi",color:"#EF4444",exs:[
+    {id:"pp1",name:"Développé incliné haltères",tp:"dumbbell",sets:4,rLo:8,rHi:10,lk:true,rest:120,variants:["Haltères","Barre","Smith"],yt:"développé+incliné+haltères+technique"},
+    {id:"pp2",name:"Développé couché Smith",tp:"machine",sets:3,rLo:8,rHi:10,lk:true,rest:120,variants:["Smith","Barre","Machine convergente"],yt:"développé+couché+smith+machine+technique"},
+    {id:"pp3",name:"Écarté machine ou poulie",tp:"machine",sets:3,rLo:12,rHi:15,rest:60,variants:["Machine","Poulie"],yt:"écarté+machine+pec+deck+technique"},
+    {id:"pp4",name:"Développé militaire haltères assis",tp:"dumbbell",sets:3,rLo:8,rHi:10,lk:true,rest:120,variants:["Haltères","Barre","Smith"],yt:"développé+militaire+haltères+assis+seated+overhead+press"},
+    {id:"pp5",name:"Élévations latérales haltères",tp:"dumbbell",sets:3,rLo:12,rHi:15,rest:60,yt:"élévations+latérales+haltères+lateral+raise+technique"},
+    {id:"pp6",name:"Triceps pushdown câble",tp:"cable",sets:3,rLo:10,rHi:12,rest:60,variants:["Poulie haute","Machine"],yt:"triceps+pushdown+poulie+haute+technique"},
+    {id:"pp7",name:"Extension triceps overhead poulie",tp:"cable",sets:3,rLo:10,rHi:12,rest:60,yt:"extension+triceps+overhead+poulie+technique"},
+    {id:"pp8",name:"Cable crunch poulie haute",tp:"cable",sets:3,rLo:12,rHi:15,rest:45,yt:"crunch+poulie+haute+cable+crunch+abdos"},
   ]},
-  {id:1,key:"lowerA",name:"Lower A",label:"Squat focus / Ischios / Mollets",day:"Mardi",color:"#10B981",exs:[
-    {id:"ulla1",name:"Squat",tp:"barbell",sets:4,rLo:8,rHi:12,lk:true,rest:120,variants:["Barre libre","Smith","Machine hack"],yt:"back+squat+barre+technique+musculation"},
-    {id:"ulla2",name:"Soulevé de terre roumain",tp:"barbell",sets:4,rLo:8,rHi:12,lk:true,rest:120,variants:["Barre","Haltères"],yt:"soulevé+terre+roumain+RDL+technique"},
-    {id:"ulla3",name:"Presse jambes",tp:"machine",sets:3,rLo:10,rHi:15,rest:90,yt:"presse+jambes+leg+press+technique"},
-    {id:"ulla4",name:"Leg curl allongé",tp:"machine",sets:3,rLo:10,rHi:15,rest:90,yt:"leg+curl+allongé+lying+leg+curl+ischio+technique"},
-    {id:"ulla5",name:"Mollets debout",tp:"machine",sets:4,rLo:12,rHi:15,rest:60,yt:"mollets+debout+machine+standing+calf+raise"},
-    {id:"ulla6",name:"Relevés jambes suspendus",tp:"barbell",sets:3,rLo:8,rHi:12,rest:60,yt:"relevé+jambes+suspendu+hanging+leg+raise+abdos"},
-    {id:"ulla7",name:"Pallof Press câble",tp:"cable",sets:3,rLo:10,rHi:12,rest:45,yt:"pallof+press+cable+anti+rotation+abdos+technique"},
+  {id:1,key:"pullDay",name:"Pull",label:"Dos / Biceps",day:"Mardi",color:"#3B82F6",exs:[
+    {id:"pl1",name:"Tractions lestées",tp:"barbell",sets:4,rLo:6,rHi:10,lk:true,rest:120,yt:"tractions+lestées+pull+ups+weighted+technique"},
+    {id:"pl2",name:"Rowing T-bar",tp:"machine",sets:4,rLo:8,rHi:10,lk:true,rest:120,variants:["T-bar","Machine Hammer"],yt:"rowing+t-bar+technique+dos+épaisseur"},
+    {id:"pl3",name:"Lat pulldown",tp:"machine",sets:3,rLo:10,rHi:12,rest:90,variants:["Poulie haute","Machine Hammer"],yt:"lat+pulldown+poulie+haute+technique"},
+    {id:"pl4",name:"Tirage horizontal câble",tp:"cable",sets:3,rLo:10,rHi:12,rest:90,variants:["Poulie basse","Machine"],yt:"tirage+horizontal+cable+row+technique"},
+    {id:"pl5",name:"Face pulls",tp:"cable",sets:3,rLo:12,rHi:15,rest:60,yt:"face+pull+poulie+deltoide+posterieur+technique"},
+    {id:"pl6",name:"Curl barre EZ",tp:"barbell",sets:3,rLo:10,rHi:12,rest:90,variants:["Barre EZ","Barre"],yt:"curl+barre+EZ+biceps+technique"},
+    {id:"pl7",name:"Curl marteau haltères",tp:"dumbbell",sets:3,rLo:10,rHi:12,rest:60,variants:["Haltères","Poulie"],yt:"curl+marteau+hammer+curl+technique"},
   ]},
-  {id:2,key:"upperB",name:"Upper B",label:"Pec incliné / Dos épaisseur / Épaules détail",day:"Jeudi",color:"#EF4444",exs:[
-    {id:"ulub1",name:"Développé incliné haltères",tp:"dumbbell",sets:4,rLo:8,rHi:12,lk:true,rest:120,variants:["Haltères","Barre","Smith"],yt:"développé+incliné+haltères+technique"},
-    {id:"ulub2",name:"Rowing T-bar",tp:"machine",sets:4,rLo:8,rHi:12,lk:true,rest:120,variants:["T-bar","Machine Hammer"],yt:"rowing+t-bar+technique+dos+épaisseur"},
-    {id:"ulub3",name:"Tirage vertical poulie",tp:"machine",sets:3,rLo:10,rHi:15,rest:90,yt:"lat+pulldown+poulie+haute+technique"},
-    {id:"ulub4",name:"Élévations latérales haltères",tp:"dumbbell",sets:4,rLo:12,rHi:15,rest:60,yt:"élévations+latérales+haltères+lateral+raise+technique"},
-    {id:"ulub5",name:"Oiseau inversé haltères",tp:"dumbbell",sets:3,rLo:12,rHi:15,rest:60,yt:"oiseau+inversé+reverse+fly+deltoide+posterieur+technique"},
-    {id:"ulub6",name:"Curl marteau haltères",tp:"dumbbell",sets:3,rLo:10,rHi:15,rest:90,yt:"curl+marteau+hammer+curl+technique"},
-    {id:"ulub7",name:"Extension triceps overhead poulie",tp:"cable",sets:3,rLo:10,rHi:15,rest:90,yt:"extension+triceps+overhead+poulie+technique"},
-    {id:"ulub8",name:"Dead Bug",tp:"barbell",sets:3,rLo:8,rHi:10,rest:30,yt:"dead+bug+exercice+gainage+abdos+technique"},
-    {id:"ulub9",name:"Side Plank lesté",tp:"barbell",sets:2,rLo:1,rHi:1,rest:30,isTimer:true,yt:"side+plank+gainage+latéral+technique"},
+  {id:2,key:"legsDay",name:"Legs",label:"Quads / Ischios / Fessiers / Abdos",day:"Jeudi",color:"#10B981",exs:[
+    {id:"lg1",name:"Squat",tp:"barbell",sets:4,rLo:6,rHi:10,lk:true,rest:150,variants:["Barre libre","Smith","Machine hack"],yt:"back+squat+barre+technique+musculation"},
+    {id:"lg2",name:"Soulevé de terre roumain",tp:"barbell",sets:4,rLo:8,rHi:10,lk:true,rest:120,variants:["Barre","Haltères"],yt:"soulevé+terre+roumain+RDL+technique"},
+    {id:"lg3",name:"Hack squat machine",tp:"machine",sets:3,rLo:10,rHi:12,rest:90,variants:["Machine hack","Leg press pieds hauts"],yt:"hack+squat+machine+technique"},
+    {id:"lg4",name:"Leg curl allongé",tp:"machine",sets:3,rLo:10,rHi:12,rest:60,yt:"leg+curl+allongé+lying+leg+curl+ischio+technique"},
+    {id:"lg5",name:"Hip thrust",tp:"barbell",sets:3,rLo:10,rHi:12,rest:90,variants:["Barre","Smith","Machine"],yt:"hip+thrust+barre+technique+fessiers"},
+    {id:"lg6",name:"Mollets debout",tp:"machine",sets:4,rLo:12,rHi:15,rest:60,variants:["Machine","Smith"],yt:"mollets+debout+machine+standing+calf+raise"},
+    {id:"lg7",name:"Hanging leg raise",tp:"barbell",sets:3,rLo:8,rHi:12,rest:60,yt:"relevé+jambes+suspendu+hanging+leg+raise+abdos"},
   ]},
-  {id:3,key:"lowerB",name:"Lower B",label:"Quads accessoires / Fessiers / Ischios",day:"Vendredi",color:"#10B981",exs:[
-    {id:"ullb1",name:"Hack squat machine",tp:"machine",sets:4,rLo:8,rHi:12,lk:true,rest:120,variants:["Machine hack","Barre libre"],yt:"hack+squat+machine+technique"},
-    {id:"ullb2",name:"Hip thrust",tp:"barbell",sets:4,rLo:10,rHi:12,lk:true,rest:120,variants:["Barre","Smith","Machine"],yt:"hip+thrust+barre+technique+fessiers"},
-    {id:"ullb3",name:"Split squat bulgare",tp:"dumbbell",sets:3,rLo:10,rHi:12,rest:90,variants:["Haltères","Barre","Smith"],yt:"split+squat+bulgare+bulgarian+split+squat+technique"},
-    {id:"ullb4",name:"Leg extension",tp:"machine",sets:3,rLo:10,rHi:15,rest:60,yt:"leg+extension+quadriceps+technique"},
-    {id:"ullb5",name:"Soulevé jambes tendues",tp:"barbell",sets:3,rLo:10,rHi:12,rest:90,variants:["Barre","Haltères"],yt:"soulevé+jambes+tendues+stiff+leg+deadlift+technique"},
-    {id:"ullb6",name:"Mollets assis",tp:"machine",sets:4,rLo:12,rHi:15,rest:60,yt:"mollets+assis+seated+calf+raise+technique"},
-    {id:"ullb7",name:"Crunch poulie haute",tp:"cable",sets:3,rLo:10,rHi:15,rest:60,yt:"crunch+poulie+haute+cable+crunch+abdos"},
-    {id:"ullb8",name:"Pallof Press iso-hold",tp:"cable",sets:3,rLo:1,rHi:1,rest:45,isTimer:true,yt:"pallof+press+iso+hold+anti+rotation+abdos"},
+  {id:3,key:"armsDay",name:"Arms",label:"Bras / Épaules détail / Abdos",day:"Vendredi",color:"#F59E0B",exs:[
+    {id:"arm1",name:"Élévations latérales haltères lourdes",tp:"dumbbell",sets:4,rLo:10,rHi:12,lk:true,rest:90,yt:"élévations+latérales+haltères+lourdes+lateral+raise+technique"},
+    {id:"arm2",name:"Oiseau inversé haltères",tp:"dumbbell",sets:3,rLo:12,rHi:15,rest:60,variants:["Haltères","Poulie","Machine"],yt:"oiseau+inversé+reverse+fly+deltoide+posterieur+technique"},
+    {id:"arm3",name:"Curl barre EZ",tp:"barbell",sets:4,rLo:10,rHi:12,lk:true,rest:90,variants:["Barre EZ","Barre"],yt:"curl+barre+EZ+biceps+technique"},
+    {id:"arm4",name:"Skull crushers barre EZ",tp:"barbell",sets:4,rLo:10,rHi:12,lk:true,rest:90,variants:["Barre EZ","Haltères"],yt:"skull+crushers+barre+EZ+triceps+technique"},
+    {id:"arm5",name:"Curl haltères incliné",tp:"dumbbell",sets:3,rLo:10,rHi:12,rest:60,yt:"curl+incliné+45+degrés+haltères+biceps+technique"},
+    {id:"arm6",name:"Dips triceps lestés",tp:"barbell",sets:3,rLo:10,rHi:12,rest:90,yt:"dips+triceps+lestés+technique"},
+    {id:"arm7",name:"Cable crunch poulie haute",tp:"cable",sets:3,rLo:12,rHi:15,rest:45,yt:"crunch+poulie+haute+cable+crunch+abdos"},
+    {id:"arm8",name:"Pallof Press câble",tp:"cable",sets:3,rLo:10,rHi:12,rest:45,yt:"pallof+press+cable+anti+rotation+abdos+technique"},
+    {id:"arm9",name:"Side Plank lesté",tp:"barbell",sets:2,rLo:1,rHi:1,rest:30,isTimer:true,yt:"side+plank+gainage+latéral+technique"},
   ]},
 ];
 
