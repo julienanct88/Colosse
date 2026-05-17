@@ -134,48 +134,50 @@ const DAYS=[
   ]},
 ];
 
-/* ═══ DAYS PPL+Arms 4j (S14+) ═══
-   Push / Pull / Legs / Arms+Épaules+Abdos
-   Big muscles 100% séparés, optimisé pour leviers longs (1m97). */
+/* ═══ DAYS U/L 4j PRIDE (S14+) ═══
+   Programme sèche 6 semaines — Pride Paris 27 juin 2026
+   Upper A / Lower A / Upper B / Lower B
+   Abdos sur les 4 séances. */
 const DAYS_UL=[
-  {id:0,key:"pushDay",name:"Push",label:"Pec / Épaules / Triceps / Abdos",day:"Lundi",color:"#EF4444",exs:[
-    {id:"pp1",name:"Développé incliné haltères",tp:"dumbbell",sets:4,rLo:8,rHi:10,lk:true,rest:120,variants:["Haltères","Barre","Smith"],yt:"développé+incliné+haltères+technique"},
-    {id:"pp2",name:"Développé couché Smith",tp:"machine",sets:3,rLo:8,rHi:10,lk:true,rest:120,variants:["Smith","Barre","Machine convergente"],yt:"développé+couché+smith+machine+technique"},
-    {id:"pp3",name:"Écarté machine ou poulie",tp:"machine",sets:3,rLo:12,rHi:15,rest:60,variants:["Machine","Poulie"],yt:"écarté+machine+pec+deck+technique"},
-    {id:"pp4",name:"Développé militaire haltères assis",tp:"dumbbell",sets:3,rLo:8,rHi:10,lk:true,rest:120,variants:["Haltères","Barre","Smith"],yt:"développé+militaire+haltères+assis+seated+overhead+press"},
-    {id:"pp5",name:"Élévations latérales haltères",tp:"dumbbell",sets:3,rLo:12,rHi:15,rest:60,yt:"élévations+latérales+haltères+lateral+raise+technique"},
-    {id:"pp6",name:"Triceps pushdown câble",tp:"cable",sets:3,rLo:10,rHi:12,rest:60,variants:["Poulie haute","Machine"],yt:"triceps+pushdown+poulie+haute+technique"},
-    {id:"pp7",name:"Extension triceps overhead poulie",tp:"cable",sets:3,rLo:10,rHi:12,rest:60,yt:"extension+triceps+overhead+poulie+technique"},
-    {id:"pp8",name:"Cable crunch poulie haute",tp:"cable",sets:3,rLo:12,rHi:15,rest:45,yt:"crunch+poulie+haute+cable+crunch+abdos"},
+  {id:0,key:"prideUpperA",name:"Upper A",label:"Pec / Dos / Épaules / Bras / Abdos",day:"Lundi",color:"#EF4444",exs:[
+    {id:"prua1",name:"Développé couché",tp:"barbell",sets:4,rLo:8,rHi:10,lk:true,rest:120,variants:["Barre","Haltères","Smith","Machine convergente"],yt:"développé+couché+barre+technique+musculation"},
+    {id:"prua2",name:"Tirage horizontal câble",tp:"cable",sets:4,rLo:10,rHi:12,lk:true,rest:90,variants:["Poulie basse","Machine"],yt:"tirage+horizontal+cable+row+technique"},
+    {id:"prua3",name:"Développé militaire haltères assis",tp:"dumbbell",sets:4,rLo:8,rHi:10,lk:true,rest:120,variants:["Haltères","Barre","Smith"],yt:"développé+militaire+haltères+assis+seated+overhead+press"},
+    {id:"prua4",name:"Tirage vertical (Lat Pulldown)",tp:"machine",sets:4,rLo:10,rHi:12,rest:90,variants:["Poulie haute","Machine Hammer"],yt:"lat+pulldown+poulie+haute+technique"},
+    {id:"prua5",name:"Triceps pushdown câble",tp:"cable",sets:3,rLo:10,rHi:12,rest:60,variants:["Poulie haute","Machine"],yt:"triceps+pushdown+poulie+haute+technique"},
+    {id:"prua6",name:"Curl haltères",tp:"dumbbell",sets:3,rLo:10,rHi:12,rest:60,yt:"curl+haltères+biceps+technique"},
+    {id:"prua7",name:"Élévations latérales haltères",tp:"dumbbell",sets:3,rLo:12,rHi:15,rest:60,yt:"élévations+latérales+haltères+lateral+raise+technique"},
+    {id:"prua8",name:"Hanging leg raise",tp:"barbell",sets:3,rLo:10,rHi:12,rest:60,yt:"relevé+jambes+suspendu+hanging+leg+raise+abdos"},
+    {id:"prua9",name:"Planche (Plank)",tp:"barbell",sets:3,rLo:1,rHi:1,rest:45,isTimer:true,yt:"planche+gainage+plank+abdos+technique"},
   ]},
-  {id:1,key:"pullDay",name:"Pull",label:"Dos / Biceps",day:"Mardi",color:"#3B82F6",exs:[
-    {id:"pl1",name:"Tractions lestées",tp:"barbell",sets:4,rLo:6,rHi:10,lk:true,rest:120,yt:"tractions+lestées+pull+ups+weighted+technique"},
-    {id:"pl2",name:"Rowing T-bar",tp:"machine",sets:4,rLo:8,rHi:10,lk:true,rest:120,variants:["T-bar","Machine Hammer"],yt:"rowing+t-bar+technique+dos+épaisseur"},
-    {id:"pl3",name:"Lat pulldown",tp:"machine",sets:3,rLo:10,rHi:12,rest:90,variants:["Poulie haute","Machine Hammer"],yt:"lat+pulldown+poulie+haute+technique"},
-    {id:"pl4",name:"Tirage horizontal câble",tp:"cable",sets:3,rLo:10,rHi:12,rest:90,variants:["Poulie basse","Machine"],yt:"tirage+horizontal+cable+row+technique"},
-    {id:"pl5",name:"Face pulls",tp:"cable",sets:3,rLo:12,rHi:15,rest:60,yt:"face+pull+poulie+deltoide+posterieur+technique"},
-    {id:"pl6",name:"Curl barre EZ",tp:"barbell",sets:3,rLo:10,rHi:12,rest:90,variants:["Barre EZ","Barre"],yt:"curl+barre+EZ+biceps+technique"},
-    {id:"pl7",name:"Curl marteau haltères",tp:"dumbbell",sets:3,rLo:10,rHi:12,rest:60,variants:["Haltères","Poulie"],yt:"curl+marteau+hammer+curl+technique"},
+  {id:1,key:"prideLowerA",name:"Lower A",label:"Squat focus / Ischios / Abdos",day:"Mardi",color:"#10B981",exs:[
+    {id:"prla1",name:"Squat",tp:"barbell",sets:4,rLo:8,rHi:10,lk:true,rest:150,variants:["Barre libre","Smith","Machine hack"],yt:"back+squat+barre+technique+musculation"},
+    {id:"prla2",name:"Soulevé de terre roumain",tp:"barbell",sets:4,rLo:8,rHi:10,lk:true,rest:120,variants:["Barre","Haltères"],yt:"soulevé+terre+roumain+RDL+technique"},
+    {id:"prla3",name:"Presse jambes",tp:"machine",sets:4,rLo:10,rHi:12,rest:120,yt:"presse+jambes+leg+press+technique"},
+    {id:"prla4",name:"Leg curl allongé",tp:"machine",sets:3,rLo:10,rHi:12,rest:60,yt:"leg+curl+allongé+lying+leg+curl+ischio+technique"},
+    {id:"prla5",name:"Mollets debout",tp:"machine",sets:4,rLo:12,rHi:15,rest:60,variants:["Machine","Smith"],yt:"mollets+debout+machine+standing+calf+raise"},
+    {id:"prla6",name:"Cable crunch poulie haute",tp:"cable",sets:3,rLo:12,rHi:15,rest:45,yt:"crunch+poulie+haute+cable+crunch+abdos"},
+    {id:"prla7",name:"Russian twist",tp:"barbell",sets:3,rLo:20,rHi:20,rest:45,yt:"russian+twist+abdos+oblique+technique"},
   ]},
-  {id:2,key:"legsDay",name:"Legs",label:"Quads / Ischios / Fessiers / Abdos",day:"Jeudi",color:"#10B981",exs:[
-    {id:"lg1",name:"Squat",tp:"barbell",sets:4,rLo:6,rHi:10,lk:true,rest:150,variants:["Barre libre","Smith","Machine hack"],yt:"back+squat+barre+technique+musculation"},
-    {id:"lg2",name:"Soulevé de terre roumain",tp:"barbell",sets:4,rLo:8,rHi:10,lk:true,rest:120,variants:["Barre","Haltères"],yt:"soulevé+terre+roumain+RDL+technique"},
-    {id:"lg3",name:"Hack squat machine",tp:"machine",sets:3,rLo:10,rHi:12,rest:90,variants:["Machine hack","Leg press pieds hauts"],yt:"hack+squat+machine+technique"},
-    {id:"lg4",name:"Leg curl allongé",tp:"machine",sets:3,rLo:10,rHi:12,rest:60,yt:"leg+curl+allongé+lying+leg+curl+ischio+technique"},
-    {id:"lg5",name:"Hip thrust",tp:"barbell",sets:3,rLo:10,rHi:12,rest:90,variants:["Barre","Smith","Machine"],yt:"hip+thrust+barre+technique+fessiers"},
-    {id:"lg6",name:"Mollets debout",tp:"machine",sets:4,rLo:12,rHi:15,rest:60,variants:["Machine","Smith"],yt:"mollets+debout+machine+standing+calf+raise"},
-    {id:"lg7",name:"Hanging leg raise",tp:"barbell",sets:3,rLo:8,rHi:12,rest:60,yt:"relevé+jambes+suspendu+hanging+leg+raise+abdos"},
+  {id:2,key:"prideUpperB",name:"Upper B",label:"Pec haut / Dos largeur / Bras / Abdos",day:"Jeudi",color:"#EF4444",exs:[
+    {id:"prub1",name:"Développé incliné haltères",tp:"dumbbell",sets:4,rLo:8,rHi:10,lk:true,rest:120,variants:["Haltères","Barre","Smith"],yt:"développé+incliné+haltères+technique"},
+    {id:"prub2",name:"Tractions",tp:"barbell",sets:4,rLo:6,rHi:10,lk:true,rest:120,variants:["Poids du corps","Lesté","Machine assistée"],yt:"tractions+pull+ups+technique"},
+    {id:"prub3",name:"Développé militaire barre",tp:"barbell",sets:4,rLo:8,rHi:10,lk:true,rest:120,variants:["Barre","Smith","Haltères"],yt:"développé+militaire+barre+overhead+press+technique"},
+    {id:"prub4",name:"Tirage horizontal prise serrée",tp:"cable",sets:4,rLo:10,rHi:12,rest:90,variants:["Poulie basse","Machine"],yt:"tirage+horizontal+prise+serrée+technique"},
+    {id:"prub5",name:"Dips",tp:"barbell",sets:3,rLo:8,rHi:10,rest:90,variants:["Poids du corps","Lesté","Machine"],yt:"dips+triceps+technique"},
+    {id:"prub6",name:"Curl barre",tp:"barbell",sets:3,rLo:10,rHi:12,rest:90,variants:["Barre","Barre EZ"],yt:"curl+barre+biceps+technique"},
+    {id:"prub7",name:"Oiseau inversé (Rear Delt Fly)",tp:"dumbbell",sets:3,rLo:12,rHi:15,rest:60,variants:["Haltères","Poulie","Machine"],yt:"oiseau+inversé+reverse+fly+deltoide+posterieur+technique"},
+    {id:"prub8",name:"Hanging leg raise",tp:"barbell",sets:3,rLo:10,rHi:12,rest:60,yt:"relevé+jambes+suspendu+hanging+leg+raise+abdos"},
+    {id:"prub9",name:"Planche latérale (Side Plank)",tp:"barbell",sets:2,rLo:1,rHi:1,rest:30,isTimer:true,yt:"side+plank+gainage+latéral+technique"},
   ]},
-  {id:3,key:"armsDay",name:"Arms",label:"Bras / Épaules détail / Abdos",day:"Vendredi",color:"#F59E0B",exs:[
-    {id:"arm1",name:"Élévations latérales haltères lourdes",tp:"dumbbell",sets:4,rLo:10,rHi:12,lk:true,rest:90,yt:"élévations+latérales+haltères+lourdes+lateral+raise+technique"},
-    {id:"arm2",name:"Oiseau inversé haltères",tp:"dumbbell",sets:3,rLo:12,rHi:15,rest:60,variants:["Haltères","Poulie","Machine"],yt:"oiseau+inversé+reverse+fly+deltoide+posterieur+technique"},
-    {id:"arm3",name:"Curl barre EZ",tp:"barbell",sets:4,rLo:10,rHi:12,lk:true,rest:90,variants:["Barre EZ","Barre"],yt:"curl+barre+EZ+biceps+technique"},
-    {id:"arm4",name:"Skull crushers barre EZ",tp:"barbell",sets:4,rLo:10,rHi:12,lk:true,rest:90,variants:["Barre EZ","Haltères"],yt:"skull+crushers+barre+EZ+triceps+technique"},
-    {id:"arm5",name:"Curl haltères incliné",tp:"dumbbell",sets:3,rLo:10,rHi:12,rest:60,yt:"curl+incliné+45+degrés+haltères+biceps+technique"},
-    {id:"arm6",name:"Dips triceps lestés",tp:"barbell",sets:3,rLo:10,rHi:12,rest:90,yt:"dips+triceps+lestés+technique"},
-    {id:"arm7",name:"Cable crunch poulie haute",tp:"cable",sets:3,rLo:12,rHi:15,rest:45,yt:"crunch+poulie+haute+cable+crunch+abdos"},
-    {id:"arm8",name:"Pallof Press câble",tp:"cable",sets:3,rLo:10,rHi:12,rest:45,yt:"pallof+press+cable+anti+rotation+abdos+technique"},
-    {id:"arm9",name:"Side Plank lesté",tp:"barbell",sets:2,rLo:1,rHi:1,rest:30,isTimer:true,yt:"side+plank+gainage+latéral+technique"},
+  {id:3,key:"prideLowerB",name:"Lower B",label:"Ischios / Fessiers / Abdos",day:"Vendredi",color:"#10B981",exs:[
+    {id:"prlb1",name:"Hack squat machine",tp:"machine",sets:4,rLo:8,rHi:10,lk:true,rest:120,variants:["Machine hack","Barre libre"],yt:"hack+squat+machine+technique"},
+    {id:"prlb2",name:"Hip thrust",tp:"barbell",sets:4,rLo:10,rHi:12,lk:true,rest:120,variants:["Barre","Smith","Machine"],yt:"hip+thrust+barre+technique+fessiers"},
+    {id:"prlb3",name:"Split squat bulgare",tp:"dumbbell",sets:3,rLo:10,rHi:12,rest:90,variants:["Haltères","Barre","Smith"],yt:"split+squat+bulgare+bulgarian+split+squat+technique"},
+    {id:"prlb4",name:"Leg curl allongé",tp:"machine",sets:3,rLo:10,rHi:12,rest:60,yt:"leg+curl+allongé+lying+leg+curl+ischio+technique"},
+    {id:"prlb5",name:"Mollets assis",tp:"machine",sets:4,rLo:12,rHi:15,rest:60,yt:"mollets+assis+seated+calf+raise+technique"},
+    {id:"prlb6",name:"Hanging leg raise",tp:"barbell",sets:3,rLo:10,rHi:12,rest:60,yt:"relevé+jambes+suspendu+hanging+leg+raise+abdos"},
+    {id:"prlb7",name:"Planche (Plank)",tp:"barbell",sets:3,rLo:1,rHi:1,rest:45,isTimer:true,yt:"planche+gainage+plank+abdos+technique"},
   ]},
 ];
 
@@ -217,48 +219,50 @@ const PHASES=[
   /* S13 Maintien */
   {w:13,p:"Maintien",c:"#F59E0B",d:"27 avr",cal:3800},
 
-  /* === PROGRAMME U/L 4j (S14-S29) — Sèche 12 semaines === */
-  /* S14 Reprise & Voyage Malte */
-  {w:14,p:"Reprise & Voyage",c:"#7B6CF5",d:"4 mai",cal:3500},
-  /* S15-S16 Transition */
-  {w:15,p:"Transition U/L",c:"#4DA8FF",d:"11 mai",cal:3800},
-  {w:16,p:"Transition U/L",c:"#4DA8FF",d:"18 mai",cal:3800},
-  /* S17 Maintien U/L */
-  {w:17,p:"Maintien U/L",c:"#3ECF8A",d:"25 mai",cal:3800},
-  /* S18-S21 Sèche Bloc 1 — Initiation (4 sem) */
-  {w:18,p:"Sèche Bloc 1",c:"#EDB84A",d:"1 juin",cal:3000},
-  {w:19,p:"Sèche Bloc 1",c:"#EDB84A",d:"8 juin",cal:3000},
-  {w:20,p:"Sèche Bloc 1",c:"#EDB84A",d:"15 juin",cal:3000},
-  {w:21,p:"Sèche Bloc 1",c:"#EDB84A",d:"22 juin",cal:3000},
-  /* S22 Diet Break */
-  {w:22,p:"Diet Break",c:"#10B981",d:"29 juin",cal:3500},
-  /* S23-S26 Sèche Bloc 2 — Soutenue (4 sem) */
-  {w:23,p:"Sèche Bloc 2",c:"#DC2626",d:"6 juil",cal:2700},
-  {w:24,p:"Sèche Bloc 2",c:"#DC2626",d:"13 juil",cal:2700},
-  {w:25,p:"Sèche Bloc 2",c:"#DC2626",d:"20 juil",cal:2700},
-  {w:26,p:"Sèche Bloc 2",c:"#DC2626",d:"27 juil",cal:2700},
-  /* S27-S29 Sèche Bloc 3 — Final Push (3 sem, objectif 14% BF / abdos visibles) */
-  {w:27,p:"Sèche Bloc 3",c:"#DC2626",d:"3 août",cal:2400},
-  {w:28,p:"Sèche Bloc 3",c:"#DC2626",d:"10 août",cal:2400},
-  {w:29,p:"Sèche Bloc 3",c:"#DC2626",d:"17 août",cal:2400},
+  /* === PROGRAMME U/L 4j — Sèche Pride 6 semaines (S15-S20) === */
+  /* S14 Transition (semaine intermédiaire entre fin PCT et démarrage sèche) */
+  {w:14,p:"Transition",c:"#4DA8FF",d:"11 mai",cal:3500},
+  /* S15 Reprise douce — démarrage programme Pride (3 séances cette semaine) */
+  {w:15,p:"Reprise sèche",c:"#7B6CF5",d:"18 mai",cal:3000},
+  /* S16 Installation déficit (4 séances + refeed samedi +300) */
+  {w:16,p:"Installation déficit",c:"#3ECF8A",d:"25 mai",cal:2800},
+  /* S17 Montée intensité — BILAN SANGUIN obligatoire S3 (4-7 juin) */
+  {w:17,p:"Montée intensité",c:"#EDB84A",d:"1 juin",cal:2700},
+  /* S18 Pic volume (+1 isolation par séance) */
+  {w:18,p:"Pic volume",c:"#EDB84A",d:"8 juin",cal:2600},
+  /* S19 Push final 1/2 (pré-fatigue isolation avant composé) */
+  {w:19,p:"Push final",c:"#DC2626",d:"15 juin",cal:2500},
+  /* S20 Peak Week Pride (Pride samedi 27 juin) */
+  {w:20,p:"Peak Week Pride",c:"#DC2626",d:"22 juin",cal:2400},
+  /* === POST-PRIDE (S21+) — à redéfinir après le 27 juin === */
+  {w:21,p:"Post-Pride",c:"#3ECF8A",d:"29 juin",cal:3200},
+  {w:22,p:"Post-Pride",c:"#3ECF8A",d:"6 juil",cal:3200},
+  {w:23,p:"Post-Pride",c:"#3ECF8A",d:"13 juil",cal:3200},
+  {w:24,p:"Post-Pride",c:"#3ECF8A",d:"20 juil",cal:3200},
+  {w:25,p:"Post-Pride",c:"#3ECF8A",d:"27 juil",cal:3200},
+  {w:26,p:"Post-Pride",c:"#3ECF8A",d:"3 août",cal:3200},
+  {w:27,p:"Post-Pride",c:"#3ECF8A",d:"10 août",cal:3200},
+  {w:28,p:"Post-Pride",c:"#3ECF8A",d:"17 août",cal:3200},
+  {w:29,p:"Post-Pride",c:"#3ECF8A",d:"24 août",cal:3200},
 ];
 
 const PCFG={
-  /* PPL phases */
+  /* PPL phases (S1-S13) */
   "Réactivation":{cLo:10,cHi:12,iLo:12,iHi:15,rest:90,desc:"Technique parfaite. Réveille les muscles."},
   "Hypertrophie":{cLo:8,cHi:10,iLo:10,iHi:12,rest:120,desc:"Volume maximum. Casse les fibres."},
   "Force Max":{cLo:5,cHi:8,iLo:8,iHi:10,rest:180,desc:"Charges lourdes. PRs. Intensité maximale."},
-  "Transition":{cLo:8,cHi:10,iLo:10,iHi:12,rest:120,desc:"Maintien des charges. Écoute ton corps."},
   "Maintien":{cLo:8,cHi:10,iLo:10,iHi:12,rest:120,desc:"Conserve tes gains. Récupération prioritaire."},
   "Sèche":{cLo:6,cHi:8,iLo:12,iHi:15,rest:90,desc:"Déficit calorique. Garde l'intensité. Perds le gras."},
-  /* U/L phases (S14+) */
-  "Reprise & Voyage":{cLo:8,cHi:12,iLo:10,iHi:15,rest:90,desc:"Reprise après pause. 2 séances en salle, 2 séances voyage allégées. Pas de PR."},
-  "Transition U/L":{cLo:8,cHi:10,iLo:10,iHi:12,rest:120,desc:"Reprise progressive. Charges 90-95% peak, RIR 2-3. Cardio LISS 2×/sem."},
-  "Maintien U/L":{cLo:6,cHi:10,iLo:10,iHi:12,rest:120,desc:"Stabilisation pré-déficit. Premiers PR autorisés."},
-  "Sèche Bloc 1":{cLo:6,cHi:10,iLo:10,iHi:12,rest:90,desc:"Initiation déficit (-800 kcal/j). Volume 14 séries/groupe. LISS 3×/sem. Protéines élevées."},
-  "Diet Break":{cLo:6,cHi:10,iLo:10,iHi:12,rest:120,desc:"Pause stratégique 1 sem (MATADOR). Calories à maintenance. Focus performance."},
-  "Sèche Bloc 2":{cLo:6,cHi:8,iLo:10,iHi:12,rest:90,desc:"Cut soutenu (-1100 kcal/j). Volume 12 séries/groupe. Charges 85-90%, RIR 2."},
-  "Sèche Bloc 3":{cLo:6,cHi:8,iLo:10,iHi:12,rest:60,desc:"Final push (-1400 kcal/j). Charges maintenues, volume réduit. Pic de définition."},
+  /* Sèche Pride 6 semaines (S14-S20) */
+  "Transition":{cLo:8,cHi:10,iLo:10,iHi:12,rest:120,desc:"Sortie PCT, transition avant sèche. Charges 90-95% peak, RIR 2-3."},
+  "Reprise sèche":{cLo:8,cHi:10,iLo:12,iHi:15,rest:90,desc:"S1 Pride : 3 séances. Charges 70% peak, RIR 3. Cardio LISS mardi + samedi 30 min."},
+  "Installation déficit":{cLo:8,cHi:10,iLo:12,iHi:15,rest:90,desc:"S2 : 4 séances. +2,5-5kg si reps faciles, RIR 2. Refeed samedi +300 kcal. LISS 2×/sem 35 min."},
+  "Montée intensité":{cLo:8,cHi:10,iLo:12,iHi:15,rest:90,desc:"S3 : 4 séances, charges +progression. RIR 1-2. ⚠️ BILAN SANGUIN obligatoire (4-7 juin). LISS 3×/sem 40 min."},
+  "Pic volume":{cLo:8,cHi:10,iLo:12,iHi:15,rest:90,desc:"S4 : +1 isolation par séance. Refeed samedi +400 kcal. LISS 4×/sem 40 min."},
+  "Push final":{cLo:8,cHi:10,iLo:12,iHi:15,rest:75,desc:"S5 : pré-fatigue isolation avant composé. Hydratation 4L/jour. LISS 5×/sem 40 min."},
+  "Peak Week Pride":{cLo:12,cHi:15,iLo:12,iHi:15,rest:45,desc:"S6 : full pump charges -30%. Déplétion jeudi, recharge vendredi (500g glucides, 3200 kcal), repos. Pump léger samedi avant Pride."},
+  /* Post-Pride (S21+) */
+  "Post-Pride":{cLo:8,cHi:10,iLo:10,iHi:12,rest:120,desc:"Après Pride : maintenance ou prolongation sèche selon décision. À redéfinir."},
 };
 function getRepRange(ex,p){var c=PCFG[p]||PCFG["Hypertrophie"];return ex.lk?{lo:c.cLo,hi:c.cHi}:{lo:c.iLo,hi:c.iHi}}
 function getPhaseRest(p){return(PCFG[p]||{}).rest||120}
@@ -885,7 +889,7 @@ function App(){
     <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:14}}>
       <div>
         <div style={{fontSize:24,fontWeight:900,letterSpacing:-1,lineHeight:1}}>COLOSSE</div>
-        <div style={{fontSize:9,fontWeight:700,letterSpacing:2,color:"rgba(255,255,255,.22)",textTransform:"uppercase",marginTop:2}}>{ph.cal||3800} kcal · {wN>=14?"U/L 4j":"PPL 6j"} · {PHASES.length} sem.</div>
+        <div style={{fontSize:9,fontWeight:700,letterSpacing:2,color:"rgba(255,255,255,.22)",textTransform:"uppercase",marginTop:2}}>{ph.cal||3800} kcal · {wN>=14?"Sèche Pride U/L":"PPL 6j"} · {PHASES.length} sem.</div>
       </div>
       <div style={{display:"flex",alignItems:"center",gap:10}}>
         {sav&&<div style={{fontSize:9,color:"#10B981",fontWeight:700,display:"flex",alignItems:"center",gap:3}}><span style={{width:5,height:5,borderRadius:"50%",background:"#10B981",display:"inline-block"}}/>Sauvé</div>}
