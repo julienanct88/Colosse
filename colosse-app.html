@@ -219,31 +219,41 @@ const PHASES=[
   /* S13 Maintien */
   {w:13,p:"Maintien",c:"#F59E0B",d:"27 avr",cal:3800},
 
-  /* === PROGRAMME U/L 4j — Sèche Pride 6 semaines (S15-S20) === */
-  /* S14 Transition (semaine intermédiaire entre fin PCT et démarrage sèche) */
+  /* === PROGRAMME U/L 4j — SÈCHE 12 SEMAINES V1 (S15-S28) ===
+     Du 18 mai au 23 août 2026. Pride 27 juin = checkpoint à mi-parcours.
+     Objectif final 23 août : 14% BF, 91-93 kg, abdos visibles. */
+  /* S14 Transition (sortie PCT, semaine de bascule) */
   {w:14,p:"Transition",c:"#4DA8FF",d:"11 mai",cal:3500},
-  /* S15 Reprise douce — démarrage programme Pride (3 séances cette semaine) */
-  {w:15,p:"Reprise sèche",c:"#7B6CF5",d:"18 mai",cal:3000},
-  /* S16 Installation déficit (4 séances + refeed samedi +300) */
-  {w:16,p:"Installation déficit",c:"#3ECF8A",d:"25 mai",cal:2800},
-  /* S17 Montée intensité — BILAN SANGUIN obligatoire S3 (4-7 juin) */
-  {w:17,p:"Montée intensité",c:"#EDB84A",d:"1 juin",cal:2700},
-  /* S18 Pic volume (+1 isolation par séance) */
-  {w:18,p:"Pic volume",c:"#EDB84A",d:"8 juin",cal:2600},
-  /* S19 Push final 1/2 (pré-fatigue isolation avant composé) */
-  {w:19,p:"Push final",c:"#DC2626",d:"15 juin",cal:2500},
-  /* S20 Peak Week Pride (Pride samedi 27 juin) */
-  {w:20,p:"Peak Week Pride",c:"#DC2626",d:"22 juin",cal:2400},
-  /* === POST-PRIDE (S21+) — à redéfinir après le 27 juin === */
-  {w:21,p:"Post-Pride",c:"#3ECF8A",d:"29 juin",cal:3200},
-  {w:22,p:"Post-Pride",c:"#3ECF8A",d:"6 juil",cal:3200},
-  {w:23,p:"Post-Pride",c:"#3ECF8A",d:"13 juil",cal:3200},
-  {w:24,p:"Post-Pride",c:"#3ECF8A",d:"20 juil",cal:3200},
-  {w:25,p:"Post-Pride",c:"#3ECF8A",d:"27 juil",cal:3200},
-  {w:26,p:"Post-Pride",c:"#3ECF8A",d:"3 août",cal:3200},
-  {w:27,p:"Post-Pride",c:"#3ECF8A",d:"10 août",cal:3200},
-  {w:28,p:"Post-Pride",c:"#3ECF8A",d:"17 août",cal:3200},
-  {w:29,p:"Post-Pride",c:"#3ECF8A",d:"24 août",cal:3200},
+  /* S15 Initiation sèche — démarrage (3000 kcal) */
+  {w:15,p:"Initiation",c:"#7B6CF5",d:"18 mai",cal:3000},
+  /* S16 Initiation suite (2900 kcal) */
+  {w:16,p:"Initiation",c:"#7B6CF5",d:"25 mai",cal:2900},
+  /* S17 Montée intensité — BILAN SANGUIN obligatoire (4-7 juin) */
+  {w:17,p:"Montée",c:"#EDB84A",d:"1 juin",cal:2800},
+  /* S18 Déficit établi (2700 kcal) */
+  {w:18,p:"Déficit établi",c:"#EDB84A",d:"8 juin",cal:2700},
+  /* S19 Déficit établi (2700 kcal) */
+  {w:19,p:"Déficit établi",c:"#EDB84A",d:"15 juin",cal:2700},
+  /* S20 Pride Week (checkpoint Pride samedi 27 juin) */
+  {w:20,p:"Pride Week",c:"#DC2626",d:"22 juin",cal:2600},
+  /* S21 Diet Break (3400 kcal, reset métabolique) */
+  {w:21,p:"Diet Break",c:"#3ECF8A",d:"29 juin",cal:3400},
+  /* S22 Sèche soutenue (relance après diet break) */
+  {w:22,p:"Sèche soutenue",c:"#DC2626",d:"6 juil",cal:2600},
+  /* S23 Sèche soutenue (2500 kcal) */
+  {w:23,p:"Sèche soutenue",c:"#DC2626",d:"13 juil",cal:2500},
+  /* S24 Intensification (2400 kcal) */
+  {w:24,p:"Intensification",c:"#DC2626",d:"20 juil",cal:2400},
+  /* S25 Intensification (2300 kcal) */
+  {w:25,p:"Intensification",c:"#DC2626",d:"27 juil",cal:2300},
+  /* S26 Finish (2200 kcal) */
+  {w:26,p:"Finish",c:"#DC2626",d:"3 août",cal:2200},
+  /* S27 Finish + Deload (2200 kcal, volume muscu -30%) */
+  {w:27,p:"Finish",c:"#DC2626",d:"10 août",cal:2200},
+  /* S28 Peak Week finale (Jour J samedi 23 août) */
+  {w:28,p:"Peak Week",c:"#DC2626",d:"17 août",cal:2100},
+  /* S29 Post-sèche (à redéfinir le 24 août) */
+  {w:29,p:"Post-sèche",c:"#3ECF8A",d:"24 août",cal:3000},
 ];
 
 const PCFG={
@@ -253,16 +263,19 @@ const PCFG={
   "Force Max":{cLo:5,cHi:8,iLo:8,iHi:10,rest:180,desc:"Charges lourdes. PRs. Intensité maximale."},
   "Maintien":{cLo:8,cHi:10,iLo:10,iHi:12,rest:120,desc:"Conserve tes gains. Récupération prioritaire."},
   "Sèche":{cLo:6,cHi:8,iLo:12,iHi:15,rest:90,desc:"Déficit calorique. Garde l'intensité. Perds le gras."},
-  /* Sèche Pride 6 semaines (S14-S20) */
+  /* Sèche 12 semaines V1 (S14-S29) */
   "Transition":{cLo:8,cHi:10,iLo:10,iHi:12,rest:120,desc:"Sortie PCT, transition avant sèche. Charges 90-95% peak, RIR 2-3."},
-  "Reprise sèche":{cLo:8,cHi:10,iLo:12,iHi:15,rest:90,desc:"S1 Pride : 3 séances. Charges 70% peak, RIR 3. Cardio LISS mardi + samedi 30 min."},
-  "Installation déficit":{cLo:8,cHi:10,iLo:12,iHi:15,rest:90,desc:"S2 : 4 séances. +2,5-5kg si reps faciles, RIR 2. Refeed samedi +300 kcal. LISS 2×/sem 35 min."},
-  "Montée intensité":{cLo:8,cHi:10,iLo:12,iHi:15,rest:90,desc:"S3 : 4 séances, charges +progression. RIR 1-2. ⚠️ BILAN SANGUIN obligatoire (4-7 juin). LISS 3×/sem 40 min."},
-  "Pic volume":{cLo:8,cHi:10,iLo:12,iHi:15,rest:90,desc:"S4 : +1 isolation par séance. Refeed samedi +400 kcal. LISS 4×/sem 40 min."},
-  "Push final":{cLo:8,cHi:10,iLo:12,iHi:15,rest:75,desc:"S5 : pré-fatigue isolation avant composé. Hydratation 4L/jour. LISS 5×/sem 40 min."},
-  "Peak Week Pride":{cLo:12,cHi:15,iLo:12,iHi:15,rest:45,desc:"S6 : full pump charges -30%. Déplétion jeudi, recharge vendredi (500g glucides, 3200 kcal), repos. Pump léger samedi avant Pride."},
-  /* Post-Pride (S21+) */
-  "Post-Pride":{cLo:8,cHi:10,iLo:10,iHi:12,rest:120,desc:"Après Pride : maintenance ou prolongation sèche selon décision. À redéfinir."},
+  "Initiation":{cLo:8,cHi:10,iLo:12,iHi:15,rest:90,desc:"Installation déficit progressif. Charges maintenues (-10% peak max). RIR 2. LISS 2×/sem 30-35 min. Refeed samedi +300 kcal."},
+  "Montée":{cLo:8,cHi:10,iLo:12,iHi:15,rest:90,desc:"S3 : déficit s'installe. ⚠️ BILAN SANGUIN obligatoire (4-7 juin). LISS 2×/sem 35 min."},
+  "Déficit établi":{cLo:8,cHi:10,iLo:12,iHi:15,rest:90,desc:"Déficit en croisière. Volume standard 4×3-4 séries. LISS 3×/sem 35-40 min. Refeed samedi +400 kcal."},
+  "Pride Week":{cLo:8,cHi:10,iLo:12,iHi:15,rest:90,desc:"S6 : checkpoint Pride samedi 27 juin. Volume -20%, charges identiques. Déplétion jeudi, recharge vendredi (480g glucides, 3200 kcal)."},
+  "Diet Break":{cLo:8,cHi:10,iLo:12,iHi:15,rest:90,desc:"S7 : reset métabolique. 3400 kcal à maintenance. 3 séances max RIR 3. Cardio 2× LISS 25 min. Prise +1-2 kg attendue (eau+glycogène)."},
+  "Sèche soutenue":{cLo:8,cHi:10,iLo:12,iHi:15,rest:90,desc:"Relance après diet break. Volume standard. LISS 3×/sem 40 min."},
+  "Intensification":{cLo:8,cHi:10,iLo:12,iHi:15,rest:90,desc:"Déficit augmenté. Volume maintenu. LISS 4×/sem 40 min (plafond, jamais 5×). Hydratation 4L/jour."},
+  "Finish":{cLo:8,cHi:10,iLo:12,iHi:15,rest:75,desc:"Dernière ligne droite. S26 volume standard, S27 deload -30%. LISS 4×/sem puis 3× S27."},
+  "Peak Week":{cLo:12,cHi:15,iLo:12,iHi:15,rest:60,desc:"Peak finale : volume -40%, activation seulement. Déplétion jeudi, recharge vendredi (530g glucides, 3400 kcal), repos. Jour J samedi 23 août."},
+  /* Post-sèche */
+  "Post-sèche":{cLo:8,cHi:10,iLo:10,iHi:12,rest:120,desc:"Après le 23 août : maintenance / mini lean bulk / prolongation. À décider à tête froide."},
 };
 function getRepRange(ex,p){var c=PCFG[p]||PCFG["Hypertrophie"];return ex.lk?{lo:c.cLo,hi:c.cHi}:{lo:c.iLo,hi:c.iHi}}
 function getPhaseRest(p){return(PCFG[p]||{}).rest||120}
@@ -889,7 +902,7 @@ function App(){
     <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:14}}>
       <div>
         <div style={{fontSize:24,fontWeight:900,letterSpacing:-1,lineHeight:1}}>COLOSSE</div>
-        <div style={{fontSize:9,fontWeight:700,letterSpacing:2,color:"rgba(255,255,255,.22)",textTransform:"uppercase",marginTop:2}}>{ph.cal||3800} kcal · {wN>=14?"Sèche Pride U/L":"PPL 6j"} · {PHASES.length} sem.</div>
+        <div style={{fontSize:9,fontWeight:700,letterSpacing:2,color:"rgba(255,255,255,.22)",textTransform:"uppercase",marginTop:2}}>{ph.cal||3800} kcal · {wN>=14?"Sèche U/L 12 sem":"PPL 6j"} · {PHASES.length} sem.</div>
       </div>
       <div style={{display:"flex",alignItems:"center",gap:10}}>
         {sav&&<div style={{fontSize:9,color:"#10B981",fontWeight:700,display:"flex",alignItems:"center",gap:3}}><span style={{width:5,height:5,borderRadius:"50%",background:"#10B981",display:"inline-block"}}/>Sauvé</div>}
