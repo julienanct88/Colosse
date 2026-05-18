@@ -264,18 +264,18 @@ const PCFG={
   "Maintien":{cLo:8,cHi:10,iLo:10,iHi:12,rest:120,desc:"Conserve tes gains. Récupération prioritaire."},
   "Sèche":{cLo:6,cHi:8,iLo:12,iHi:15,rest:90,desc:"Déficit calorique. Garde l'intensité. Perds le gras."},
   /* Sèche 12 semaines V1 (S14-S29) */
-  "Transition":{cLo:8,cHi:10,iLo:10,iHi:12,rest:120,desc:"Sortie PCT, transition avant sèche. Charges 90-95% peak, RIR 2-3."},
-  "Initiation":{cLo:8,cHi:10,iLo:12,iHi:15,rest:90,desc:"Installation déficit progressif. Charges maintenues (-10% peak max). RIR 2. LISS 2×/sem 30-35 min. Refeed samedi +300 kcal."},
-  "Montée":{cLo:8,cHi:10,iLo:12,iHi:15,rest:90,desc:"S3 : déficit s'installe. ⚠️ BILAN SANGUIN obligatoire (4-7 juin). LISS 2×/sem 35 min."},
-  "Déficit établi":{cLo:8,cHi:10,iLo:12,iHi:15,rest:90,desc:"Déficit en croisière. Volume standard 4×3-4 séries. LISS 3×/sem 35-40 min. Refeed samedi +400 kcal."},
-  "Pride Week":{cLo:8,cHi:10,iLo:12,iHi:15,rest:90,desc:"S6 : checkpoint Pride samedi 27 juin. Volume -20%, charges identiques. Déplétion jeudi, recharge vendredi (480g glucides, 3200 kcal)."},
-  "Diet Break":{cLo:8,cHi:10,iLo:12,iHi:15,rest:90,desc:"S7 : reset métabolique. 3400 kcal à maintenance. 3 séances max RIR 3. Cardio 2× LISS 25 min. Prise +1-2 kg attendue (eau+glycogène)."},
-  "Sèche soutenue":{cLo:8,cHi:10,iLo:12,iHi:15,rest:90,desc:"Relance après diet break. Volume standard. LISS 3×/sem 40 min."},
-  "Intensification":{cLo:8,cHi:10,iLo:12,iHi:15,rest:90,desc:"Déficit augmenté. Volume maintenu. LISS 4×/sem 40 min (plafond, jamais 5×). Hydratation 4L/jour."},
-  "Finish":{cLo:8,cHi:10,iLo:12,iHi:15,rest:75,desc:"Dernière ligne droite. S26 volume standard, S27 deload -30%. LISS 4×/sem puis 3× S27."},
-  "Peak Week":{cLo:12,cHi:15,iLo:12,iHi:15,rest:60,desc:"Peak finale : volume -40%, activation seulement. Déplétion jeudi, recharge vendredi (530g glucides, 3400 kcal), repos. Jour J samedi 23 août."},
+  "Transition":{cLo:8,cHi:10,iLo:10,iHi:12,rest:120,desc:"Sortie PCT, transition avant sèche. Charges 90-95% peak, RIR 2-3. Cardio max 4×/sem (jamais 5×)."},
+  "Initiation":{cLo:8,cHi:10,iLo:12,iHi:15,rest:90,desc:"Installation déficit. Charges maintenues (-10% peak max), RIR 2. Volume STANDARD (4×composé/3×iso). LISS 2×/sem 30-35 min. Refeed samedi +300 kcal."},
+  "Montée":{cLo:8,cHi:10,iLo:12,iHi:15,rest:90,desc:"S3 V1 : déficit s'installe. Volume STANDARD. ⚠️ BILAN SANGUIN obligatoire 4-7 juin (créatinine, cystatine C, DFG, ALAT, GGT, testo, LH, FSH, prolactine, HDL/LDL). LISS 2×/sem 35 min. Refeed samedi +300."},
+  "Déficit établi":{cLo:8,cHi:10,iLo:12,iHi:15,rest:90,desc:"Déficit en croisière. Volume STANDARD 4×composé/3×iso. LISS 3×/sem 35-40 min (PLAFOND 4×/sem). Refeed samedi +400 kcal."},
+  "Pride Week":{cLo:8,cHi:10,iLo:12,iHi:15,rest:90,desc:"S20 = checkpoint Pride sam 27 juin. Volume -20% (3 séries partout). Lun-Mer: 2600 kcal. JEU: 2400 (déplétion légère). VEN: 3200 (RECHARGE, 480g glucides). SAM: protocole pré-Pride. LISS 2×/sem 30 min (stop jeudi)."},
+  "Diet Break":{cLo:8,cHi:10,iLo:12,iHi:15,rest:90,desc:"S21 V1 : reset métabolique. 3400 kcal à maintenance. Volume -30% (3 séances max, RIR 3 min). Cardio 2× LISS 25 min. Prise +1-2 kg attendue (eau+glycogène) → NORMAL, ne pas paniquer."},
+  "Sèche soutenue":{cLo:8,cHi:10,iLo:12,iHi:15,rest:90,desc:"Relance post diet break. Volume STANDARD. LISS 3×/sem 40 min. Refeed possible samedi."},
+  "Intensification":{cLo:8,cHi:10,iLo:12,iHi:15,rest:90,desc:"Déficit augmenté. Volume STANDARD maintenu. LISS 4×/sem 40 min (⚠️ PLAFOND ABSOLU, jamais 5×). Hydratation 4L/jour."},
+  "Finish":{cLo:8,cHi:10,iLo:12,iHi:15,rest:75,desc:"Dernière ligne droite. S26: volume STANDARD. S27: DELOAD -30% (volume réduit, charges identiques). LISS 4× puis 3× S27. ⚠️ Cardio plafond 4×."},
+  "Peak Week":{cLo:12,cHi:15,iLo:12,iHi:15,rest:60,desc:"S28 = Peak finale, Jour J sam 23 août. Volume -40% (activation seulement). Lun-Mer: 2100 kcal. JEU: 2000 (déplétion). VEN: 3400 (RECHARGE FINALE, 530g glucides, repos). SAM: protocole + photos comparaison J0 (18 mai). LISS 2× 30 min (stop jeudi)."},
   /* Post-sèche */
-  "Post-sèche":{cLo:8,cHi:10,iLo:10,iHi:12,rest:120,desc:"Après le 23 août : maintenance / mini lean bulk / prolongation. À décider à tête froide."},
+  "Post-sèche":{cLo:8,cHi:10,iLo:10,iHi:12,rest:120,desc:"Après le 23 août : maintenance / mini lean bulk / prolongation. À décider à tête froide le 24 août."},
 };
 function getRepRange(ex,p){var c=PCFG[p]||PCFG["Hypertrophie"];return ex.lk?{lo:c.cLo,hi:c.cHi}:{lo:c.iLo,hi:c.iHi}}
 function getPhaseRest(p){return(PCFG[p]||{}).rest||120}
