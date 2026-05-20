@@ -139,45 +139,40 @@ const DAYS=[
    Upper A / Lower A / Upper B / Lower B
    Abdos sur les 4 séances. */
 const DAYS_UL=[
-  {id:0,key:"prideUpperA",name:"Upper A",label:"Pec / Dos / Épaules / Bras / Abdos",day:"Lundi",color:"#EF4444",exs:[
-    {id:"prua1",name:"Développé couché",tp:"barbell",sets:4,rLo:8,rHi:10,lk:true,rest:120,variants:["Barre","Haltères","Smith","Machine convergente"],yt:"développé+couché+barre+technique+musculation"},
-    {id:"prua2",name:"Tirage horizontal câble",tp:"cable",sets:4,rLo:10,rHi:12,lk:true,rest:90,variants:["Poulie basse","Machine"],yt:"tirage+horizontal+cable+row+technique"},
-    {id:"prua3",name:"Développé militaire haltères assis",tp:"dumbbell",sets:4,rLo:8,rHi:10,lk:true,rest:120,variants:["Haltères","Barre","Smith"],yt:"développé+militaire+haltères+assis+seated+overhead+press"},
-    {id:"prua4",name:"Tirage vertical (Lat Pulldown)",tp:"machine",sets:4,rLo:10,rHi:12,rest:90,variants:["Poulie haute","Machine Hammer"],yt:"lat+pulldown+poulie+haute+technique"},
-    {id:"prua5",name:"Triceps pushdown câble",tp:"cable",sets:3,rLo:10,rHi:12,rest:60,variants:["Poulie haute","Machine"],yt:"triceps+pushdown+poulie+haute+technique"},
-    {id:"prua6",name:"Curl haltères",tp:"dumbbell",sets:3,rLo:10,rHi:12,rest:60,yt:"curl+haltères+biceps+technique"},
-    {id:"prua7",name:"Élévations latérales haltères",tp:"dumbbell",sets:3,rLo:12,rHi:15,rest:60,yt:"élévations+latérales+haltères+lateral+raise+technique"},
-    {id:"prua8",name:"Hanging leg raise",tp:"barbell",sets:3,rLo:10,rHi:12,rest:60,yt:"relevé+jambes+suspendu+hanging+leg+raise+abdos"},
-    {id:"prua9",name:"Planche (Plank)",tp:"barbell",sets:3,rLo:1,rHi:1,rest:45,isTimer:true,yt:"planche+gainage+plank+abdos+technique"},
+  {id:0,key:"fpPush",name:"Push",label:"Pec · Épaules · Triceps · Abdos",day:"Lundi",color:"#EF4444",exs:[
+    {id:"fpp1",name:"Presse poitrine machine",tp:"machine",sets:4,rLo:8,rHi:10,lk:true,rest:90,variants:["Machine convergente","Smith"],yt:"presse+poitrine+machine+chest+press+technique"},
+    {id:"fpp2",name:"Pec deck (butterfly)",tp:"machine",sets:3,rLo:12,rHi:15,rest:60,yt:"pec+deck+butterfly+machine+technique"},
+    {id:"fpp3",name:"Développé épaules machine",tp:"machine",sets:4,rLo:10,rHi:12,lk:true,rest:90,variants:["Machine","Smith","Haltères"],yt:"développé+épaules+machine+shoulder+press+technique"},
+    {id:"fpp4",name:"Élévations latérales machine",tp:"machine",sets:3,rLo:12,rHi:15,rest:60,variants:["Machine","Haltères"],yt:"élévations+latérales+machine+lateral+raise+technique"},
+    {id:"fpp5",name:"Face pull (poulie haute)",tp:"cable",sets:4,rLo:15,rHi:20,rest:60,yt:"face+pull+poulie+haute+technique+épaules"},
+    {id:"fpp6",name:"Triceps pushdown (corde ou barre)",tp:"cable",sets:3,rLo:12,rHi:15,rest:60,variants:["Corde","Barre droite"],yt:"triceps+pushdown+poulie+haute+technique"},
+    {id:"fpp7",name:"Crunch machine",tp:"machine",sets:3,rLo:15,rHi:20,rest:45,yt:"crunch+machine+abdos+technique"},
+    {id:"fpp8",name:"Relevé de jambes",tp:"barbell",sets:3,rLo:12,rHi:15,rest:45,yt:"relevé+jambes+hanging+leg+raise+abdos"},
   ]},
-  {id:1,key:"prideLowerA",name:"Lower A",label:"Squat focus / Ischios / Abdos",day:"Mardi",color:"#10B981",exs:[
-    {id:"prla1",name:"Squat",tp:"barbell",sets:4,rLo:8,rHi:10,lk:true,rest:150,variants:["Barre libre","Smith","Machine hack"],yt:"back+squat+barre+technique+musculation"},
-    {id:"prla2",name:"Soulevé de terre roumain",tp:"barbell",sets:4,rLo:8,rHi:10,lk:true,rest:120,variants:["Barre","Haltères"],yt:"soulevé+terre+roumain+RDL+technique"},
-    {id:"prla3",name:"Presse jambes",tp:"machine",sets:4,rLo:10,rHi:12,rest:120,yt:"presse+jambes+leg+press+technique"},
-    {id:"prla4",name:"Leg curl allongé",tp:"machine",sets:3,rLo:10,rHi:12,rest:60,yt:"leg+curl+allongé+lying+leg+curl+ischio+technique"},
-    {id:"prla5",name:"Mollets debout",tp:"machine",sets:4,rLo:12,rHi:15,rest:60,variants:["Machine","Smith"],yt:"mollets+debout+machine+standing+calf+raise"},
-    {id:"prla6",name:"Cable crunch poulie haute",tp:"cable",sets:3,rLo:12,rHi:15,rest:45,yt:"crunch+poulie+haute+cable+crunch+abdos"},
-    {id:"prla7",name:"Russian twist",tp:"barbell",sets:3,rLo:20,rHi:20,rest:45,yt:"russian+twist+abdos+oblique+technique"},
+  {id:1,key:"fpQuad",name:"Lower A",label:"Quad · Ischios · Mollets · Abdos",day:"Mardi",color:"#10B981",exs:[
+    {id:"fpq1",name:"Presse cuisses 45°",tp:"machine",sets:4,rLo:10,rHi:12,lk:true,rest:120,yt:"presse+cuisses+45+leg+press+technique"},
+    {id:"fpq2",name:"Leg extension machine",tp:"machine",sets:3,rLo:12,rHi:15,rest:75,yt:"leg+extension+machine+quadriceps+technique"},
+    {id:"fpq3",name:"Leg curl (couché ou assis)",tp:"machine",sets:4,rLo:10,rHi:12,lk:true,rest:75,variants:["Couché","Assis"],yt:"leg+curl+ischio+jambiers+technique"},
+    {id:"fpq4",name:"Mollets debout machine",tp:"machine",sets:4,rLo:15,rHi:20,rest:45,variants:["Machine","Smith"],yt:"mollets+debout+machine+standing+calf+raise+technique"},
+    {id:"fpq5",name:"Planche frontale",tp:"barbell",sets:3,rLo:40,rHi:50,rest:45,isTimer:true,yt:"planche+gainage+plank+technique"},
+    {id:"fpq6",name:"Mountain climbers (×20 par jambe)",tp:"barbell",sets:3,rLo:20,rHi:20,rest:45,yt:"mountain+climbers+gainage+dynamique+technique"},
   ]},
-  {id:2,key:"prideUpperB",name:"Upper B",label:"Pec haut / Dos largeur / Bras / Abdos",day:"Jeudi",color:"#EF4444",exs:[
-    {id:"prub1",name:"Développé incliné haltères",tp:"dumbbell",sets:4,rLo:8,rHi:10,lk:true,rest:120,variants:["Haltères","Barre","Smith"],yt:"développé+incliné+haltères+technique"},
-    {id:"prub2",name:"Tractions",tp:"barbell",sets:4,rLo:6,rHi:10,lk:true,rest:120,variants:["Poids du corps","Lesté","Machine assistée"],yt:"tractions+pull+ups+technique"},
-    {id:"prub3",name:"Développé militaire barre",tp:"barbell",sets:4,rLo:8,rHi:10,lk:true,rest:120,variants:["Barre","Smith","Haltères"],yt:"développé+militaire+barre+overhead+press+technique"},
-    {id:"prub4",name:"Tirage horizontal prise serrée",tp:"cable",sets:4,rLo:10,rHi:12,rest:90,variants:["Poulie basse","Machine"],yt:"tirage+horizontal+prise+serrée+technique"},
-    {id:"prub5",name:"Dips",tp:"barbell",sets:3,rLo:8,rHi:10,rest:90,variants:["Poids du corps","Lesté","Machine"],yt:"dips+triceps+technique"},
-    {id:"prub6",name:"Curl barre",tp:"barbell",sets:3,rLo:10,rHi:12,rest:60,variants:["Barre","Barre EZ"],yt:"curl+barre+biceps+technique"},
-    {id:"prub7",name:"Oiseau inversé (Rear Delt Fly)",tp:"dumbbell",sets:3,rLo:12,rHi:15,rest:60,variants:["Haltères","Poulie","Machine"],yt:"oiseau+inversé+reverse+fly+deltoide+posterieur+technique"},
-    {id:"prub8",name:"Hanging leg raise",tp:"barbell",sets:3,rLo:10,rHi:12,rest:60,yt:"relevé+jambes+suspendu+hanging+leg+raise+abdos"},
-    {id:"prub9",name:"Planche latérale (Side Plank)",tp:"barbell",sets:2,rLo:1,rHi:1,rest:30,isTimer:true,yt:"side+plank+gainage+latéral+technique"},
+  {id:2,key:"fpPull",name:"Pull",label:"Dos · Biceps · Épaules arrière · Abdos",day:"Jeudi",color:"#3B82F6",exs:[
+    {id:"fpu1",name:"Tirage vertical poulie haute",tp:"machine",sets:4,rLo:8,rHi:10,lk:true,rest:90,variants:["Prise large","Prise serrée"],yt:"lat+pulldown+tirage+vertical+poulie+haute+technique"},
+    {id:"fpu2",name:"Rowing poulie basse assis",tp:"cable",sets:4,rLo:10,rHi:12,lk:true,rest:75,variants:["Embout triangle","Barre"],yt:"rowing+poulie+basse+seated+cable+row+technique"},
+    {id:"fpu3",name:"Rowing machine (chest supported)",tp:"machine",sets:3,rLo:10,rHi:12,rest:75,yt:"rowing+machine+chest+supported+row+technique"},
+    {id:"fpu4",name:"Curl biceps machine",tp:"machine",sets:3,rLo:10,rHi:12,rest:60,yt:"curl+biceps+machine+technique"},
+    {id:"fpu5",name:"Pec deck inversé (rear delt)",tp:"machine",sets:3,rLo:15,rHi:15,rest:60,yt:"pec+deck+inversé+reverse+fly+deltoide+posterieur+technique"},
+    {id:"fpu6",name:"Crunch câble (poulie haute)",tp:"cable",sets:3,rLo:15,rHi:15,rest:60,yt:"crunch+câble+poulie+haute+abdos+technique"},
+    {id:"fpu7",name:"Relevé de jambes suspendu",tp:"barbell",sets:3,rLo:12,rHi:15,rest:45,yt:"relevé+jambes+suspendu+hanging+leg+raise+abdos"},
   ]},
-  {id:3,key:"prideLowerB",name:"Lower B",label:"Ischios / Fessiers / Abdos",day:"Vendredi",color:"#10B981",exs:[
-    {id:"prlb1",name:"Hack squat machine",tp:"machine",sets:4,rLo:8,rHi:10,lk:true,rest:120,variants:["Machine hack","Barre libre"],yt:"hack+squat+machine+technique"},
-    {id:"prlb2",name:"Hip thrust",tp:"barbell",sets:4,rLo:10,rHi:12,lk:true,rest:120,variants:["Barre","Smith","Machine"],yt:"hip+thrust+barre+technique+fessiers"},
-    {id:"prlb3",name:"Split squat bulgare",tp:"dumbbell",sets:3,rLo:10,rHi:12,rest:90,variants:["Haltères","Barre","Smith"],yt:"split+squat+bulgare+bulgarian+split+squat+technique"},
-    {id:"prlb4",name:"Leg curl allongé",tp:"machine",sets:3,rLo:10,rHi:12,rest:60,yt:"leg+curl+allongé+lying+leg+curl+ischio+technique"},
-    {id:"prlb5",name:"Mollets assis",tp:"machine",sets:4,rLo:12,rHi:15,rest:60,yt:"mollets+assis+seated+calf+raise+technique"},
-    {id:"prlb6",name:"Hanging leg raise",tp:"barbell",sets:3,rLo:10,rHi:12,rest:60,yt:"relevé+jambes+suspendu+hanging+leg+raise+abdos"},
-    {id:"prlb7",name:"Planche (Plank)",tp:"barbell",sets:3,rLo:1,rHi:1,rest:45,isTimer:true,yt:"planche+gainage+plank+abdos+technique"},
+  {id:3,key:"fpHinge",name:"Lower B",label:"Ischios · Fessiers · Quad · Mollets · Abdos",day:"Vendredi",color:"#10B981",exs:[
+    {id:"fph1",name:"Hack squat machine",tp:"machine",sets:4,rLo:8,rHi:10,lk:true,rest:120,variants:["Machine hack","Smith squat"],yt:"hack+squat+machine+technique"},
+    {id:"fph2",name:"Leg curl assis",tp:"machine",sets:4,rLo:10,rHi:12,lk:true,rest:75,variants:["Assis","Couché"],yt:"leg+curl+assis+seated+leg+curl+ischio+technique"},
+    {id:"fph3",name:"Leg extension (finition)",tp:"machine",sets:3,rLo:12,rHi:15,rest:60,yt:"leg+extension+quadriceps+finition+technique"},
+    {id:"fph4",name:"Mollets assis machine (soléaire)",tp:"machine",sets:4,rLo:15,rHi:20,rest:45,yt:"mollets+assis+machine+seated+calf+raise+soléaire+technique"},
+    {id:"fph5",name:"Crunch machine",tp:"machine",sets:3,rLo:15,rHi:20,rest:45,yt:"crunch+machine+abdos+technique"},
+    {id:"fph6",name:"Planche latérale (par côté)",tp:"barbell",sets:3,rLo:30,rHi:40,rest:45,isTimer:true,yt:"side+plank+planche+latérale+obliques+technique"},
   ]},
 ];
 
@@ -901,7 +896,7 @@ function App(){
     <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:14}}>
       <div>
         <div style={{fontSize:24,fontWeight:900,letterSpacing:-1,lineHeight:1}}>COLOSSE</div>
-        <div style={{fontSize:9,fontWeight:700,letterSpacing:2,color:"rgba(255,255,255,.22)",textTransform:"uppercase",marginTop:2}}>{ph.cal||3800} kcal · {wN>=14?"Sèche U/L 12 sem":"PPL 6j"} · {PHASES.length} sem.</div>
+        <div style={{fontSize:9,fontWeight:700,letterSpacing:2,color:"rgba(255,255,255,.22)",textTransform:"uppercase",marginTop:2}}>{ph.cal||3800} kcal · {wN>=14?"Sèche Push/Pull 12 sem":"PPL 6j"} · {PHASES.length} sem.</div>
       </div>
       <div style={{display:"flex",alignItems:"center",gap:10}}>
         {sav&&<div style={{fontSize:9,color:"#10B981",fontWeight:700,display:"flex",alignItems:"center",gap:3}}><span style={{width:5,height:5,borderRadius:"50%",background:"#10B981",display:"inline-block"}}/>Sauvé</div>}
