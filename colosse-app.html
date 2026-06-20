@@ -852,7 +852,7 @@ async function callGemini(model,key,systemText,userText){
     res=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
       systemInstruction:{parts:[{text:systemText}]},
       contents:[{role:"user",parts:[{text:userText}]}],
-      generationConfig:{temperature:0.7,maxOutputTokens:700}
+      generationConfig:{temperature:0.7,maxOutputTokens:1200}
     })});
   }catch(e){throw new Error("NET")}
   if(!res.ok){
@@ -885,7 +885,9 @@ function CoachDrawer({initTab,onClose,ph,wN,day,sessCount,mood,macros,swapEx}){
   const[out,setOut]=useState("");
   const[err,setErr]=useState("");
   const[nutriQ,setNutriQ]=useState("");
+  const outRef=useRef(null);
   const AC="#7B6CF5";
+  useEffect(function(){if((out||err)&&outRef.current)outRef.current.scrollIntoView({behavior:"smooth",block:"start"})},[out,err]);
 
   function saveKey(v){setKey(v);aiSetKey(v)}
   function saveModel(v){setModel(v);aiSetModel(v)}
@@ -963,6 +965,7 @@ function CoachDrawer({initTab,onClose,ph,wN,day,sessCount,mood,macros,swapEx}){
         </div>
       </div>}
 
+      <div ref={outRef}/>
       {err&&<div style={{marginTop:12,padding:"11px 13px",borderRadius:12,background:"rgba(239,68,68,.1)",border:"1px solid rgba(239,68,68,.3)",fontSize:12,color:"#fda4a4",lineHeight:1.5}}>{err}</div>}
       {out&&<div style={{marginTop:12,padding:"13px 14px",borderRadius:12,background:"rgba(255,255,255,.04)",border:"1px solid "+AC+"30",fontSize:13,color:"rgba(255,255,255,.9)",lineHeight:1.6,whiteSpace:"pre-wrap"}}>{out}</div>}
       {loading&&<div style={{marginTop:12,textAlign:"center",fontSize:11,color:AC,fontWeight:700,animation:"pulse 1s infinite"}}>L'IA réfléchit…</div>}
