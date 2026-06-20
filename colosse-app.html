@@ -531,7 +531,7 @@ function Timer({sec,c,onEnd,onSkip,onDC}){
 }
 
 /* ═══ EXERCISE CARD ═══ */
-function ExCard({ex,data,prev,color,upd,onDone,isLk,canUp,canDn,onUp,onDn,phaseName,atb,allWks,wkNum,dayKey}){
+function ExCard({ex,data,prev,color,upd,onDone,isLk,canUp,canDn,onUp,onDn,phaseName,atb,allWks,wkNum,dayKey,onSwap}){
   if(!data||!data.s)return null;
   var rng=getRepRange(ex,phaseName);
   /* Variant-aware progression */
@@ -559,6 +559,7 @@ function ExCard({ex,data,prev,color,upd,onDone,isLk,canUp,canDn,onUp,onDn,phaseN
           <span style={{fontSize:14,fontWeight:800,color:"#fff",lineHeight:1.2}}>{ex.name}</span>
           {ex.yt&&<a href={YT+ex.yt} target="_blank" rel="noopener" style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:20,height:20,borderRadius:5,background:"rgba(255,0,0,.12)",border:"1px solid rgba(255,0,0,.2)",color:"#FF4444",fontSize:9,fontWeight:800,textDecoration:"none",flexShrink:0}}>▶</a>}
           {isPR&&<span style={{padding:"1px 6px",borderRadius:12,background:"rgba(255,215,0,.12)",border:"1px solid rgba(255,215,0,.35)",fontSize:9,fontWeight:800,color:"#FFD700",animation:"prPop .4s ease-out"}}>🏆 PR</span>}
+          {onSwap&&<button onClick={onSwap} title="Remplacer cet exercice (IA)" style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:20,height:20,borderRadius:5,background:"rgba(123,108,245,.14)",border:"1px solid rgba(123,108,245,.32)",color:"#a99bff",fontSize:11,fontWeight:800,cursor:"pointer",padding:0,flexShrink:0}}>🔁</button>}
         </div>
         <div style={{fontSize:10,color:"rgba(255,255,255,.28)",display:"flex",alignItems:"center",gap:5,flexWrap:"wrap"}}>
           <span>{ex.isTimer?ex.sets+"× chrono":ex.sets+"×"+(rng.lo===rng.hi?rng.lo:rng.lo+"-"+rng.hi)+" reps"} · {ex.tp}</span>
@@ -782,6 +783,193 @@ function WeekCarousel({phases,wk,setWk,st,setRd,setSt}){
   </div>;
 }
 
+/* ═══════════════════════════════════════════════════════════
+   COUCHE IA — COACH GEMINI  (ADDITIVE, ne touche pas au cœur)
+   • L'IA LIT les données Colosse mais n'ÉCRIT JAMAIS (pas de
+     charges, progression, périodisation, modif du programme).
+   • Tous les chiffres (kcal, macros, séries, reps) viennent du
+     CODE et sont passés tels quels à l'IA (interdit de recalculer).
+   • 3 usages: motivation / nutrition / remplacement d'exercice.
+   • FRONTIÈRE: aucun conseil médical, hormonal ou dopant.
+   ═══════════════════════════════════════════════════════════ */
+const AI_KEY_SK="colosse-ai-key";
+const AI_MODEL_SK="colosse-ai-model";
+const AI_MODELS=[
+  {id:"gemini-2.0-flash",nm:"2.0 Flash",d:"Équilibré · défaut"},
+  {id:"gemini-2.5-flash",nm:"2.5 Flash",d:"Plus malin"},
+  {id:"gemini-2.0-flash-lite",nm:"2.0 Flash-Lite",d:"Quota gratuit max"},
+  {id:"gemini-1.5-flash",nm:"1.5 Flash",d:"Secours"},
+];
+function aiGetKey(){try{return localStorage.getItem(AI_KEY_SK)||""}catch(e){return""}}
+function aiSetKey(k){try{localStorage.setItem(AI_KEY_SK,k)}catch(e){}}
+function aiGetModel(){try{return localStorage.getItem(AI_MODEL_SK)||"gemini-2.0-flash"}catch(e){return"gemini-2.0-flash"}}
+function aiSetModel(m){try{localStorage.setItem(AI_MODEL_SK,m)}catch(e){}}
+
+/* Dernier poids de corps mesuré (mensurations) — sert au calcul CODE des macros. */
+function getLatestWeight(allWks,upToWkNum){
+  for(var w=upToWkNum;w>=1;w--){
+    var wd=allWks[w];if(!wd||!wd.ms)continue;
+    var p=parseFloat(wd.ms.poids||"");if(p>0)return p;
+  }
+  return 0;
+}
+/* Macros calculées PAR LE CODE depuis les kcal du programme + poids mesuré.
+   Protéines prioritaires (2.2 g/kg, défaut 220), lipides 25% kcal, glucides = reste. */
+function getMacros(cal,weightKg){
+  cal=cal||0;
+  var prot=weightKg>0?Math.round(weightKg*2.2):220;
+  var fat=Math.round(cal*0.25/9);
+  var carbs=Math.round((cal-prot*4-fat*9)/4);if(carbs<0)carbs=0;
+  return{cal:cal,prot:prot,fat:fat,carbs:carbs};
+}
+
+/* Garde-fou système commun. */
+const AI_GUARD="Tu es le coach de l'app Colosse (musculation + nutrition UNIQUEMENT). Règles STRICTES: réponds en français, court et concret. N'invente JAMAIS de chiffres: réutilise tels quels les kcal, macros, séries et fourchettes de reps fournis. Ne modifie pas le programme, ne propose pas de charges/poids, ni de périodisation. INTERDIT ABSOLU: tout conseil médical, sur les hormones, la testostérone, le PCT, les produits dopants ou compléments de ce type — si on te le demande, refuse poliment et recentre sur entraînement/alimentation.";
+
+function buildBaseContext(ph,wN,sessCount,mood,macros){
+  var L=[];
+  L.push("Semaine S"+wN+" — phase « "+ph.p+" ».");
+  L.push("Cibles du jour (calculées par l'app, à réutiliser SANS recalcul): "+macros.cal+" kcal · "+macros.prot+" g protéines · "+macros.carbs+" g glucides · "+macros.fat+" g lipides.");
+  L.push("Séances faites cette semaine: "+sessCount+".");
+  if(mood)L.push("Ressenti récent: "+mood+".");
+  return L.join("\n");
+}
+function sessionLines(day,phaseName){
+  var L=["Séance du jour: "+day.name+" ("+day.label+")."];
+  day.exs.forEach(function(ex){
+    var rng=getRepRange(ex,phaseName);
+    L.push("- "+ex.name+" — "+ex.sets+"×"+(ex.isTimer?"chrono":(rng.lo===rng.hi?rng.lo:rng.lo+"-"+rng.hi)+" reps")+" ("+ex.tp+")");
+  });
+  return L.join("\n");
+}
+
+/* Appel Gemini — clé + modèle fournis par l'utilisateur, jamais en dur. */
+async function callGemini(model,key,systemText,userText){
+  if(!key)throw new Error("NO_KEY");
+  var url="https://generativelanguage.googleapis.com/v1beta/models/"+model+":generateContent?key="+encodeURIComponent(key);
+  var res;
+  try{
+    res=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
+      systemInstruction:{parts:[{text:systemText}]},
+      contents:[{role:"user",parts:[{text:userText}]}],
+      generationConfig:{temperature:0.7,maxOutputTokens:700}
+    })});
+  }catch(e){throw new Error("NET")}
+  if(!res.ok){
+    if(res.status===429)throw new Error("QUOTA");
+    if(res.status===400||res.status===403)throw new Error("BADKEY");
+    throw new Error("HTTP_"+res.status);
+  }
+  var data=await res.json();
+  var c=data&&data.candidates&&data.candidates[0];
+  var txt=c&&c.content&&c.content.parts&&c.content.parts.map(function(p){return p.text||""}).join("");
+  if(!txt)throw new Error("EMPTY");
+  return txt.trim();
+}
+function aiErrMsg(e){
+  var m=(e&&e.message)||"";
+  if(m==="NO_KEY")return "Ajoute ta clé API Gemini (gratuite) dans ⚙️ Réglages ci-dessous.";
+  if(m==="QUOTA")return "Quota gratuit atteint pour ce modèle. Passe sur « 2.0 Flash-Lite » dans les réglages, ou réessaie demain.";
+  if(m==="BADKEY")return "Clé invalide ou modèle non autorisé. Vérifie ta clé dans ⚙️ Réglages (aistudio.google.com/apikey).";
+  if(m==="NET")return "Pas de connexion. Vérifie ton réseau puis réessaie.";
+  if(m==="EMPTY")return "Réponse vide. Réessaie ou change de modèle.";
+  return "Erreur ("+m+"). Réessaie.";
+}
+
+/* ═══ TIROIR COACH IA ═══ */
+function CoachDrawer({initTab,onClose,ph,wN,day,sessCount,mood,macros,swapEx}){
+  const[tab,setTab]=useState(initTab||"coach");
+  const[key,setKey]=useState(aiGetKey());
+  const[model,setModel]=useState(aiGetModel());
+  const[loading,setLoading]=useState(false);
+  const[out,setOut]=useState("");
+  const[err,setErr]=useState("");
+  const[nutriQ,setNutriQ]=useState("");
+  const AC="#7B6CF5";
+
+  function saveKey(v){setKey(v);aiSetKey(v)}
+  function saveModel(v){setModel(v);aiSetModel(v)}
+
+  async function run(userText){
+    setErr("");setOut("");setLoading(true);
+    try{
+      var base=buildBaseContext(ph,wN,sessCount,mood,macros);
+      var txt=await callGemini(model,key,AI_GUARD,base+"\n\n"+userText);
+      setOut(txt);
+    }catch(e){setErr(aiErrMsg(e))}
+    setLoading(false);
+  }
+  function runCoach(){
+    run(sessionLines(day,ph.p)+"\n\nDonne-moi un coup de fouet court (3-4 phrases max) pour attaquer cette séance maintenant. Appuie-toi sur ma constance et mon ressenti si pertinent. Aucun chiffre inventé, pas de charges.");
+  }
+  function runNutri(){
+    var q=nutriQ.trim()||"Donne-moi 2-3 idées de repas simples qui rentrent dans mes cibles du jour.";
+    run("Question nutrition: "+q+"\n\nRéponds avec des repas/substitutions concrets (versions rapide/budget/végé si utile). Reste dans mes cibles kcal+macros ci-dessus, NE les recalcule pas, réutilise les chiffres fournis.");
+  }
+  function runSwap(){
+    if(!swapEx)return;
+    var rng=getRepRange(swapEx,ph.p);
+    var varTxt=(swapEx.variants&&swapEx.variants.length)?(" Variantes déjà prévues dans le programme (à privilégier si pertinent): "+swapEx.variants.join(", ")+".") : "";
+    run("Je veux remplacer cet exercice: « "+swapEx.name+" » (matériel: "+swapEx.tp+", "+swapEx.sets+"×"+(rng.lo===rng.hi?rng.lo:rng.lo+"-"+rng.hi)+" reps)."+varTxt+" Propose 2-3 alternatives qui ciblent le MÊME groupe musculaire, faisables avec un matériel équivalent en salle. Pour chacune: le nom puis 1 ligne (intérêt / point d'attention). Garde les mêmes séries et la même fourchette de reps. C'est une simple suggestion: ne change rien au reste.");
+  }
+
+  var TABS=[{k:"coach",l:"💪 Coach"},{k:"nutri",l:"🥗 Nutrition"}];
+  if(swapEx)TABS.push({k:"swap",l:"🔁 Remplacer"});
+  TABS.push({k:"set",l:"⚙️"});
+
+  var btn={padding:"11px 14px",borderRadius:12,border:"1px solid "+AC+"55",background:AC+"1a",color:"#cfc6ff",fontSize:13,fontWeight:800,cursor:"pointer",width:"100%",textAlign:"center"};
+
+  return<div onClick={onClose} style={{position:"fixed",inset:0,zIndex:10000,background:"rgba(0,0,0,.55)",backdropFilter:"blur(3px)",display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+    <div onClick={function(e){e.stopPropagation()}} style={{width:"100%",maxWidth:500,maxHeight:"88vh",overflowY:"auto",background:"#0d0d18",borderTop:"1px solid "+AC+"40",borderRadius:"20px 20px 0 0",padding:"14px 14px 28px",animation:"slideUp .25s ease-out",boxShadow:"0 -8px 40px rgba(0,0,0,.5)"}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <span style={{fontSize:15,fontWeight:900,color:"#fff",letterSpacing:-.3}}>✦ Coach IA</span>
+          <span style={{fontSize:9,color:"rgba(255,255,255,.3)",fontWeight:700}}>S{wN} · {ph.p}</span>
+        </div>
+        <button onClick={onClose} style={{width:30,height:30,borderRadius:"50%",border:"1px solid rgba(255,255,255,.1)",background:"rgba(255,255,255,.05)",color:"rgba(255,255,255,.5)",fontSize:14,cursor:"pointer"}}>✕</button>
+      </div>
+
+      <div style={{display:"flex",gap:4,marginBottom:12,flexWrap:"wrap"}}>
+        {TABS.map(function(t){var on=tab===t.k;return<button key={t.k} onClick={function(){setTab(t.k);setOut("");setErr("")}} style={{padding:"7px 12px",borderRadius:10,border:on?"1px solid "+AC+"70":"1px solid rgba(255,255,255,.07)",background:on?AC+"22":"transparent",color:on?"#cfc6ff":"rgba(255,255,255,.4)",fontSize:11,fontWeight:800,cursor:"pointer"}}>{t.l}</button>})}
+      </div>
+
+      {tab==="coach"&&<div>
+        <div style={{fontSize:11,color:"rgba(255,255,255,.4)",marginBottom:10,lineHeight:1.5}}>Un coup de fouet basé sur ta constance ({sessCount} séances cette semaine), ton ressenti{mood?" ("+mood+")":""} et ta séance <b style={{color:"#fff"}}>{day.name}</b> du jour.</div>
+        <button onClick={runCoach} disabled={loading} style={btn}>{loading?"…":"Motive-moi pour aujourd'hui"}</button>
+      </div>}
+
+      {tab==="nutri"&&<div>
+        <div style={{fontSize:11,color:"rgba(255,255,255,.4)",marginBottom:8,lineHeight:1.5}}>Cibles du jour (fixées par l'app): <b style={{color:"#fff"}}>{macros.cal} kcal · {macros.prot}P · {macros.carbs}G · {macros.fat}L</b>. L'IA réutilise ces chiffres, elle ne les recalcule pas.</div>
+        <textarea value={nutriQ} onChange={function(e){setNutriQ(e.target.value)}} placeholder="Ex: j'ai pas de poulet, version rapide, idée de petit-déj..." rows={2} style={{width:"100%",padding:"9px 11px",borderRadius:10,border:"1px solid rgba(255,255,255,.08)",background:"rgba(255,255,255,.04)",color:"#fff",fontSize:12,lineHeight:1.5,resize:"vertical",outline:"none",boxSizing:"border-box",marginBottom:8}}/>
+        <button onClick={runNutri} disabled={loading} style={btn}>{loading?"…":"Idées repas / substitutions"}</button>
+      </div>}
+
+      {tab==="swap"&&swapEx&&<div>
+        <div style={{fontSize:11,color:"rgba(255,255,255,.4)",marginBottom:10,lineHeight:1.5}}>Alternatives pour <b style={{color:"#fff"}}>{swapEx.name}</b> (même groupe, mêmes séries/reps). Suggestion seulement — ton programme n'est pas modifié.</div>
+        <button onClick={runSwap} disabled={loading} style={btn}>{loading?"…":"Trouver 2-3 alternatives"}</button>
+        {swapEx.yt&&<a href={YT+swapEx.yt} target="_blank" rel="noopener" style={{display:"block",textAlign:"center",marginTop:8,fontSize:11,color:"#FF6666",fontWeight:700,textDecoration:"none"}}>▶ Revoir la technique de l'exercice actuel</a>}
+      </div>}
+
+      {tab==="set"&&<div>
+        <div style={{fontSize:11,color:"rgba(255,255,255,.4)",marginBottom:8,lineHeight:1.5}}>Clé API Gemini <b style={{color:"#fff"}}>gratuite</b> sur <span style={{color:"#cfc6ff"}}>aistudio.google.com/apikey</span>. Stockée uniquement sur ton téléphone.</div>
+        <input type="password" value={key} onChange={function(e){saveKey(e.target.value)}} placeholder="Colle ta clé API ici" style={{width:"100%",padding:"10px 11px",borderRadius:10,border:"1px solid rgba(255,255,255,.08)",background:"rgba(255,255,255,.04)",color:"#fff",fontSize:12,fontFamily:"'JetBrains Mono',monospace",outline:"none",boxSizing:"border-box",marginBottom:6}}/>
+        <div style={{fontSize:10,color:key?"#10B981":"rgba(255,255,255,.3)",fontWeight:700,marginBottom:12}}>{key?"✓ Clé enregistrée":"Aucune clé enregistrée"}</div>
+        <div style={{fontSize:10,fontWeight:800,color:"rgba(255,255,255,.35)",textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>Modèle</div>
+        <div style={{display:"flex",flexDirection:"column",gap:5}}>
+          {AI_MODELS.map(function(m){var on=model===m.id;return<button key={m.id} onClick={function(){saveModel(m.id)}} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 12px",borderRadius:10,border:on?"1px solid "+AC+"70":"1px solid rgba(255,255,255,.07)",background:on?AC+"1a":"transparent",cursor:"pointer"}}>
+            <span style={{fontSize:12,fontWeight:800,color:on?"#cfc6ff":"#fff"}}>{m.nm}</span>
+            <span style={{fontSize:9,color:"rgba(255,255,255,.35)"}}>{m.d}</span>
+          </button>})}
+        </div>
+      </div>}
+
+      {err&&<div style={{marginTop:12,padding:"11px 13px",borderRadius:12,background:"rgba(239,68,68,.1)",border:"1px solid rgba(239,68,68,.3)",fontSize:12,color:"#fda4a4",lineHeight:1.5}}>{err}</div>}
+      {out&&<div style={{marginTop:12,padding:"13px 14px",borderRadius:12,background:"rgba(255,255,255,.04)",border:"1px solid "+AC+"30",fontSize:13,color:"rgba(255,255,255,.9)",lineHeight:1.6,whiteSpace:"pre-wrap"}}>{out}</div>}
+      {loading&&<div style={{marginTop:12,textAlign:"center",fontSize:11,color:AC,fontWeight:700,animation:"pulse 1s infinite"}}>L'IA réfléchit…</div>}
+    </div>
+  </div>;
+}
+
 /* ═══ ERROR BOUNDARY ═══ */
 class ErrorBoundary extends React.Component{
   constructor(props){super(props);this.state={err:null}}
@@ -809,6 +997,9 @@ function App(){
   const[tmr,setTmr]=useState(false);
   const[tmrKey,setTmrKey]=useState(0);
   const[rd,setRd]=useState(120);
+  const[coachOpen,setCoachOpen]=useState(false);
+  const[coachTab,setCoachTab]=useState("coach");
+  const[swapEx,setSwapEx]=useState(null);
   useWakeLock(true);
 
   useEffect(function(){
@@ -878,6 +1069,11 @@ function App(){
       return n;
     });
   }
+
+  function openSwap(ex){setSwapEx(ex);setCoachTab("swap");setCoachOpen(true)}
+  function openCoach(){setSwapEx(null);setCoachTab("coach");setCoachOpen(true)}
+  var aiMacros=getMacros(ph.cal||0,getLatestWeight(st.wk,wN));
+  var aiSess=getWeekSessionCount(wd,wN);
 
   var orderedExs=getOrderedExs(day,st.ord?st.ord[day.key]:null);
   var freeExs=orderedExs.filter(function(e){return!e.lk});
@@ -966,7 +1162,7 @@ function App(){
     <div style={{paddingBottom:tmr?240:0}}>
       {orderedExs.map(function(ex){
         var fI=freeExs.indexOf(ex);
-        return<ExCard key={ex.id} ex={ex} data={dData[ex.id]} prev={pDData&&pDData[ex.id]?pDData[ex.id]:null} color={day.color} upd={function(f,v){upEx(ex.id,f,v)}} onDone={function(){var r=ex.rest||rd;setRd(r);setTmr(true);setTmrKey(function(k){return k+1})}} isLk={!!ex.lk} canUp={!ex.lk&&fI>0} canDn={!ex.lk&&fI>=0&&fI<freeExs.length-1} onUp={function(){reorder(day.key,ex.id,"up")}} onDn={function(){reorder(day.key,ex.id,"down")}} phaseName={ph.p} atb={getAllTimeBest(ex.id,st.wk,wN)} allWks={st.wk} wkNum={wN} dayKey={day.key}/>;
+        return<ExCard key={ex.id} ex={ex} data={dData[ex.id]} prev={pDData&&pDData[ex.id]?pDData[ex.id]:null} color={day.color} upd={function(f,v){upEx(ex.id,f,v)}} onDone={function(){var r=ex.rest||rd;setRd(r);setTmr(true);setTmrKey(function(k){return k+1})}} isLk={!!ex.lk} canUp={!ex.lk&&fI>0} canDn={!ex.lk&&fI>=0&&fI<freeExs.length-1} onUp={function(){reorder(day.key,ex.id,"up")}} onDn={function(){reorder(day.key,ex.id,"down")}} phaseName={ph.p} atb={getAllTimeBest(ex.id,st.wk,wN)} allWks={st.wk} wkNum={wN} dayKey={day.key} onSwap={function(){openSwap(ex)}}/>;
       })}
     </div>
 
@@ -1017,6 +1213,10 @@ function App(){
     <div style={{textAlign:"center",marginTop:10,fontSize:8,color:"rgba(255,255,255,.07)",letterSpacing:1.5,textTransform:"uppercase"}}>Colosse · Transformation 2026 · Double Progression</div>
 
     {tmr&&<Timer key={tmrKey} sec={rd} c={day.color} onEnd={function(){setTmr(false)}} onSkip={function(){setTmr(false)}} onDC={function(d){setRd(d)}}/>}
+
+    {/* FLOATING COACH IA */}
+    {!tmr&&!coachOpen&&<button onClick={openCoach} aria-label="Coach IA" style={{position:"fixed",right:16,bottom:20,zIndex:9998,width:54,height:54,borderRadius:"50%",border:"1px solid rgba(123,108,245,.5)",background:"linear-gradient(135deg,#7B6CF5,#5a4bd4)",color:"#fff",fontSize:22,fontWeight:900,cursor:"pointer",boxShadow:"0 6px 22px rgba(123,108,245,.45)",display:"flex",alignItems:"center",justifyContent:"center"}}>✦</button>}
+    {coachOpen&&<CoachDrawer initTab={coachTab} onClose={function(){setCoachOpen(false)}} ph={ph} wN={wN} day={day} sessCount={aiSess} mood={wd.mood||""} macros={aiMacros} swapEx={swapEx}/>}
   </div>;
 }
 
