@@ -176,19 +176,68 @@ const DAYS_UL=[
   ]},
 ];
 
+/* ═══ DAYS REPRISE 5j (S23+, lundi 6 juil 2026) ═══
+   Reprise après pause. Objectif = PRÉSENCE, pas la perf.
+   5 séances courtes (45 min max, 4-6 exos), chaque muscle 2×/semaine.
+   Charges -40% les 2 premières semaines, RIR 3-4.
+   Règle des 20 min : flemme → 3 exos × 2 séries = présence validée. */
+const DAYS_R5=[
+  {id:0,key:"r5push",name:"Push A",label:"Pecs · Épaules · Triceps",day:"Lundi",color:"#EF4444",exs:[
+    {id:"r5p1",name:"Presse poitrine machine",tp:"machine",sets:3,rLo:8,rHi:10,lk:true,rest:90,variants:["Machine convergente","Smith"],yt:"presse+poitrine+machine+chest+press+technique"},
+    {id:"r5p2",name:"Pec deck (butterfly)",tp:"machine",sets:3,rLo:12,rHi:15,rest:60,yt:"pec+deck+butterfly+machine+technique"},
+    {id:"r5p3",name:"Développé épaules machine",tp:"machine",sets:3,rLo:10,rHi:12,lk:true,rest:90,variants:["Machine","Smith","Haltères"],yt:"développé+épaules+machine+shoulder+press+technique"},
+    {id:"r5p4",name:"Élévations latérales machine",tp:"machine",sets:2,rLo:12,rHi:15,rest:60,variants:["Machine","Haltères"],yt:"élévations+latérales+machine+lateral+raise+technique"},
+    {id:"r5p5",name:"Triceps pushdown (corde)",tp:"cable",sets:2,rLo:12,rHi:15,rest:60,variants:["Corde","Barre droite"],yt:"triceps+pushdown+poulie+haute+technique"},
+  ]},
+  {id:1,key:"r5pull",name:"Pull A",label:"Dos · Biceps · Abdos",day:"Mardi",color:"#3B82F6",exs:[
+    {id:"r5t1",name:"Tirage vertical poulie haute",tp:"machine",sets:3,rLo:8,rHi:10,lk:true,rest:90,variants:["Prise large","Prise serrée"],yt:"lat+pulldown+tirage+vertical+poulie+haute+technique"},
+    {id:"r5t2",name:"Rowing poulie basse assis",tp:"cable",sets:3,rLo:10,rHi:12,lk:true,rest:75,variants:["Embout triangle","Barre"],yt:"rowing+poulie+basse+seated+cable+row+technique"},
+    {id:"r5t3",name:"Curl biceps machine",tp:"machine",sets:3,rLo:12,rHi:15,rest:60,yt:"curl+biceps+machine+technique"},
+    {id:"r5t4",name:"Face pull (poulie haute)",tp:"cable",sets:2,rLo:15,rHi:20,rest:60,yt:"face+pull+poulie+haute+technique+épaules"},
+    {id:"r5t5",name:"Crunch machine",tp:"machine",sets:2,rLo:15,rHi:20,rest:45,yt:"crunch+machine+abdos+technique"},
+  ]},
+  {id:2,key:"r5legs",name:"Legs A",label:"Quads · Ischios · Mollets",day:"Mercredi",color:"#10B981",exs:[
+    {id:"r5l1",name:"Presse cuisses 45°",tp:"machine",sets:3,rLo:10,rHi:12,lk:true,rest:120,yt:"presse+cuisses+45+leg+press+technique"},
+    {id:"r5l2",name:"Leg extension machine",tp:"machine",sets:3,rLo:12,rHi:15,rest:75,yt:"leg+extension+machine+quadriceps+technique"},
+    {id:"r5l3",name:"Leg curl (couché ou assis)",tp:"machine",sets:3,rLo:10,rHi:12,lk:true,rest:75,variants:["Couché","Assis"],yt:"leg+curl+ischio+jambiers+technique"},
+    {id:"r5l4",name:"Mollets debout machine",tp:"machine",sets:3,rLo:15,rHi:20,rest:45,variants:["Machine","Smith"],yt:"mollets+debout+machine+standing+calf+raise+technique"},
+    {id:"r5l5",name:"Planche frontale",tp:"barbell",sets:2,rLo:40,rHi:50,rest:45,isTimer:true,yt:"planche+gainage+plank+technique"},
+  ]},
+  {id:3,key:"r5upper",name:"Upper B",label:"Épaules · Dos largeur · Abdos",day:"Jeudi",color:"#F59E0B",exs:[
+    {id:"r5u1",name:"Développé épaules machine",tp:"machine",sets:3,rLo:10,rHi:12,lk:true,rest:90,variants:["Machine","Haltères"],yt:"développé+épaules+machine+shoulder+press+technique"},
+    {id:"r5u2",name:"Élévations latérales machine",tp:"machine",sets:3,rLo:12,rHi:15,rest:60,variants:["Machine","Haltères"],yt:"élévations+latérales+machine+lateral+raise+technique"},
+    {id:"r5u3",name:"Rowing machine (chest supported)",tp:"machine",sets:3,rLo:10,rHi:12,lk:true,rest:75,yt:"rowing+machine+chest+supported+row+technique"},
+    {id:"r5u4",name:"Pec deck inversé (rear delt)",tp:"machine",sets:2,rLo:15,rHi:15,rest:60,yt:"pec+deck+inversé+reverse+fly+deltoide+posterieur+technique"},
+    {id:"r5u5",name:"Relevé de jambes",tp:"barbell",sets:2,rLo:12,rHi:15,rest:45,yt:"relevé+jambes+hanging+leg+raise+abdos"},
+  ]},
+  {id:4,key:"r5lower",name:"Lower B",label:"Ischios · Fessiers · Pump bras",day:"Vendredi",color:"#8B5CF6",exs:[
+    {id:"r5w1",name:"Leg curl assis",tp:"machine",sets:3,rLo:10,rHi:12,lk:true,rest:75,variants:["Assis","Couché"],yt:"leg+curl+assis+seated+leg+curl+ischio+technique"},
+    {id:"r5w2",name:"Hack squat ou presse (léger)",tp:"machine",sets:3,rLo:12,rHi:15,lk:true,rest:90,variants:["Machine hack","Presse cuisses"],yt:"hack+squat+machine+technique"},
+    {id:"r5w3",name:"Mollets assis machine",tp:"machine",sets:3,rLo:15,rHi:20,rest:45,yt:"mollets+assis+machine+seated+calf+raise+soléaire+technique"},
+    {id:"r5w4",name:"Crunch câble (poulie haute)",tp:"cable",sets:2,rLo:15,rHi:15,rest:45,yt:"crunch+câble+poulie+haute+abdos+technique"},
+    {id:"r5w5",name:"Curl biceps (pump fun)",tp:"machine",sets:2,rLo:12,rHi:15,rest:45,variants:["Machine","Haltères"],yt:"curl+biceps+machine+technique"},
+    {id:"r5w6",name:"Pushdown corde (pump fun)",tp:"cable",sets:2,rLo:12,rHi:15,rest:45,yt:"triceps+pushdown+poulie+haute+technique"},
+  ]},
+];
+
 /* ═══ HELPERS DAYS / DOW MAPPING ═══ */
-/* À partir de la S14 (lundi 4 mai 2026), bascule sur U/L 4 jours.
-   Avant S14, programme PPL 6 jours (DAYS).
+/* S1-S13 : PPL 6 jours. S14-S22 : U/L 4 jours (historique).
+   S23+ (lundi 6 juil 2026) : REPRISE 5 jours, présence d'abord.
    Note: les semaines sont 1-indexées dans le PWA (wN), mais wk est 0-indexé. */
 function getDays(wN){
+  if(wN>=23)return DAYS_R5;
   return wN>=14 ? DAYS_UL : DAYS;
 }
-/* Tous les jours (PPL + U/L) — utile pour migration, init, recherche PR all-time. */
-const ALL_DAYS = DAYS.concat(DAYS_UL);
+/* Tous les jours (PPL + U/L + R5) — utile pour migration, init, recherche PR all-time. */
+const ALL_DAYS = DAYS.concat(DAYS_UL).concat(DAYS_R5);
 /* Mapping jour de la semaine → index dans le tableau DAYS de la phase active.
-   PPL : Lun=0, Mar=1, Mer=2, Jeu=3, Ven=4, Sam=5 (6 jours).
-   U/L : Lun=0 (Upper A), Mar=1 (Lower A), Jeu=2 (Upper B), Ven=3 (Lower B). */
+   PPL : Lun=0..Sam=5. U/L : Lun=0, Mar=1, Jeu=2, Ven=3.
+   R5 : Lun=0, Mar=1, Mer=2, Jeu=3, Ven=4 (week-end → Ven affiché). */
 function dowToDayI(wN, dow){
+  if(wN>=23){
+    var r5Map={1:0, 2:1, 3:2, 4:3, 5:4, 6:4, 0:0};
+    return r5Map[dow]!==undefined ? r5Map[dow] : 0;
+  }
   if(wN>=14){
     /* Mapping U/L : sauts mer/sam/dim */
     var ulMap={1:0, 2:1, 3:1, 4:2, 5:3, 6:3, 0:0};
@@ -220,6 +269,9 @@ const PHASES=[
      Le tableau n'est qu'un point de départ : c'est la PERTE RÉELLE
      mesurée chaque jeudi (moyenne 7j) qui pilote les ajustements.
      Pride 27 juin = checkpoint (S21). Objectif 23 août (S29) : 14% BF, 91-93 kg. */
+  /* S14 Transition (bascule U/L) — entrée manquante à l'origine :
+     son absence décalait TOUTES les phases suivantes d'une semaine à l'affichage. */
+  {w:14,p:"Transition",c:"#4DA8FF",d:"4 mai",cal:3850},
   /* S15 Transition (sortie PCT) */
   {w:15,p:"Transition",c:"#4DA8FF",d:"11 mai",cal:3850},
   /* S16 Initiation — DÉMARRAGE sèche (18 mai), maintien ~3000 → -150 */
@@ -236,20 +288,26 @@ const PHASES=[
   {w:21,p:"Pride Week",c:"#DC2626",d:"22 juin",cal:2600},
   /* S22 Diet Break — retour au maintien (reset métabolique) */
   {w:22,p:"Diet Break",c:"#3ECF8A",d:"29 juin",cal:3000},
-  /* S23 Sèche soutenue (-450) */
-  {w:23,p:"Sèche soutenue",c:"#DC2626",d:"6 juil",cal:2550},
-  /* S24 Sèche soutenue (-500) */
-  {w:24,p:"Sèche soutenue",c:"#DC2626",d:"13 juil",cal:2500},
-  /* S25 Intensification (-550) */
-  {w:25,p:"Intensification",c:"#DC2626",d:"20 juil",cal:2450},
-  /* S26 Intensification (plancher approché) */
-  {w:26,p:"Intensification",c:"#DC2626",d:"27 juil",cal:2450},
-  /* S27 Finish (PLANCHER 2400) */
-  {w:27,p:"Finish",c:"#DC2626",d:"3 août",cal:2400},
-  /* S28 Finish + Deload (PLANCHER 2400, volume muscu -30%) */
-  {w:28,p:"Finish",c:"#DC2626",d:"10 août",cal:2400},
-  /* S29 Peak Week finale (Jour J samedi 23 août), PLANCHER 2400 */
-  {w:29,p:"Peak Week",c:"#DC2626",d:"17 août",cal:2400},
+  /* === REPRISE (S23+, 6 juil 2026) ===
+     Pause fin juin. On repart. Un seul objectif : PRÉSENCE 5/sem.
+     Pas de deadline, pas de checkpoint daté, pas de déficit.
+     Maintenance ~2850 kcal. La sèche sérieuse reviendra plus tard,
+     posée sur une fondation d'adhérence qui tient. */
+  /* S23-S25 Reprise : charges -40%, séances 45 min, présence = victoire */
+  {w:23,p:"Reprise",c:"#3ECF8A",d:"6 juil",cal:2850},
+  {w:24,p:"Reprise",c:"#3ECF8A",d:"13 juil",cal:2850},
+  {w:25,p:"Reprise",c:"#3ECF8A",d:"20 juil",cal:2850},
+  /* S26+ Reconstruction : les charges remontent, présence toujours reine */
+  {w:26,p:"Reconstruction",c:"#4DA8FF",d:"27 juil",cal:2800},
+  {w:27,p:"Reconstruction",c:"#4DA8FF",d:"3 août",cal:2800},
+  {w:28,p:"Reconstruction",c:"#4DA8FF",d:"10 août",cal:2800},
+  {w:29,p:"Reconstruction",c:"#4DA8FF",d:"17 août",cal:2800},
+  {w:30,p:"Reconstruction",c:"#4DA8FF",d:"24 août",cal:2800},
+  {w:31,p:"Reconstruction",c:"#4DA8FF",d:"31 août",cal:2800},
+  {w:32,p:"Reconstruction",c:"#4DA8FF",d:"7 sept",cal:2800},
+  {w:33,p:"Reconstruction",c:"#4DA8FF",d:"14 sept",cal:2800},
+  {w:34,p:"Reconstruction",c:"#4DA8FF",d:"21 sept",cal:2800},
+  {w:35,p:"Reconstruction",c:"#4DA8FF",d:"28 sept",cal:2800},
 ];
 
 const PCFG={
@@ -270,6 +328,9 @@ const PCFG={
   "Intensification":{cLo:8,cHi:10,iLo:12,iHi:15,rest:90,desc:"Déficit augmenté. Volume STANDARD maintenu. LISS 4×/sem 40 min (⚠️ PLAFOND ABSOLU, jamais 5×). Hydratation 4L/jour."},
   "Finish":{cLo:8,cHi:10,iLo:12,iHi:15,rest:75,desc:"Dernière ligne droite. S26: volume STANDARD. S27: DELOAD -30% (volume réduit, charges identiques). LISS 4× puis 3× S27. ⚠️ Cardio plafond 4×."},
   "Peak Week":{cLo:12,cHi:15,iLo:12,iHi:15,rest:60,desc:"S29 = Peak finale, Jour J sam 23 août. Volume -40% (activation seulement). Lun-Mer: 2400 kcal. JEU: 2300 (déplétion). VEN: 3400 (RECHARGE FINALE, 480g glucides, repos). SAM: protocole + photos comparaison J0 (18 mai). LISS 2× 30 min (stop jeudi)."},
+  /* Reprise 5j (S23+) — présence d'abord */
+  "Reprise":{cLo:8,cHi:10,iLo:12,iHi:15,rest:90,desc:"UN SEUL SCORE : présences /5. Charges -40%, RIR 3-4, tu sors FRAIS. 45 min max. Flemme ? Règle des 20 min : 3 exos × 2 séries = présence validée. ~2850 kcal, pas de déficit. Pesée jeudi uniquement."},
+  "Reconstruction":{cLo:8,cHi:10,iLo:10,iHi:12,rest:90,desc:"Présence installée → les charges remontent progressivement (RIR 2). Toujours 45 min max, présence reine. Maintenance ~2800 kcal. La sèche reviendra quand la fondation tient."},
   /* Post-sèche */
   "Post-sèche":{cLo:8,cHi:10,iLo:10,iHi:12,rest:120,desc:"Après le 23 août : maintenance / mini lean bulk / prolongation. À décider à tête froide le 24 août."},
 };
@@ -429,7 +490,7 @@ function migrateData(st){
   else{ALL_DAYS.forEach(function(d){if(!st.ord[d.key])st.ord[d.key]=d.exs.map(function(e){return e.id});else{d.exs.forEach(function(e){if(st.ord[d.key].indexOf(e.id)===-1){st.ord[d.key].push(e.id);changed=true}})}})}
   if(changed)save(st);return st;
 }
-function init(){var wk={};for(var i=1;i<=29;i++)wk[i]=emptyW();wk[1]=buildS1();var ord={};ALL_DAYS.forEach(function(d){ord[d.key]=d.exs.map(function(e){return e.id})});return{wk:wk,cw:2,ord:ord}}
+function init(){var wk={};for(var i=1;i<=35;i++)wk[i]=emptyW();wk[1]=buildS1();var ord={};ALL_DAYS.forEach(function(d){ord[d.key]=d.exs.map(function(e){return e.id})});return{wk:wk,cw:2,ord:ord}}
 
 /* ═══ PROGRESSION DOUBLE — RÉFÉRENCE = DERNIÈRE SÉRIE ═══ */
 function compObj(exDef,prev,rng,tpOverride){
@@ -705,7 +766,8 @@ function WeekCarousel({phases,wk,setWk,st,setRd,setSt}){
   var pc=PCFG[ph.p]||PCFG["Hypertrophie"];
   var wd2=getWeekDates(wN);
   var wkData=st.wk[wN];
-  var sc=wkData?getWeekSessionCount(wkData):0;
+  var scMax=getDays(wN).length;
+  var sc=wkData?getWeekSessionCount(wkData,wN):0;
   var vt=getLatestVTaper(st.wk,wN);
   var vtColor=vt?(vt.num>=1.45?"#10B981":vt.num>=1.35?"#F59E0B":"#EF4444"):null;
 
@@ -753,8 +815,8 @@ function WeekCarousel({phases,wk,setWk,st,setRd,setSt}){
           <div style={{flex:1,padding:"6px 10px",borderRadius:10,background:"rgba(255,255,255,.04)",border:"1px solid rgba(255,255,255,.06)"}}>
             <div style={{fontSize:8,fontWeight:800,color:"rgba(255,255,255,.25)",letterSpacing:.5,marginBottom:3}}>💪 SÉANCES</div>
             <div style={{display:"flex",alignItems:"center",gap:6}}>
-              <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:18,fontWeight:900,color:sc>=6?"#10B981":"#fff"}}>{sc}<span style={{fontSize:11,color:"rgba(255,255,255,.25)",fontWeight:400}}>/6</span></span>
-              <div style={{flex:1}}><MBar v={sc} mx={6} c={sc>=6?"#10B981":ph.c} h={4}/></div>
+              <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:18,fontWeight:900,color:sc>=scMax?"#10B981":"#fff"}}>{sc}<span style={{fontSize:11,color:"rgba(255,255,255,.25)",fontWeight:400}}>/{scMax}</span></span>
+              <div style={{flex:1}}><MBar v={sc} mx={scMax} c={sc>=scMax?"#10B981":ph.c} h={4}/></div>
             </div>
           </div>
         </div>
@@ -817,7 +879,7 @@ function App(){
     // Epoch LUNDI 2 fév — semaine commence le lundi
     var s1Mon=new Date(2026,1,2),now=new Date();
     var aw=Math.floor((now-s1Mon)/(7*24*60*60*1000));
-    if(aw<0)aw=0;if(aw>28)aw=28;
+    if(aw<0)aw=0;if(aw>PHASES.length-1)aw=PHASES.length-1;
     setWk(aw);setRd(getPhaseRest(PHASES[aw].p));
     var dow=now.getDay();
     setDayI(dowToDayI(aw+1, dow));
@@ -898,7 +960,7 @@ function App(){
     <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:14}}>
       <div>
         <div style={{fontSize:24,fontWeight:900,letterSpacing:-1,lineHeight:1}}>COLOSSE</div>
-        <div style={{fontSize:9,fontWeight:700,letterSpacing:2,color:"rgba(255,255,255,.22)",textTransform:"uppercase",marginTop:2}}>{ph.cal||3800} kcal · {wN>=14?"Sèche Push/Pull 12 sem":"PPL 6j"} · {PHASES.length} sem.</div>
+        <div style={{fontSize:9,fontWeight:700,letterSpacing:2,color:"rgba(255,255,255,.22)",textTransform:"uppercase",marginTop:2}}>{ph.cal||3800} kcal · {wN>=23?"Reprise 5j · 2×/muscle":wN>=14?"Sèche Push/Pull":"PPL 6j"} · Présence d'abord</div>
       </div>
       <div style={{display:"flex",alignItems:"center",gap:10}}>
         {sav&&<div style={{fontSize:9,color:"#10B981",fontWeight:700,display:"flex",alignItems:"center",gap:3}}><span style={{width:5,height:5,borderRadius:"50%",background:"#10B981",display:"inline-block"}}/>Sauvé</div>}
@@ -923,7 +985,7 @@ function App(){
           var active=safeDayI===i;
           var dd=wd.ds[d.key];var dc2=false;
           if(dd){var any=false,all=true;d.exs.forEach(function(ex){if(!dd[ex.id])return;if(dd[ex.id].s.some(function(s){return s.d}))any=true;else all=false});dc2=any&&all}
-          var dateLbl = wN>=14 ? wd2[dateIdxUL[i]] : wd2[i];
+          var dateLbl = wN>=23 ? wd2[i] : (wN>=14 ? wd2[dateIdxUL[i]] : wd2[i]);
           return<button key={i} onClick={function(){setDayI(i)}} style={{flex:"1 1 0",padding:"6px 2px 6px",borderRadius:12,border:active?"2px solid "+d.color:"1px solid rgba(255,255,255,.05)",background:active?d.color+"15":"transparent",cursor:"pointer",textAlign:"center",minWidth:44,position:"relative",transition:"all .15s"}}>
             {dc2&&!active&&<div style={{position:"absolute",top:4,right:4,width:5,height:5,borderRadius:"50%",background:"#10B981"}}/>}
             <div style={{fontSize:8,color:active?d.color:"rgba(255,255,255,.2)",fontWeight:800,letterSpacing:.3}}>{d.day.substring(0,3).toUpperCase()}</div>
