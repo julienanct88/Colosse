@@ -288,26 +288,28 @@ const PHASES=[
   {w:21,p:"Pride Week",c:"#DC2626",d:"22 juin",cal:2600},
   /* S22 Diet Break — retour au maintien (reset métabolique) */
   {w:22,p:"Diet Break",c:"#3ECF8A",d:"29 juin",cal:3000},
-  /* === REPRISE (S23+, 6 juil 2026) ===
-     Pause fin juin. On repart. Un seul objectif : PRÉSENCE 5/sem.
-     Pas de deadline, pas de checkpoint daté, pas de déficit.
-     Maintenance ~2850 kcal. La sèche sérieuse reviendra plus tard,
-     posée sur une fondation d'adhérence qui tient. */
-  /* S23-S25 Reprise : charges -40%, séances 45 min, présence = victoire */
-  {w:23,p:"Reprise",c:"#3ECF8A",d:"6 juil",cal:2850},
-  {w:24,p:"Reprise",c:"#3ECF8A",d:"13 juil",cal:2850},
-  {w:25,p:"Reprise",c:"#3ECF8A",d:"20 juil",cal:2850},
-  /* S26+ Reconstruction : les charges remontent, présence toujours reine */
-  {w:26,p:"Reconstruction",c:"#4DA8FF",d:"27 juil",cal:2800},
-  {w:27,p:"Reconstruction",c:"#4DA8FF",d:"3 août",cal:2800},
-  {w:28,p:"Reconstruction",c:"#4DA8FF",d:"10 août",cal:2800},
-  {w:29,p:"Reconstruction",c:"#4DA8FF",d:"17 août",cal:2800},
-  {w:30,p:"Reconstruction",c:"#4DA8FF",d:"24 août",cal:2800},
-  {w:31,p:"Reconstruction",c:"#4DA8FF",d:"31 août",cal:2800},
-  {w:32,p:"Reconstruction",c:"#4DA8FF",d:"7 sept",cal:2800},
-  {w:33,p:"Reconstruction",c:"#4DA8FF",d:"14 sept",cal:2800},
-  {w:34,p:"Reconstruction",c:"#4DA8FF",d:"21 sept",cal:2800},
-  {w:35,p:"Reconstruction",c:"#4DA8FF",d:"28 sept",cal:2800},
+  /* === REPRISE + SÈCHE (S23+, 6 juil 2026) ===
+     Objectif : SEC en septembre. 2 sem de reprise en douceur, puis
+     déficit progressif jusqu'au plancher 2400. Présence 5/5 = LE seul
+     score. Pas de deadline poids, pas de checkpoint daté : c'est la
+     perte réelle du jeudi (moyenne 7j) qui pilote les ajustements. */
+  /* S23-24 Reprise : réhabituer le corps, déficit doux, charges -40% */
+  {w:23,p:"Reprise",c:"#3ECF8A",d:"6 juil",cal:2700},
+  {w:24,p:"Reprise",c:"#3ECF8A",d:"13 juil",cal:2700},
+  /* S25-27 Sèche installée (-500) */
+  {w:25,p:"Sèche",c:"#DC2626",d:"20 juil",cal:2500},
+  {w:26,p:"Sèche",c:"#DC2626",d:"27 juil",cal:2500},
+  {w:27,p:"Sèche",c:"#DC2626",d:"3 août",cal:2500},
+  /* S28-30 Sèche soutenue */
+  {w:28,p:"Sèche",c:"#DC2626",d:"10 août",cal:2450},
+  {w:29,p:"Sèche",c:"#DC2626",d:"17 août",cal:2450},
+  {w:30,p:"Sèche",c:"#DC2626",d:"24 août",cal:2450},
+  /* S31-35 Finition septembre (PLANCHER 2400) */
+  {w:31,p:"Sèche",c:"#DC2626",d:"31 août",cal:2400},
+  {w:32,p:"Sèche",c:"#DC2626",d:"7 sept",cal:2400},
+  {w:33,p:"Sèche",c:"#DC2626",d:"14 sept",cal:2400},
+  {w:34,p:"Sèche",c:"#DC2626",d:"21 sept",cal:2400},
+  {w:35,p:"Sèche",c:"#DC2626",d:"28 sept",cal:2400},
 ];
 
 const PCFG={
@@ -316,7 +318,7 @@ const PCFG={
   "Hypertrophie":{cLo:8,cHi:10,iLo:10,iHi:12,rest:120,desc:"Volume maximum. Casse les fibres."},
   "Force Max":{cLo:5,cHi:8,iLo:8,iHi:10,rest:180,desc:"Charges lourdes. PRs. Intensité maximale."},
   "Maintien":{cLo:8,cHi:10,iLo:10,iHi:12,rest:120,desc:"Conserve tes gains. Récupération prioritaire."},
-  "Sèche":{cLo:6,cHi:8,iLo:12,iHi:15,rest:90,desc:"Déficit calorique. Garde l'intensité. Perds le gras."},
+  "Sèche":{cLo:8,cHi:10,iLo:12,iHi:15,rest:90,desc:"Déficit installé, objectif SEC en septembre. Présence 5/5 reste LE score. Charges maintenues (RIR 2), 45 min max. Protéines hautes (~220g), plancher 2400 kcal. Pesée jeudi : moyenne 7j → on ajuste. Règle des 20 min les jours durs."},
   /* Sèche 12 semaines V1 (S14-S29) */
   "Transition":{cLo:8,cHi:10,iLo:10,iHi:12,rest:120,desc:"Sortie PCT, transition avant sèche. Charges 90-95% peak, RIR 2-3. Cardio max 4×/sem (jamais 5×)."},
   "Initiation":{cLo:8,cHi:10,iLo:12,iHi:15,rest:90,desc:"Installation déficit. Charges maintenues (-10% peak max), RIR 2. Volume STANDARD (4×composé/3×iso). LISS 2×/sem 30-35 min. Refeed samedi +300 kcal."},
@@ -328,9 +330,8 @@ const PCFG={
   "Intensification":{cLo:8,cHi:10,iLo:12,iHi:15,rest:90,desc:"Déficit augmenté. Volume STANDARD maintenu. LISS 4×/sem 40 min (⚠️ PLAFOND ABSOLU, jamais 5×). Hydratation 4L/jour."},
   "Finish":{cLo:8,cHi:10,iLo:12,iHi:15,rest:75,desc:"Dernière ligne droite. S26: volume STANDARD. S27: DELOAD -30% (volume réduit, charges identiques). LISS 4× puis 3× S27. ⚠️ Cardio plafond 4×."},
   "Peak Week":{cLo:12,cHi:15,iLo:12,iHi:15,rest:60,desc:"S29 = Peak finale, Jour J sam 23 août. Volume -40% (activation seulement). Lun-Mer: 2400 kcal. JEU: 2300 (déplétion). VEN: 3400 (RECHARGE FINALE, 480g glucides, repos). SAM: protocole + photos comparaison J0 (18 mai). LISS 2× 30 min (stop jeudi)."},
-  /* Reprise 5j (S23+) — présence d'abord */
-  "Reprise":{cLo:8,cHi:10,iLo:12,iHi:15,rest:90,desc:"UN SEUL SCORE : présences /5. Charges -40%, RIR 3-4, tu sors FRAIS. 45 min max. Flemme ? Règle des 20 min : 3 exos × 2 séries = présence validée. ~2850 kcal, pas de déficit. Pesée jeudi uniquement."},
-  "Reconstruction":{cLo:8,cHi:10,iLo:10,iHi:12,rest:90,desc:"Présence installée → les charges remontent progressivement (RIR 2). Toujours 45 min max, présence reine. Maintenance ~2800 kcal. La sèche reviendra quand la fondation tient."},
+  /* Reprise 5j (S23-24) — présence d'abord, entrée en déficit doux */
+  "Reprise":{cLo:8,cHi:10,iLo:12,iHi:15,rest:90,desc:"UN SEUL SCORE : présences /5. Charges -40%, RIR 3-4, tu sors FRAIS. 45 min max. Flemme ? Règle des 20 min : 3 exos × 2 séries = présence validée. Déficit doux (~2700). Pesée jeudi uniquement, pas de photos 3 semaines."},
   /* Post-sèche */
   "Post-sèche":{cLo:8,cHi:10,iLo:10,iHi:12,rest:120,desc:"Après le 23 août : maintenance / mini lean bulk / prolongation. À décider à tête froide le 24 août."},
 };
@@ -960,7 +961,7 @@ function App(){
     <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:14}}>
       <div>
         <div style={{fontSize:24,fontWeight:900,letterSpacing:-1,lineHeight:1}}>COLOSSE</div>
-        <div style={{fontSize:9,fontWeight:700,letterSpacing:2,color:"rgba(255,255,255,.22)",textTransform:"uppercase",marginTop:2}}>{ph.cal||3800} kcal · {wN>=23?"Reprise 5j · 2×/muscle":wN>=14?"Sèche Push/Pull":"PPL 6j"} · Présence d'abord</div>
+        <div style={{fontSize:9,fontWeight:700,letterSpacing:2,color:"rgba(255,255,255,.22)",textTransform:"uppercase",marginTop:2}}>{ph.cal||3800} kcal · {wN>=23?"Sèche 5j · 2×/muscle":wN>=14?"Sèche Push/Pull":"PPL 6j"} · Présence d'abord</div>
       </div>
       <div style={{display:"flex",alignItems:"center",gap:10}}>
         {sav&&<div style={{fontSize:9,color:"#10B981",fontWeight:700,display:"flex",alignItems:"center",gap:3}}><span style={{width:5,height:5,borderRadius:"50%",background:"#10B981",display:"inline-block"}}/>Sauvé</div>}
