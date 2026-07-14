@@ -1,6 +1,6 @@
 // Colosse PWA Service Worker
 // Change CACHE_VERSION to force update on all clients
-const CACHE_VERSION = 'colosse-v30-seche';
+const CACHE_VERSION = 'colosse-v31-fusion';
 const CACHE_NAME = CACHE_VERSION;
 
 const PRECACHE_URLS = [
