@@ -24,6 +24,8 @@
     ::-webkit-scrollbar{display:none}
   </style>
   <script>
+  /* Clés publiques du salon de challenges. Les mensurations restent uniquement sur l’appareil. */
+  window.COLOSSE_CLOUD=window.COLOSSE_CLOUD||{url:"",publishableKey:""};
   function loadScript(urls,check,name){
     return new Promise(function(resolve,reject){
       var i=0;
@@ -43,6 +45,12 @@
   .then(function(){
     var src=document.getElementById('app-src');
     if(src){var code=Babel.transform(src.textContent,{presets:['react']}).code;var exec=document.createElement('script');exec.textContent=code;document.body.appendChild(exec)}
+    loadScript([
+      'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js',
+      'https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js'
+    ],function(){return !!(window.supabase&&window.supabase.createClient)},'Challenge cloud')
+    .then(function(){window.dispatchEvent(new Event('colosse:supabase-ready'))})
+    .catch(function(){/* L’app continue normalement en mode local. */});
   })
   .catch(function(err){
     var root=document.getElementById('root');
@@ -54,7 +62,7 @@
 <div id="root"></div>
 <script type="text/plain" id="app-src">
 const{useState,useEffect,useRef}=React;
-const APP_VERSION="v34";
+const APP_VERSION="v35-beta";
 const APP_UPDATED="1 août 2026";
 
 /* ═══ WAKE LOCK ═══ */
@@ -283,12 +291,37 @@ function getDays(wN){
   if(wN>=23)return DAYS_R5;
   return wN>=14 ? DAYS_UL : DAYS;
 }
+/* Nouveaux profils bêta : 3 à 5 jours, sans modifier le programme historique de Julien. */
+const DAYS_BETA3=[
+  Object.assign({},DAYS_AUG26[0],{day:"Lundi"}),
+  Object.assign({},DAYS_AUG26[4],{day:"Mercredi"}),
+  Object.assign({},DAYS_AUG26[2],{day:"Vendredi"})
+];
+const DAYS_BETA4=[
+  Object.assign({},DAYS_AUG26[0],{day:"Lundi"}),
+  Object.assign({},DAYS_AUG26[1],{day:"Mardi"}),
+  Object.assign({},DAYS_AUG26[2],{day:"Jeudi"}),
+  Object.assign({},DAYS_AUG26[3],{day:"Vendredi"})
+];
+function getDaysForProfile(profile,wN){
+  if(!profile||profile.programKey==="julien")return getDays(wN);
+  var n=parseInt(profile.days)||3;
+  return n<=3?DAYS_BETA3:n===4?DAYS_BETA4:DAYS_AUG26;
+}
 /* Tous les jours — utile pour migration, init et recherche PR all-time. */
 const ALL_DAYS = DAYS.concat(DAYS_UL).concat(DAYS_R5).concat(DAYS_AUG26);
 /* Mapping jour de la semaine → index dans le tableau DAYS de la phase active.
    PPL : Lun=0..Sam=5. U/L : Lun=0, Mar=1, Jeu=2, Ven=3.
    R5 : Lun=0, Mar=1, Mer=2, Jeu=3, Ven=4 (week-end → Ven affiché). */
-function dowToDayI(wN, dow){
+function dowToDayI(wN, dow, profile){
+  if(profile&&profile.programKey!=="julien"){
+    var n=parseInt(profile.days)||3;
+    var map3={1:0,2:0,3:1,4:1,5:2,6:2,0:0};
+    var map4={1:0,2:1,3:1,4:2,5:3,6:3,0:0};
+    var map5={1:0,2:1,3:2,4:3,5:4,6:4,0:0};
+    var m=n<=3?map3:n===4?map4:map5;
+    return m[dow]!==undefined?m[dow]:0;
+  }
   if(wN>=23){
     var r5Map={1:0, 2:1, 3:2, 4:3, 5:4, 6:4, 0:0};
     return r5Map[dow]!==undefined ? r5Map[dow] : 0;
@@ -299,6 +332,14 @@ function dowToDayI(wN, dow){
     return ulMap[dow]!==undefined ? ulMap[dow] : 0;
   }
   return (dow>=1 && dow<=6) ? dow-1 : 0;
+}
+function isExactTrainingDay(wN,dayI,dow,profile){
+  var scheduled;
+  if(profile&&profile.programKey!=="julien"){
+    var n=parseInt(profile.days)||3;
+    scheduled=n<=3?[1,3,5]:n===4?[1,2,4,5]:[1,2,3,4,5];
+  }else scheduled=wN>=23?[1,2,3,4,5]:wN>=14?[1,2,4,5]:[1,2,3,4,5,6];
+  return scheduled[dayI]===dow;
 }
 
 const PHASES=[
@@ -438,10 +479,10 @@ function getLatestVTaper(allWks,upToWkNum){
   return null;
 }
 
-function getWeekSessionCount(wkData,wN){
+function getWeekSessionCount(wkData,wN,profile){
   if(!wkData||!wkData.ds)return 0;var done=0;
   /* Si wN fourni, n'utiliser que les jours du programme actif. Sinon, scanner tous les jours. */
-  var daysToScan = (typeof wN==="number") ? getDays(wN) : ALL_DAYS;
+  var daysToScan = (typeof wN==="number") ? getDaysForProfile(profile,wN) : ALL_DAYS;
   daysToScan.forEach(function(d){var dd=wkData.ds[d.key];if(!dd)return;var any=false,all=true;
     d.exs.forEach(function(ex){if(!dd[ex.id])return;if(dd[ex.id].s.some(function(s){return s.d}))any=true;else all=false});
     if(any&&all)done++});
@@ -467,8 +508,103 @@ const S1={
 const S1M={poids:"95",bras_c:"39",bras_r:"35",poitrine:"",epaules:"",taille:"",cuisse:""};
 
 const SK="colosse-coach-v2";
+const PROFILE_SK="colosse-profile-v1";
+const CHALLENGE_SK="colosse-challenges-v1";
 function load(){try{var r=localStorage.getItem(SK);return r?JSON.parse(r):null}catch(e){return null}}
 function save(d){try{localStorage.setItem(SK,JSON.stringify(d))}catch(e){}}
+function loadProfile(){try{var r=localStorage.getItem(PROFILE_SK);return r?JSON.parse(r):null}catch(e){return null}}
+function saveProfile(p){try{localStorage.setItem(PROFILE_SK,JSON.stringify(p))}catch(e){}}
+function makeId(prefix){
+  try{if(crypto&&crypto.randomUUID)return(prefix||"")+crypto.randomUUID()}
+  catch(e){}
+  return(prefix||"")+Date.now().toString(36)+Math.random().toString(36).slice(2,10);
+}
+function round50(n){return Math.round(n/50)*50}
+function enrichProfile(raw){
+  var p=JSON.parse(JSON.stringify(raw||{}));
+  var w=parseFloat(p.weight)||0,h=parseFloat(p.height)||0,a=parseInt(p.age)||30;
+  var bmi=w>0&&h>0?w/Math.pow(h/100,2):0;
+  var sexAdj=p.sex==="female"?-161:p.sex==="male"?5:-78;
+  var bmr=w>0&&h>0?10*w+6.25*h-5*a+sexAdj:0;
+  var act=p.activity==="regular"?1.5:p.activity==="light"?1.35:1.2;
+  var maintenance=bmr?bmr*act:0,delta=p.goal==="fat_loss"?-350:p.goal==="muscle"?200:-100;
+  p.bmi=bmi?Math.round(bmi*10)/10:null;
+  p.calTarget=maintenance?Math.max(p.sex==="female"?1500:1800,round50(maintenance+delta)):null;
+  p.proteinTarget=w?Math.round(Math.max(100,Math.min(220,w*1.8))/5)*5:null;
+  if(p.level==="restart")p.profileType="Reprise progressive";
+  else if(p.goal==="fat_loss"&&bmi>=30)p.profileType="Perte de gras progressive";
+  else if(p.goal==="fat_loss")p.profileType="Définition & maintien musculaire";
+  else if(p.goal==="muscle")p.profileType="Construction musculaire";
+  else p.profileType="Recomposition corporelle";
+  p.programKey=p.programKey||"beta";
+  p.id=p.id||makeId("p_");p.createdAt=p.createdAt||new Date().toISOString();
+  return p;
+}
+function legacyJulienProfile(){return enrichProfile({id:"julien",name:"Julien",age:38,sex:"male",height:197,weight:98.7,waist:99,goal:"fat_loss",bodyShape:"belly",level:"restart",activity:"light",days:5,duration:45,equipment:"gym",constraints:[],programKey:"julien",migrated:true})}
+function loadChallenges(){try{var r=localStorage.getItem(CHALLENGE_SK);return r?JSON.parse(r):{rooms:[],attempts:[]}}catch(e){return{rooms:[],attempts:[]}}}
+function saveChallenges(d){try{localStorage.setItem(CHALLENGE_SK,JSON.stringify(d))}catch(e){}}
+
+const CHALLENGE_CATALOG=[
+  {id:"plank",icon:"🧱",name:"Planche",kind:"time",target:60,max:300,unit:"sec",color:"#8B5CF6",desc:"Tiens une position propre le plus longtemps possible.",blocked:["back","shoulder"]},
+  {id:"wall_sit",icon:"🪑",name:"Chaise au mur",kind:"time",target:60,max:300,unit:"sec",color:"#10B981",desc:"Dos au mur, cuisses contrôlées, meilleur temps.",blocked:["knee"]},
+  {id:"pushups",icon:"💥",name:"Pompes propres",kind:"reps",target:20,max:200,unit:"reps",color:"#EF4444",desc:"Une seule série, seules les répétitions propres comptent.",blocked:["wrist","shoulder"]},
+  {id:"crunch60",icon:"🔥",name:"Crunchs contrôlés",kind:"reps60",target:30,max:120,unit:"reps",color:"#F59E0B",desc:"60 secondes, sans tirer sur la nuque.",blocked:["back"]},
+  {id:"squat60",icon:"⚡",name:"Squats poids du corps",kind:"reps60",target:35,max:120,unit:"reps",color:"#3B82F6",desc:"60 secondes, amplitude et contrôle avant la vitesse.",blocked:["knee","back"]}
+];
+function challengeById(id){return CHALLENGE_CATALOG.find(function(c){return c.id===id})||CHALLENGE_CATALOG[0]}
+function eligibleChallenges(profile){var cs=(profile&&profile.constraints)||[];if(cs.indexOf("medical")>=0)return[];return CHALLENGE_CATALOG.filter(function(c){return!c.blocked.some(function(x){return cs.indexOf(x)>=0})})}
+function challengeCode(){return Math.random().toString(36).slice(2,8).toUpperCase()}
+function scoreLabel(c,n){n=parseInt(n)||0;if(c.kind==="time"){var m=Math.floor(n/60),s=n%60;return(m?m+" min ":"")+String(s).padStart(m?2:1,"0")+" s"}return n+" reps"}
+function roomRanking(data,room){
+  var best={};(data.attempts||[]).filter(function(a){return a.roomId===room.id}).forEach(function(a){if(!best[a.profileId]||a.score>best[a.profileId].score)best[a.profileId]=a});
+  return Object.keys(best).map(function(k){return best[k]}).sort(function(a,b){return b.score-a.score});
+}
+
+/* ═══ CHALLENGE CLOUD — uniquement pseudo, défi et scores ═══ */
+var cloudConnectionPromise=null;
+function cloudConfig(){var c=window.COLOSSE_CLOUD||{};return{url:String(c.url||"").trim(),key:String(c.publishableKey||"").trim()}}
+function cloudConfigured(){var c=cloudConfig();return /^https:\/\/.+\.supabase\.co$/.test(c.url)&&c.key.length>20}
+function waitForCloudLibrary(){return new Promise(function(resolve,reject){
+  if(window.supabase&&window.supabase.createClient){resolve();return}
+  var waited=0,t=setInterval(function(){waited+=100;if(window.supabase&&window.supabase.createClient){clearInterval(t);resolve()}else if(waited>=8000){clearInterval(t);reject(new Error("Le service de challenge ne répond pas."))}},100);
+})}
+async function getCloudConnection(){
+  if(!cloudConfigured())throw new Error("Le partage des challenges n’est pas encore configuré.");
+  if(cloudConnectionPromise)return cloudConnectionPromise;
+  cloudConnectionPromise=(async function(){
+    await waitForCloudLibrary();var cfg=cloudConfig();
+    var client=window.supabase.createClient(cfg.url,cfg.key,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
+    var sr=await client.auth.getSession();if(sr.error)throw sr.error;
+    var session=sr.data&&sr.data.session;
+    if(!session){var ar=await client.auth.signInAnonymously();if(ar.error)throw ar.error;session=ar.data.session}
+    if(!session||!session.user)throw new Error("Impossible de créer ton accès anonyme.");
+    return{client:client,userId:session.user.id};
+  })().catch(function(err){cloudConnectionPromise=null;throw err});
+  return cloudConnectionPromise;
+}
+function normalizedCloudRoom(row,members,userId){return{id:row.id,code:row.code,title:row.title,challengeId:row.challenge_id,createdBy:row.created_by,createdAt:row.created_at,endsAt:row.ends_at,shared:true,currentUserId:userId,members:(members||[]).map(function(m){return{id:m.user_id,name:m.nickname}})}}
+function normalizedCloudAttempt(row){return{id:row.id,roomId:row.room_id,profileId:row.user_id,name:row.nickname,score:row.score,createdAt:row.created_at,shared:true}}
+async function cloudFetchRoom(roomId){
+  var cx=await getCloudConnection(),client=cx.client;
+  var rr=await client.from("challenge_rooms").select("*").eq("id",roomId).single();if(rr.error)throw rr.error;
+  var mr=await client.from("challenge_members").select("user_id,nickname,joined_at").eq("room_id",roomId);if(mr.error)throw mr.error;
+  var ar=await client.from("challenge_attempts").select("id,room_id,user_id,nickname,score,created_at").eq("room_id",roomId).order("score",{ascending:false});if(ar.error)throw ar.error;
+  return{room:normalizedCloudRoom(rr.data,mr.data,cx.userId),attempts:(ar.data||[]).map(normalizedCloudAttempt),userId:cx.userId};
+}
+async function cloudCreateChallenge(challenge,profile){
+  var cx=await getCloudConnection(),r=await cx.client.rpc("create_challenge",{p_challenge_id:challenge.id,p_title:("Challenge de "+profile.name).slice(0,80),p_nickname:String(profile.name).slice(0,24)});
+  if(r.error)throw r.error;var row=Array.isArray(r.data)?r.data[0]:r.data;if(!row||!row.id)throw new Error("Le salon n’a pas été créé.");
+  return cloudFetchRoom(row.id);
+}
+async function cloudJoinChallenge(code,profile){
+  var cx=await getCloudConnection(),r=await cx.client.rpc("join_challenge",{p_code:String(code||"").trim().toUpperCase(),p_nickname:String(profile.name).slice(0,24)});
+  if(r.error)throw r.error;var row=Array.isArray(r.data)?r.data[0]:r.data;if(!row||!row.id)throw new Error("Challenge introuvable ou terminé.");
+  return cloudFetchRoom(row.id);
+}
+async function cloudRecordAttempt(room,profile,score){
+  var cx=await getCloudConnection(),r=await cx.client.rpc("record_challenge_attempt",{p_room_id:room.id,p_score:score});
+  if(r.error)throw r.error;var row=Array.isArray(r.data)?r.data[0]:r.data;if(!row||!row.id)throw new Error("Le score n’a pas été enregistré.");return normalizedCloudAttempt(row);
+}
 
 function getWeekDates(wNum){
   var s1Mon=new Date(2026,1,2);
@@ -562,6 +698,7 @@ function migrateData(st){
   if(changed)save(st);return st;
 }
 function init(){var wk={};for(var i=1;i<=35;i++)wk[i]=emptyW();wk[1]=buildS1();var ord={};ALL_DAYS.forEach(function(d){ord[d.key]=d.exs.map(function(e){return e.id})});return{wk:wk,cw:2,ord:ord,hb:{}}}
+function initFresh(){var wk={};for(var i=1;i<=35;i++)wk[i]=emptyW();var ord={};ALL_DAYS.forEach(function(d){ord[d.key]=d.exs.map(function(e){return e.id})});return{wk:wk,cw:1,ord:ord,hb:{},freshProfile:true}}
 
 /* ═══ PROGRESSION DOUBLE — RÉFÉRENCE = DERNIÈRE SÉRIE ═══ */
 function compObj(exDef,prev,rng,tpOverride){
@@ -831,7 +968,7 @@ function MeasCard({wd,pmw,upM}){
 }
 
 /* ═══ WEEK CAROUSEL ═══ */
-function WeekCarousel({phases,wk,setWk,st,setRd,setSt}){
+function WeekCarousel({phases,wk,setWk,st,setRd,setSt,profile}){
   const ref=useRef(null);
   const startX=useRef(0);const startY=useRef(0);const swiping=useRef(false);
   const[offX,setOffX]=useState(0);const[anim,setAnim]=useState(true);
@@ -865,8 +1002,12 @@ function WeekCarousel({phases,wk,setWk,st,setRd,setSt}){
   var pc=PCFG[ph.p]||PCFG["Hypertrophie"];
   var wd2=getWeekDates(wN);
   var wkData=st.wk[wN];
-  var scMax=getDays(wN).length;
-  var sc=wkData?getWeekSessionCount(wkData,wN):0;
+  var scMax=getDaysForProfile(profile,wN).length;
+  var sc=wkData?getWeekSessionCount(wkData,wN,profile):0;
+  var targetCal=profile&&profile.programKey!=="julien"&&profile.calTarget?profile.calTarget:(ph.cal||3800);
+  var phaseDesc=profile&&profile.programKey!=="julien"
+    ? profile.profileType+" · "+profile.days+" séances de "+profile.duration+" min"
+    : pc.desc;
   var vt=getLatestVTaper(st.wk,wN);
   var vtColor=vt?(vt.num>=1.45?"#10B981":vt.num>=1.35?"#F59E0B":"#EF4444"):null;
 
@@ -892,7 +1033,7 @@ function WeekCarousel({phases,wk,setWk,st,setRd,setSt}){
             </div>
           </div>
           <div style={{textAlign:"right"}}>
-            <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:18,fontWeight:800,color:ph.c}}>{ph.cal||3800}</div>
+            <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:18,fontWeight:800,color:ph.c}}>{targetCal}</div>
             <div style={{fontSize:8,color:"rgba(255,255,255,.25)"}}>kcal/jour</div>
           </div>
         </div>
@@ -922,7 +1063,7 @@ function WeekCarousel({phases,wk,setWk,st,setRd,setSt}){
 
         {/* Row 3: Description + Reps */}
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <div style={{fontSize:10,color:"rgba(255,255,255,.35)",fontStyle:"italic",flex:1}}>{pc.desc}</div>
+          <div style={{fontSize:10,color:"rgba(255,255,255,.35)",fontStyle:"italic",flex:1}}>{phaseDesc}</div>
           <span style={{fontSize:9,color:"rgba(255,255,255,.2)",flexShrink:0,marginLeft:8}}>{pc.cLo}-{pc.cHi} compo · {pc.iLo}-{pc.iHi} iso</span>
         </div>
 
@@ -940,6 +1081,147 @@ function WeekCarousel({phases,wk,setWk,st,setRd,setSt}){
           style={{width:act?14:6,height:6,borderRadius:3,border:"none",background:act?p.c:i<wk?p.c+"55":"rgba(255,255,255,.1)",cursor:"pointer",padding:0,transition:"all .2s"}}/>;
       })}
     </div>
+  </div>;
+}
+
+/* ═══ CRÉATION DE PROFIL ═══ */
+function ProfileOnboarding({onCreate}){
+  const[step,setStep]=useState(0);
+  const[form,setForm]=useState({name:"",age:"",sex:"",height:"",weight:"",waist:"",goal:"",bodyShape:"",level:"",activity:"",days:3,duration:45,equipment:"gym",constraints:[]});
+  function set(k,v){setForm(function(p){var n=Object.assign({},p);n[k]=v;return n})}
+  function toggleConstraint(v){setForm(function(p){var n=Object.assign({},p),a=(p.constraints||[]).slice();if(v==="none"){a=a.indexOf("none")>=0?[]:["none"]}else{a=a.filter(function(x){return x!=="none"});var i=a.indexOf(v);if(i>=0)a.splice(i,1);else a.push(v)}n.constraints=a;return n})}
+  function canNext(){
+    if(step===0)return form.name.trim()&&form.age&&form.sex;
+    if(step===1)return form.height&&form.weight;
+    if(step===2)return form.goal&&form.bodyShape;
+    if(step===3)return form.level&&form.activity&&form.days&&form.duration&&form.equipment;
+    return true;
+  }
+  var preview=enrichProfile(form);
+  const goals=[{v:"fat_loss",i:"🔥",l:"Perdre du gras",s:"Affiner la silhouette et la taille"},{v:"recomp",i:"⚖️",l:"Recomposition",s:"Moins de gras, plus de muscle"},{v:"muscle",i:"💪",l:"Prendre du muscle",s:"Volume et progression des charges"}];
+  const shapes=[{v:"belly",l:"Surtout au niveau du ventre"},{v:"overall",l:"Réparti sur l’ensemble du corps"},{v:"lean",l:"Plutôt mince, peu musclé"},{v:"muscular_soft",l:"Déjà musclé, définition à améliorer"},{v:"balanced",l:"Silhouette plutôt équilibrée"},{v:"unknown",l:"Je ne sais pas encore"}];
+  const fieldStyle={width:"100%",padding:"13px 14px",borderRadius:12,border:"1px solid rgba(255,255,255,.1)",background:"rgba(255,255,255,.045)",color:"#fff",fontSize:15,outline:"none",boxSizing:"border-box"};
+  function Choices({items,value,onChange,cols}){return<div style={{display:"grid",gridTemplateColumns:cols||"1fr",gap:8}}>{items.map(function(x){var on=Array.isArray(value)?value.indexOf(x.v)>=0:value===x.v;return<button key={x.v} onClick={function(){onChange(x.v)}} style={{padding:"12px",minHeight:58,borderRadius:13,border:on?"1px solid rgba(16,185,129,.55)":"1px solid rgba(255,255,255,.07)",background:on?"rgba(16,185,129,.13)":"rgba(255,255,255,.025)",color:on?"#6EE7B7":"rgba(255,255,255,.65)",textAlign:"left",cursor:"pointer",fontSize:11,fontWeight:800}}>{x.i&&<span style={{fontSize:17,marginRight:7}}>{x.i}</span>}{x.l}{x.s&&<span style={{display:"block",fontSize:8,fontWeight:500,color:"rgba(255,255,255,.28)",marginTop:4,lineHeight:1.35}}>{x.s}</span>}</button>})}</div>}
+  var titles=["Bienvenue dans Colosse","Tes repères de départ","Ton objectif réel","Ton organisation","Ton profil est prêt"];
+  var subs=["Crée ton espace personnel. Tes données resteront sur ce téléphone.","Ces chiffres servent à calibrer le point de départ, pas à te juger.","Choisis ce qui compte maintenant. Le plan pourra évoluer.","Un programme utile doit entrer dans ta vraie vie.","Voici la première proposition de Colosse. Tu pourras l’ajuster."];
+  return<div style={{minHeight:"100vh",background:"#08080f",color:"#fff",fontFamily:"'DM Sans',sans-serif",padding:"24px 16px 42px",maxWidth:500,margin:"0 auto"}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:25}}><div><div style={{fontSize:24,fontWeight:950,letterSpacing:-1}}>COLOSSE</div><div style={{fontSize:8,color:"#10B981",fontWeight:900,letterSpacing:1.4,marginTop:3}}>PROFILS · BÊTA</div></div><div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:"rgba(255,255,255,.35)"}}>{step+1}/5</div></div>
+    <div style={{display:"flex",gap:5,marginBottom:25}}>{[0,1,2,3,4].map(function(i){return<div key={i} style={{height:4,flex:1,borderRadius:4,background:i<=step?"#10B981":"rgba(255,255,255,.08)"}}/>})}</div>
+    <div style={{fontSize:24,fontWeight:950,letterSpacing:-.6,lineHeight:1.05}}>{titles[step]}</div><div style={{fontSize:11,color:"rgba(255,255,255,.38)",lineHeight:1.55,marginTop:8,marginBottom:22}}>{subs[step]}</div>
+    {step===0&&<div style={{display:"grid",gap:13}}>
+      <label style={{fontSize:9,color:"rgba(255,255,255,.4)",fontWeight:800}}>PRÉNOM OU PSEUDO<input autoFocus value={form.name} onChange={function(e){set("name",e.target.value)}} placeholder="Ex. Thomas" style={Object.assign({},fieldStyle,{marginTop:6})}/></label>
+      <label style={{fontSize:9,color:"rgba(255,255,255,.4)",fontWeight:800}}>ÂGE<input type="number" inputMode="numeric" value={form.age} onChange={function(e){set("age",e.target.value)}} placeholder="38" style={Object.assign({},fieldStyle,{marginTop:6})}/></label>
+      <div><div style={{fontSize:9,color:"rgba(255,255,255,.4)",fontWeight:800,marginBottom:7}}>SEXE — POUR L’ESTIMATION ÉNERGÉTIQUE</div><Choices value={form.sex} onChange={function(v){set("sex",v)}} cols="repeat(3,1fr)" items={[{v:"male",l:"Homme"},{v:"female",l:"Femme"},{v:"other",l:"Autre"}]}/></div>
+    </div>}
+    {step===1&&<div style={{display:"grid",gap:13}}>
+      <label style={{fontSize:9,color:"rgba(255,255,255,.4)",fontWeight:800}}>TAILLE (CM)<input type="number" inputMode="decimal" value={form.height} onChange={function(e){set("height",e.target.value)}} placeholder="180" style={Object.assign({},fieldStyle,{marginTop:6})}/></label>
+      <label style={{fontSize:9,color:"rgba(255,255,255,.4)",fontWeight:800}}>POIDS ACTUEL (KG)<input type="number" inputMode="decimal" value={form.weight} onChange={function(e){set("weight",e.target.value)}} placeholder="85" style={Object.assign({},fieldStyle,{marginTop:6})}/></label>
+      <label style={{fontSize:9,color:"rgba(255,255,255,.4)",fontWeight:800}}>TOUR DE TAILLE (CM) · FACULTATIF<input type="number" inputMode="decimal" value={form.waist} onChange={function(e){set("waist",e.target.value)}} placeholder="Mesure au niveau du nombril" style={Object.assign({},fieldStyle,{marginTop:6})}/></label>
+      <div style={{padding:"11px 12px",borderRadius:12,background:"rgba(59,130,246,.06)",border:"1px solid rgba(59,130,246,.15)",fontSize:9,color:"rgba(255,255,255,.38)",lineHeight:1.5}}>Ces données sont enregistrées localement. Elles ne seront pas envoyées dans le classement des challenges.</div>
+    </div>}
+    {step===2&&<div style={{display:"grid",gap:18}}>
+      <div><div style={{fontSize:9,color:"rgba(255,255,255,.4)",fontWeight:800,marginBottom:8}}>OBJECTIF PRINCIPAL</div><Choices items={goals} value={form.goal} onChange={function(v){set("goal",v)}}/></div>
+      <div><div style={{fontSize:9,color:"rgba(255,255,255,.4)",fontWeight:800,marginBottom:8}}>DESCRIPTION QUI TE CORRESPOND LE MIEUX</div><Choices items={shapes} value={form.bodyShape} onChange={function(v){set("bodyShape",v)}} cols="repeat(2,1fr)"/></div>
+    </div>}
+    {step===3&&<div style={{display:"grid",gap:17}}>
+      <div><div style={{fontSize:9,color:"rgba(255,255,255,.4)",fontWeight:800,marginBottom:8}}>NIVEAU ACTUEL</div><Choices value={form.level} onChange={function(v){set("level",v)}} cols="repeat(3,1fr)" items={[{v:"restart",l:"Je reprends"},{v:"beginner",l:"Débutant"},{v:"intermediate",l:"Intermédiaire"}]}/></div>
+      <div><div style={{fontSize:9,color:"rgba(255,255,255,.4)",fontWeight:800,marginBottom:8}}>ACTIVITÉ QUOTIDIENNE</div><Choices value={form.activity} onChange={function(v){set("activity",v)}} cols="repeat(3,1fr)" items={[{v:"sedentary",l:"Faible"},{v:"light",l:"Modérée"},{v:"regular",l:"Active"}]}/></div>
+      <div><div style={{fontSize:9,color:"rgba(255,255,255,.4)",fontWeight:800,marginBottom:8}}>SÉANCES PAR SEMAINE</div><Choices value={String(form.days)} onChange={function(v){set("days",parseInt(v))}} cols="repeat(3,1fr)" items={[{v:"3",l:"3 jours"},{v:"4",l:"4 jours"},{v:"5",l:"5 jours"}]}/></div>
+      <div><div style={{fontSize:9,color:"rgba(255,255,255,.4)",fontWeight:800,marginBottom:8}}>DURÉE MAXIMALE</div><Choices value={String(form.duration)} onChange={function(v){set("duration",parseInt(v))}} cols="repeat(3,1fr)" items={[{v:"30",l:"30 min"},{v:"45",l:"45 min"},{v:"60",l:"60 min"}]}/></div>
+      <div><div style={{fontSize:9,color:"rgba(255,255,255,.4)",fontWeight:800,marginBottom:8}}>MATÉRIEL</div><Choices value={form.equipment} onChange={function(v){set("equipment",v)}} cols="repeat(2,1fr)" items={[{v:"gym",l:"Salle de sport"},{v:"mixed",l:"Salle + maison"}]}/></div>
+      <div><div style={{fontSize:9,color:"rgba(255,255,255,.4)",fontWeight:800,marginBottom:8}}>DOULEURS OU LIMITES · PLUSIEURS CHOIX POSSIBLES</div><Choices value={form.constraints} onChange={toggleConstraint} cols="repeat(2,1fr)" items={[{v:"knee",l:"Genou"},{v:"back",l:"Dos"},{v:"shoulder",l:"Épaule"},{v:"wrist",l:"Poignet"},{v:"medical",l:"Restriction médicale"},{v:"none",l:"Aucune"}]}/></div>
+    </div>}
+    {step===4&&<div>
+      <div style={{padding:"18px",borderRadius:18,background:"linear-gradient(135deg,rgba(16,185,129,.14),rgba(16,185,129,.04))",border:"1px solid rgba(16,185,129,.28)",marginBottom:12}}><div style={{fontSize:9,color:"#6EE7B7",fontWeight:900,letterSpacing:1.2}}>PROFIL COLOSSE</div><div style={{fontSize:23,fontWeight:950,marginTop:6}}>{preview.profileType}</div><div style={{fontSize:11,color:"rgba(255,255,255,.4)",marginTop:6}}>{form.days} séances · {form.duration} min · {form.equipment==="gym"?"salle":"salle + maison"}</div></div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:12}}>{[{l:"IMC repère",v:preview.bmi||"—"},{l:"Énergie estimée",v:preview.calTarget?preview.calTarget+" kcal":"—"},{l:"Protéines repère",v:preview.proteinTarget?preview.proteinTarget+" g":"—"}].map(function(x){return<div key={x.l} style={{padding:"12px 6px",borderRadius:12,textAlign:"center",background:"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.06)"}}><div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:14,fontWeight:900}}>{x.v}</div><div style={{fontSize:7,color:"rgba(255,255,255,.28)",marginTop:4}}>{x.l}</div></div>})}</div>
+      <div style={{fontSize:9,color:"rgba(255,255,255,.35)",lineHeight:1.6,padding:"12px",borderRadius:12,background:"rgba(255,255,255,.025)",border:"1px solid rgba(255,255,255,.06)"}}>Ce sont des points de départ, pas un diagnostic. Colosse ajustera progressivement selon tes séances, ton ressenti et tes résultats.{form.constraints.indexOf("medical")>=0&&<strong style={{display:"block",color:"#FCA5A5",marginTop:6}}>Ta restriction médicale doit être validée avec un professionnel avant de démarrer.</strong>}</div>
+    </div>}
+    <div style={{display:"flex",gap:9,marginTop:25}}>{step>0&&<button onClick={function(){setStep(function(s){return s-1})}} style={{padding:"13px 18px",borderRadius:13,border:"1px solid rgba(255,255,255,.09)",background:"transparent",color:"rgba(255,255,255,.55)",fontWeight:800,cursor:"pointer"}}>Retour</button>}<button disabled={!canNext()} onClick={function(){if(step<4)setStep(function(s){return s+1});else onCreate(preview)}} style={{flex:1,padding:"14px",borderRadius:13,border:"none",background:canNext()?"#10B981":"rgba(255,255,255,.08)",color:canNext()?"#04150f":"rgba(255,255,255,.2)",fontSize:12,fontWeight:950,cursor:canNext()?"pointer":"default"}}>{step<4?"Continuer":"Créer mon profil"}</button></div>
+  </div>;
+}
+
+/* ═══ CHALLENGES ═══ */
+function ChallengeRun({challenge,onFinish,onCancel}){
+  const[countdown,setCountdown]=useState(3),[active,setActive]=useState(false),[score,setScore]=useState(0),[remaining,setRemaining]=useState(challenge.kind==="reps60"?60:null);
+  const startRef=useRef(0);
+  useEffect(function(){var t=setInterval(function(){setCountdown(function(c){if(c<=1){clearInterval(t);setActive(true);startRef.current=Date.now();return 0}return c-1})},850);return function(){clearInterval(t)}},[]);
+  useEffect(function(){if(!active)return;var t=setInterval(function(){
+    var sec=Math.floor((Date.now()-startRef.current)/1000);
+    if(challenge.kind==="time"){setScore(sec);if(sec>=challenge.max){clearInterval(t);onFinish(challenge.max)}}
+    if(challenge.kind==="reps60"){var r=Math.max(60-sec,0);setRemaining(r);if(r<=0){clearInterval(t);setActive(false)}}
+  },150);return function(){clearInterval(t)}},[active,challenge.id]);
+  return<div style={{position:"fixed",inset:0,zIndex:12000,background:"radial-gradient(circle at 50% 30%,"+challenge.color+"25,#08080f 55%)",color:"#fff",fontFamily:"'DM Sans',sans-serif",display:"flex",flexDirection:"column",padding:"calc(20px + env(safe-area-inset-top)) 18px calc(24px + env(safe-area-inset-bottom))",textAlign:"center"}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><button onClick={onCancel} style={{width:40,height:40,borderRadius:12,border:"1px solid rgba(255,255,255,.08)",background:"rgba(255,255,255,.04)",color:"rgba(255,255,255,.55)",fontSize:16,cursor:"pointer"}}>✕</button><div style={{fontSize:9,fontWeight:900,letterSpacing:1.4,color:challenge.color}}>TENTATIVE OFFICIELLE</div><div style={{width:40}}/></div>
+    <div style={{marginTop:35,fontSize:42}}>{challenge.icon}</div><div style={{fontSize:24,fontWeight:950,marginTop:8}}>{challenge.name}</div>
+    {!active&&countdown>0?<div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:110,fontWeight:950,color:challenge.color,animation:"pulse .85s infinite"}}>{countdown}</div></div>:<div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
+      {challenge.kind==="time"?<><div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:70,fontWeight:950,letterSpacing:-4}}>{scoreLabel(challenge,score)}</div><div style={{fontSize:10,color:"rgba(255,255,255,.3)",marginTop:7}}>Objectif initial · {scoreLabel(challenge,challenge.target)}</div></>:<><div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:84,fontWeight:950,color:challenge.color}}>{score}</div><div style={{fontSize:12,color:"rgba(255,255,255,.35)"}}>répétitions propres{challenge.kind==="reps60"?" · "+remaining+" s restantes":""}</div><button disabled={!active} onClick={function(){setScore(function(s){return Math.min(s+1,challenge.max)})}} style={{width:170,height:170,borderRadius:"50%",border:"2px solid "+challenge.color,background:challenge.color+"1F",color:"#fff",fontSize:18,fontWeight:950,marginTop:25,cursor:active?"pointer":"default",boxShadow:"0 0 50px "+challenge.color+"25"}}>+ 1 REP</button></>}
+    </div>}
+    {countdown===0&&<div>{challenge.kind==="time"?<button onClick={function(){onFinish(score)}} style={{width:"100%",padding:"18px",borderRadius:16,border:"none",background:"#EF4444",color:"#fff",fontSize:15,fontWeight:950,cursor:"pointer"}}>J’arrête · enregistrer</button>:<button disabled={challenge.kind==="reps60"&&active} onClick={function(){onFinish(score)}} style={{width:"100%",padding:"18px",borderRadius:16,border:"none",background:challenge.kind==="reps60"&&active?"rgba(255,255,255,.08)":challenge.color,color:challenge.kind==="reps60"&&active?"rgba(255,255,255,.25)":"#fff",fontSize:15,fontWeight:950,cursor:"pointer"}}>{challenge.kind==="reps60"&&active?"Le chrono est en cours…":"Valider "+score+" répétitions"}</button>}<div style={{fontSize:8,color:"rgba(255,255,255,.22)",marginTop:10}}>Arrête immédiatement en cas de douleur ou de malaise.</div></div>}
+  </div>;
+}
+
+function ChallengeScreen({profile,data,setData,cloud,incomingCode}){
+  const[showCatalog,setShowCatalog]=useState(false),[running,setRunning]=useState(null),[result,setResult]=useState(null),[busy,setBusy]=useState(false),[notice,setNotice]=useState("");
+  const joinedCodeRef=useRef("");
+  var rooms=data.rooms||[],room=rooms[0]||null;
+  var allowed=eligibleChallenges(profile),recommended=allowed[0];
+  function applyCloudSnapshot(snap){setData(function(p){var n=JSON.parse(JSON.stringify(p));n.rooms=[snap.room].concat((n.rooms||[]).filter(function(r){return r.id!==snap.room.id}));n.attempts=(n.attempts||[]).filter(function(a){return a.roomId!==snap.room.id}).concat(snap.attempts||[]);return n})}
+  async function createRoom(challenge){
+    if(busy)return;setBusy(true);setNotice("");
+    try{
+      if(cloudConfigured()){var snap=await cloudCreateChallenge(challenge,profile);applyCloudSnapshot(snap)}
+      else{var r={id:makeId("r_"),code:challengeCode(),title:"Challenge de "+profile.name,challengeId:challenge.id,createdBy:profile.id,createdAt:new Date().toISOString(),endsAt:new Date(Date.now()+7*24*60*60*1000).toISOString(),members:[{id:profile.id,name:profile.name}],shared:false};setData(function(p){var n=JSON.parse(JSON.stringify(p));n.rooms=[r].concat(n.rooms||[]);return n})}
+      setShowCatalog(false);
+    }catch(e){setNotice("Impossible de créer le salon partagé : "+(e.message||e))}finally{setBusy(false)}
+  }
+  async function recordAttempt(score){
+    if(score<=0){setRunning(null);return}setRunning(null);setBusy(true);setNotice("");
+    try{
+      if(room.shared){var remoteAttempt=await cloudRecordAttempt(room,profile,score),snap=await cloudFetchRoom(room.id);applyCloudSnapshot(snap);setResult(remoteAttempt)}
+      else{var a={id:makeId("a_"),roomId:room.id,profileId:profile.id,name:profile.name,score:score,createdAt:new Date().toISOString()};setData(function(p){var n=JSON.parse(JSON.stringify(p));n.attempts=[a].concat(n.attempts||[]);return n});setResult(a)}
+    }catch(e){setNotice("Score non synchronisé : "+(e.message||e))}finally{setBusy(false)}
+  }
+  async function invite(){
+    if(!room.shared){alert("Ce défi est enregistré uniquement sur cet iPhone. Crée un nouveau challenge une fois le partage activé.");return}
+    var url=location.origin+location.pathname+"?challenge="+room.code,text="Rejoins mon challenge Colosse « "+challengeById(room.challengeId).name+" » — code "+room.code+"\n"+url;
+    if(navigator.share){try{await navigator.share({title:"Challenge Colosse",text:text,url:url});return}catch(e){if(e&&e.name==="AbortError")return}}
+    try{await navigator.clipboard.writeText(text);alert("Invitation copiée.")}catch(e){alert(text)}
+  }
+  useEffect(function(){
+    if(!incomingCode||joinedCodeRef.current===incomingCode)return;joinedCodeRef.current=incomingCode;
+    if(!cloudConfigured()){setNotice("Le lien est valide, mais le partage en ligne n’est pas encore activé.");return}
+    var alive=true;setBusy(true);cloudJoinChallenge(incomingCode,profile).then(function(snap){if(!alive)return;applyCloudSnapshot(snap);setShowCatalog(false);setNotice("Challenge rejoint. Ton ami apparaît maintenant dans ce même classement.");try{history.replaceState({},"",location.pathname)}catch(e){}}).catch(function(e){if(alive)setNotice("Impossible de rejoindre ce challenge : "+(e.message||e))}).finally(function(){if(alive)setBusy(false)});
+    return function(){alive=false};
+  },[incomingCode,profile.id]);
+  useEffect(function(){
+    if(!room||!room.shared)return;var alive=true;
+    async function refresh(){try{var snap=await cloudFetchRoom(room.id);if(alive)applyCloudSnapshot(snap)}catch(e){}}
+    var t=setInterval(refresh,8000);return function(){alive=false;clearInterval(t)};
+  },[room&&room.id,room&&room.shared]);
+  if(running)return<ChallengeRun challenge={running} onCancel={function(){setRunning(null)}} onFinish={recordAttempt}/>;
+  if(!recommended)return<div style={{padding:"22px 17px",borderRadius:18,background:"rgba(245,158,11,.07)",border:"1px solid rgba(245,158,11,.24)"}}><div style={{fontSize:27,marginBottom:9}}>🛡️</div><div style={{fontSize:17,fontWeight:950}}>Challenges en pause</div><div style={{fontSize:10,color:"rgba(255,255,255,.4)",lineHeight:1.6,marginTop:7}}>Tes limites actuelles ne permettent pas de proposer un défi fiable. Demande d’abord l’accord du professionnel qui te suit, puis mets ton profil à jour.</div></div>;
+  if(showCatalog||!room){return<div>
+    {notice&&<div style={{marginBottom:10,padding:"11px 13px",borderRadius:12,background:"rgba(59,130,246,.08)",border:"1px solid rgba(96,165,250,.24)",color:"#BFDBFE",fontSize:10,lineHeight:1.45}}>{notice}</div>}
+    {busy&&<div style={{marginBottom:10,padding:"10px 13px",borderRadius:12,background:"rgba(16,185,129,.08)",border:"1px solid rgba(16,185,129,.2)",color:"#6EE7B7",fontSize:10,fontWeight:850}}>Connexion au salon partagé…</div>}
+    <div style={{marginBottom:12,padding:"18px 16px",borderRadius:18,background:"linear-gradient(135deg,rgba(139,92,246,.16),rgba(59,130,246,.05))",border:"1px solid rgba(139,92,246,.25)"}}><div style={{fontSize:9,color:"#C4B5FD",fontWeight:900,letterSpacing:1.3}}>NOUVEAU CHALLENGE</div><div style={{fontSize:21,fontWeight:950,marginTop:5}}>Choisis ton terrain de jeu.</div><div style={{fontSize:10,color:"rgba(255,255,255,.35)",lineHeight:1.5,marginTop:6}}>Colosse filtre les défis incompatibles avec les limites déclarées dans ton profil.</div></div>
+    <div style={{marginBottom:8,fontSize:9,fontWeight:900,color:"rgba(255,255,255,.35)",letterSpacing:1.2}}>RECOMMANDÉ POUR TOI</div>
+    <button onClick={function(){createRoom(recommended)}} style={{width:"100%",padding:"17px",borderRadius:16,border:"1px solid "+recommended.color+"55",background:"linear-gradient(135deg,"+recommended.color+"1E,"+recommended.color+"08)",color:"#fff",textAlign:"left",cursor:"pointer",marginBottom:13}}><span style={{fontSize:25,float:"left",marginRight:12}}>{recommended.icon}</span><strong style={{fontSize:14}}>{recommended.name}</strong><span style={{display:"block",fontSize:9,color:"rgba(255,255,255,.38)",marginTop:4}}>{recommended.desc}</span></button>
+    <div style={{marginBottom:8,fontSize:9,fontWeight:900,color:"rgba(255,255,255,.35)",letterSpacing:1.2}}>TOUS LES DÉFIS COMPATIBLES</div><div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8}}>{allowed.map(function(c){return<button key={c.id} onClick={function(){createRoom(c)}} style={{padding:"14px 11px",minHeight:108,borderRadius:15,border:"1px solid rgba(255,255,255,.07)",background:"rgba(255,255,255,.025)",color:"#fff",textAlign:"left",cursor:"pointer"}}><span style={{fontSize:22,display:"block",marginBottom:8}}>{c.icon}</span><strong style={{fontSize:11}}>{c.name}</strong><span style={{fontSize:8,color:"rgba(255,255,255,.28)",display:"block",marginTop:4}}>Objectif · {scoreLabel(c,c.target)}</span></button>})}</div>
+    {room&&<button onClick={function(){setShowCatalog(false)}} style={{width:"100%",marginTop:12,padding:"12px",borderRadius:12,border:"1px solid rgba(255,255,255,.07)",background:"transparent",color:"rgba(255,255,255,.4)",fontWeight:800,cursor:"pointer"}}>Annuler</button>}
+  </div>}
+  var participantId=room.currentUserId||profile.id,c=challengeById(room.challengeId),rank=roomRanking(data,room),mine=rank.findIndex(function(a){return a.profileId===participantId}),myBest=mine>=0?rank[mine]:null,daysLeft=Math.max(0,Math.ceil((new Date(room.endsAt)-new Date())/(24*60*60*1000)));
+  return<div>
+    {notice&&<div style={{marginBottom:10,padding:"11px 13px",borderRadius:12,background:"rgba(59,130,246,.08)",border:"1px solid rgba(96,165,250,.24)",color:"#BFDBFE",fontSize:10,lineHeight:1.45}}>{notice}</div>}
+    {busy&&<div style={{marginBottom:10,padding:"10px 13px",borderRadius:12,background:"rgba(16,185,129,.08)",border:"1px solid rgba(16,185,129,.2)",color:"#6EE7B7",fontSize:10,fontWeight:850}}>Synchronisation du classement…</div>}
+    {result&&<div style={{marginBottom:10,padding:"12px 14px",borderRadius:13,background:"rgba(16,185,129,.1)",border:"1px solid rgba(16,185,129,.28)",color:"#6EE7B7",fontSize:11,fontWeight:850}}>🏆 Tentative enregistrée · {scoreLabel(c,result.score)}<button onClick={function(){setResult(null)}} style={{float:"right",border:"none",background:"transparent",color:"#6EE7B7",cursor:"pointer"}}>✕</button></div>}
+    <div style={{padding:"18px 16px",borderRadius:19,background:"radial-gradient(circle at 80% 0,"+c.color+"2A,"+c.color+"0A 48%,rgba(255,255,255,.02))",border:"1px solid "+c.color+"40",marginBottom:11}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}><div><div style={{fontSize:9,fontWeight:900,color:c.color,letterSpacing:1.3}}>DÉFI DE LA SEMAINE · {room.shared?"PARTAGÉ":"SUR CET IPHONE"}</div><div style={{fontSize:24,fontWeight:950,marginTop:5}}>{c.icon} {c.name}</div><div style={{fontSize:10,color:"rgba(255,255,255,.35)",marginTop:5}}>Objectif {scoreLabel(c,c.target)} · meilleur score conservé</div></div><div style={{padding:"5px 8px",borderRadius:9,background:"rgba(255,255,255,.05)",fontSize:8,fontWeight:850,color:"rgba(255,255,255,.4)"}}>{daysLeft} j</div></div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:16}}><div style={{padding:"11px",borderRadius:12,background:"rgba(8,8,15,.48)",border:"1px solid rgba(255,255,255,.06)"}}><div style={{fontSize:8,color:"rgba(255,255,255,.28)"}}>TON RECORD</div><div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:18,fontWeight:950,color:c.color,marginTop:3}}>{myBest?scoreLabel(c,myBest.score):"—"}</div></div><div style={{padding:"11px",borderRadius:12,background:"rgba(8,8,15,.48)",border:"1px solid rgba(255,255,255,.06)"}}><div style={{fontSize:8,color:"rgba(255,255,255,.28)"}}>TON RANG</div><div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:18,fontWeight:950,marginTop:3}}>{mine>=0?"#"+(mine+1):"—"}<span style={{fontSize:9,color:"rgba(255,255,255,.25)"}}> / {Math.max(rank.length,1)}</span></div></div></div>
+      <button onClick={function(){setRunning(c)}} style={{width:"100%",padding:"15px",marginTop:13,borderRadius:14,border:"none",background:c.color,color:"#fff",fontSize:13,fontWeight:950,cursor:"pointer",boxShadow:"0 8px 25px "+c.color+"30"}}>▶ Lancer ma tentative</button>
+    </div>
+    <div style={{padding:"15px",borderRadius:16,background:"rgba(255,255,255,.025)",border:"1px solid rgba(255,255,255,.06)",marginBottom:10}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}><div style={{fontSize:9,fontWeight:900,color:"rgba(255,255,255,.42)",letterSpacing:1.2}}>🏆 PODIUM</div><button onClick={invite} style={{padding:"6px 9px",borderRadius:9,border:"1px solid rgba(96,165,250,.22)",background:"rgba(59,130,246,.07)",color:"#93C5FD",fontSize:8,fontWeight:850,cursor:"pointer"}}>Inviter · {room.code}</button></div>
+      {[0,1,2].map(function(i){var a=rank[i];return<div key={i} style={{display:"grid",gridTemplateColumns:"34px 1fr auto",alignItems:"center",gap:8,padding:"9px 0",borderBottom:i<2?"1px solid rgba(255,255,255,.055)":"none",opacity:a?1:.38}}><div style={{fontSize:20,textAlign:"center"}}>{i===0?"🥇":i===1?"🥈":"🥉"}</div><div><div style={{fontSize:11,fontWeight:850}}>{a?a.name:"Place disponible"}</div><div style={{fontSize:8,color:"rgba(255,255,255,.25)",marginTop:2}}>{a&&a.profileId===participantId?"C’est toi":""}</div></div><div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,fontWeight:900,color:a?c.color:"rgba(255,255,255,.2)"}}>{a?scoreLabel(c,a.score):"—"}</div></div>})}
+    </div>
+    <button onClick={function(){setShowCatalog(true)}} style={{width:"100%",padding:"11px",borderRadius:12,border:"1px solid rgba(255,255,255,.06)",background:"transparent",color:"rgba(255,255,255,.32)",fontSize:9,fontWeight:800,cursor:"pointer"}}>Changer de challenge</button>
   </div>;
 }
 
@@ -964,9 +1246,12 @@ class ErrorBoundary extends React.Component{
 /* ═══ APP ═══ */
 function App(){
   const[st,setSt]=useState(null);
+  const[profile,setProfile]=useState(undefined);
+  const[challengeData,setChallengeData]=useState(null);
+  const[cloud,setCloud]=useState({enabled:cloudConfigured(),status:cloudConfigured()?"connecting":"local",userId:null,error:null});
   const[wk,setWk]=useState(0);
   const[dayI,setDayI]=useState(0);
-  const[view,setView]=useState("session");
+  const[view,setView]=useState(function(){try{return new URLSearchParams(location.search).get("challenge")?"challenge":"session"}catch(e){return"session"}});
   const[guideOpen,setGuideOpen]=useState(false);
   const[sav,setSav]=useState(false);
   const[tmr,setTmr]=useState(false);
@@ -975,15 +1260,20 @@ function App(){
   useWakeLock(true);
 
   useEffect(function(){
-    var s=load();
-    if(s&&s.wk){s=migrateData(s);setSt(s)}else{var d=init();setSt(d)}
+    var s=load(),p=loadProfile();
+    setChallengeData(loadChallenges());
+    /* Migration silencieuse : l'appareil de Julien conserve toutes ses données historiques. */
+    if(s&&s.wk&&!p){p=legacyJulienProfile();saveProfile(p)}
+    if(!p){setProfile(null);return}
+    setProfile(p);
+    if(s&&s.wk){s=migrateData(s);setSt(s)}else{var d=initFresh();save(d);setSt(d)}
     // Epoch LUNDI 2 fév — semaine commence le lundi
     var s1Mon=new Date(2026,1,2),now=new Date();
     var aw=Math.floor((now-s1Mon)/(7*24*60*60*1000));
     if(aw<0)aw=0;if(aw>PHASES.length-1)aw=PHASES.length-1;
     setWk(aw);setRd(getPhaseRest(PHASES[aw].p));
     var dow=now.getDay();
-    setDayI(dowToDayI(aw+1, dow));
+    setDayI(dowToDayI(aw+1, dow,p));
   },[]);
 
   useEffect(function(){
@@ -992,12 +1282,32 @@ function App(){
     return function(){clearTimeout(t)};
   },[st]);
 
-  if(!st)return<div style={{minHeight:"100vh",background:"#08080f",display:"flex",alignItems:"center",justifyContent:"center"}}>
+  useEffect(function(){
+    if(challengeData)saveChallenges(challengeData);
+  },[challengeData]);
+
+  useEffect(function(){
+    if(!cloudConfigured())return;var alive=true;
+    function connect(){setCloud(function(c){return Object.assign({},c,{enabled:true,status:"connecting",error:null})});getCloudConnection().then(function(cx){if(alive)setCloud({enabled:true,status:"connected",userId:cx.userId,error:null})}).catch(function(e){if(alive)setCloud({enabled:true,status:"error",userId:null,error:e.message||String(e)})})}
+    connect();window.addEventListener("colosse:supabase-ready",connect);return function(){alive=false;window.removeEventListener("colosse:supabase-ready",connect)};
+  },[]);
+
+  function createFirstProfile(p){
+    var fresh=initFresh();saveProfile(p);save(fresh);setProfile(p);setSt(fresh);
+    var s1Mon=new Date(2026,1,2),now=new Date(),aw=Math.floor((now-s1Mon)/(7*24*60*60*1000));
+    if(aw<0)aw=0;if(aw>PHASES.length-1)aw=PHASES.length-1;
+    setWk(aw);setRd(getPhaseRest(PHASES[aw].p));setDayI(dowToDayI(aw+1,now.getDay(),p));
+  }
+
+  if(profile===null)return<ProfileOnboarding onCreate={createFirstProfile}/>;
+  if(profile===undefined||!st||!challengeData)return<div style={{minHeight:"100vh",background:"#08080f",display:"flex",alignItems:"center",justifyContent:"center"}}>
     <div style={{textAlign:"center"}}><div style={{fontSize:28,marginBottom:8}}>💪</div><div style={{fontSize:12,color:"rgba(255,255,255,.3)",fontWeight:600}}>Chargement...</div></div>
   </div>;
 
   var wN=wk+1,ph=PHASES[wk];
-  var DAYS_ACT=getDays(wN);
+  var dailyCal=profile&&profile.programKey!=="julien"&&profile.calTarget?profile.calTarget:ph.cal;
+  var dailyProtein=profile&&profile.programKey!=="julien"&&profile.proteinTarget?profile.proteinTarget:220;
+  var DAYS_ACT=getDaysForProfile(profile,wN);
   /* Si dayI déborde du tableau actif (ex: bascule PPL 6j -> U/L 4j), on clamp */
   var safeDayI=Math.min(dayI,DAYS_ACT.length-1);
   var day=DAYS_ACT[safeDayI];
@@ -1040,7 +1350,8 @@ function App(){
     var measures=MEAS.map(function(m){var v=wd.ms[m.id];return v?m.nm+" : "+v+" "+m.u:null}).filter(Boolean);
     return "COLOSSE — BILAN COACH S"+wN+"\n"+
       "Période : "+getWeekDates(wN)[0]+" → "+getWeekDates(wN)[5]+"\n"+
-      "Phase : "+ph.p+" · objectif "+ph.cal+" kcal/j · 220 g protéines\n"+
+      "Profil : "+profile.name+" · "+profile.profileType+"\n"+
+      "Repères : "+dailyCal+" kcal/j · "+dailyProtein+" g protéines\n"+
       "Séances commencées : "+done.length+"/"+DAYS_ACT.length+(done.length?" — "+done.join(", "):"")+"\n"+
       "Suivi : nutrition validée "+nut+"/7 · cardio/marche fait "+card+"/7 · séances abdos terminées "+absDone+"/"+absPlanned+"\n"+
       (measures.length?"Mesures : "+measures.join(" · ")+"\n":"")+
@@ -1088,7 +1399,7 @@ function App(){
   day.exs.forEach(function(ex){var d=dData[ex.id];if(d){dTot+=d.s.length;dDone+=d.s.filter(function(s){return s.d}).length}});
   var sessComplete=dTot>0&&dDone===dTot;
   var sessVol=calcVol(dData,day.exs);
-  var isToday=(function(){var dow=new Date().getDay();return dow>=1&&dow<=6&&dayI===dow-1})();
+  var isToday=isExactTrainingDay(wN,safeDayI,new Date().getDay(),profile);
   var weekDone=0;
   DAYS_ACT.forEach(function(d){var dd=wd.ds[d.key];if(!dd)return;var any=false,all=true;d.exs.forEach(function(ex){if(!dd[ex.id])return;if(dd[ex.id].s.some(function(s){return s.d}))any=true;else all=false});if(any&&all)weekDone++});
   var weekHabitKeys=getWeekDateKeys(wN),weekHabits={nutrition:0,cardio:0};
@@ -1096,7 +1407,7 @@ function App(){
   var todayAbs=getDayAbsStatus(day,wd),weekAbs={done:0,planned:0};
   DAYS_ACT.forEach(function(d){var a=getDayAbsStatus(d,wd);if(a.planned){weekAbs.planned++;if(a.done)weekAbs.done++}});
 
-  function switchView(v){setView(v);try{window.scrollTo({top:0,behavior:"smooth"})}catch(e){window.scrollTo(0,0)}}
+  function switchView(v){setView(v);if(v!=="session")setTmr(false);try{window.scrollTo({top:0,behavior:"smooth"})}catch(e){window.scrollTo(0,0)}}
 
   var MOODS=[{v:"💀",l:"Mort"},{v:"😫",l:"Épuisé"},{v:"😐",l:"Moyen"},{v:"💪",l:"Solide"},{v:"🔥",l:"ON FIRE"}];
 
@@ -1107,7 +1418,7 @@ function App(){
       <div>
         <div style={{fontSize:24,fontWeight:900,letterSpacing:-1,lineHeight:1}}>COLOSSE</div>
         <div style={{fontSize:8,fontWeight:900,letterSpacing:1.1,color:"#10B981",textTransform:"uppercase",marginTop:4}}>MIS À JOUR · {APP_UPDATED} · {APP_VERSION}</div>
-        <div style={{fontSize:9,fontWeight:700,letterSpacing:1.2,color:"rgba(255,255,255,.3)",textTransform:"uppercase",marginTop:3}}>{view==="session"?"TA SÉANCE":view==="tracking"?"TON SUIVI":"TON COACH"} · S{wN}</div>
+        <div style={{fontSize:9,fontWeight:700,letterSpacing:1.2,color:"rgba(255,255,255,.3)",textTransform:"uppercase",marginTop:3}}>{view==="session"?"TA SÉANCE":view==="tracking"?"TON SUIVI":view==="challenge"?"TES CHALLENGES":"TON COACH"} · {profile.name}</div>
       </div>
       <div style={{display:"flex",alignItems:"center",gap:10}}>
         {sav&&<div style={{fontSize:9,color:"#10B981",fontWeight:700,display:"flex",alignItems:"center",gap:3}}><span style={{width:5,height:5,borderRadius:"50%",background:"#10B981",display:"inline-block"}}/>Sauvé</div>}
@@ -1117,6 +1428,8 @@ function App(){
         </div>
       </div>
     </div>
+
+    {view==="challenge"&&<ChallengeScreen profile={profile} data={challengeData} setData={setChallengeData} cloud={cloud} incomingCode={(function(){try{return new URLSearchParams(location.search).get("challenge")||""}catch(e){return""}})()}/>}
 
     {view==="tracking"&&<>
     {/* SYNTHÈSE SUIVI */}
@@ -1137,7 +1450,7 @@ function App(){
         <div style={{fontSize:10,fontWeight:800,color:sessComplete?"#10B981":"rgba(255,255,255,.25)"}}>{sessComplete?"SÉANCE ✓":"SÉANCE À FAIRE"}</div>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:7}}>
-        {[{k:"nutrition",icon:"🍽️",l:"Nutrition tenue",sub:ph.cal+" kcal · 220 g prot."},{k:"cardio",icon:"🚶",l:"Cardio/marche fait",sub:"Coche seulement après"}].map(function(x){var on=!!hb[x.k];return<button key={x.k} onClick={function(){toggleHabit(x.k)}} style={{padding:"11px 8px",minHeight:78,borderRadius:12,border:on?"1px solid rgba(16,185,129,.45)":"1px solid rgba(255,255,255,.06)",background:on?"rgba(16,185,129,.12)":"rgba(255,255,255,.025)",color:on?"#10B981":"rgba(255,255,255,.55)",fontSize:10,fontWeight:800,cursor:"pointer",textAlign:"left"}}><span style={{fontSize:16,display:"block",marginBottom:5}}>{on?"✓":x.icon}</span>{x.l}<span style={{display:"block",fontSize:8,fontWeight:600,color:on?"rgba(16,185,129,.7)":"rgba(255,255,255,.25)",marginTop:3}}>{on?"FAIT AUJOURD’HUI":x.sub}</span></button>})}
+        {[{k:"nutrition",icon:"🍽️",l:"Nutrition tenue",sub:dailyCal+" kcal · "+dailyProtein+" g prot."},{k:"cardio",icon:"🚶",l:"Cardio/marche fait",sub:"Coche seulement après"}].map(function(x){var on=!!hb[x.k];return<button key={x.k} onClick={function(){toggleHabit(x.k)}} style={{padding:"11px 8px",minHeight:78,borderRadius:12,border:on?"1px solid rgba(16,185,129,.45)":"1px solid rgba(255,255,255,.06)",background:on?"rgba(16,185,129,.12)":"rgba(255,255,255,.025)",color:on?"#10B981":"rgba(255,255,255,.55)",fontSize:10,fontWeight:800,cursor:"pointer",textAlign:"left"}}><span style={{fontSize:16,display:"block",marginBottom:5}}>{on?"✓":x.icon}</span>{x.l}<span style={{display:"block",fontSize:8,fontWeight:600,color:on?"rgba(16,185,129,.7)":"rgba(255,255,255,.25)",marginTop:3}}>{on?"FAIT AUJOURD’HUI":x.sub}</span></button>})}
       </div>
       <div style={{marginTop:7,padding:"11px 12px",borderRadius:12,background:todayAbs.done?"rgba(16,185,129,.1)":"rgba(239,68,68,.045)",border:"1px solid "+(todayAbs.done?"rgba(16,185,129,.3)":"rgba(239,68,68,.14)"),display:"flex",alignItems:"center",gap:10}}>
         <span style={{fontSize:18}}>{todayAbs.done?"✓":todayAbs.planned?"🔥":"—"}</span>
@@ -1152,19 +1465,23 @@ function App(){
 
     {view==="coach"&&<>
     {/* COACH — CAP ET SEMAINE */}
-    <div style={{marginBottom:12,padding:"17px 16px",borderRadius:18,background:"linear-gradient(135deg,rgba(59,130,246,.14),rgba(139,92,246,.05))",border:"1px solid rgba(59,130,246,.24)"}}>
-      <div style={{fontSize:10,fontWeight:900,letterSpacing:1.6,color:"#60A5FA",marginBottom:5}}>CAP · 30 SEPTEMBRE</div>
+    {profile.programKey==="julien"?<div style={{marginBottom:12,padding:"17px 16px",borderRadius:18,background:"linear-gradient(135deg,rgba(59,130,246,.14),rgba(139,92,246,.05))",border:"1px solid rgba(59,130,246,.24)"}}>
+      <div style={{fontSize:10,fontWeight:900,letterSpacing:1.6,color:"#60A5FA",marginBottom:5}}>JULIEN · CAP 30 SEPTEMBRE</div>
       <div style={{fontSize:20,fontWeight:900,letterSpacing:-.4}}>Plus sec. Plus visible. Régulier.</div>
       <div style={{fontSize:11,color:"rgba(255,255,255,.38)",lineHeight:1.55,marginTop:6}}>Le plan s’ajuste avec tes séances, ton tour de taille du jeudi et ton ressenti — pas avec une promesse inventée.</div>
-    </div>
+    </div>:<div style={{marginBottom:12,padding:"17px 16px",borderRadius:18,background:"linear-gradient(135deg,rgba(59,130,246,.14),rgba(139,92,246,.05))",border:"1px solid rgba(59,130,246,.24)"}}>
+      <div style={{fontSize:10,fontWeight:900,letterSpacing:1.6,color:"#60A5FA",marginBottom:5}}>{profile.name.toUpperCase()} · PROFIL PERSONNALISÉ</div>
+      <div style={{fontSize:20,fontWeight:900,letterSpacing:-.4}}>{profile.profileType}</div>
+      <div style={{fontSize:11,color:"rgba(255,255,255,.38)",lineHeight:1.55,marginTop:6}}>{profile.days} séances de {profile.duration} min · repère {dailyCal} kcal et {dailyProtein} g de protéines. Point de départ à ajuster selon les résultats et le ressenti.</div>
+    </div>}
 
     {/* WEEK CAROUSEL */}
-    <WeekCarousel phases={PHASES} wk={wk} setWk={setWk} st={st} setRd={setRd} setSt={setSt}/>
+    <WeekCarousel phases={PHASES} wk={wk} setWk={setWk} st={st} setRd={setRd} setSt={setSt} profile={profile}/>
 
-    <div style={{marginBottom:12,padding:"15px",borderRadius:16,background:"rgba(255,255,255,.025)",border:"1px solid rgba(255,255,255,.06)"}}>
+    {profile.programKey==="julien"&&<div style={{marginBottom:12,padding:"15px",borderRadius:16,background:"rgba(255,255,255,.025)",border:"1px solid rgba(255,255,255,.06)"}}>
       <div style={{fontSize:9,fontWeight:900,letterSpacing:1.4,color:"rgba(255,255,255,.42)",marginBottom:11}}>LA ROUTE JUSQU’À OCTOBRE</div>
       {[{p:"Reprise",d:"3 → 16 août",k:"2700 kcal",c:"#10B981",t:"Retour propre, charges contrôlées."},{p:"Progression",d:"17 août → 13 sept.",k:"2550 kcal",c:"#F59E0B",t:"Double progression et régularité."},{p:"Définition",d:"14 → 30 sept.",k:"2450 kcal",c:"#EF4444",t:"Maintenir les charges, affiner la taille."}].map(function(x,i){return<div key={x.p} style={{display:"grid",gridTemplateColumns:"28px 1fr auto",gap:9,alignItems:"center",padding:i===0?"0 0 11px":"11px 0",borderBottom:i<2?"1px solid rgba(255,255,255,.055)":"none"}}><div style={{width:28,height:28,borderRadius:9,display:"flex",alignItems:"center",justifyContent:"center",background:x.c+"18",color:x.c,fontSize:11,fontWeight:900}}>{i+1}</div><div><div style={{fontSize:12,fontWeight:850,color:"#fff"}}>{x.p} <span style={{fontSize:9,fontWeight:500,color:"rgba(255,255,255,.3)"}}>· {x.d}</span></div><div style={{fontSize:9,color:"rgba(255,255,255,.27)",marginTop:2}}>{x.t}</div></div><div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:9,fontWeight:800,color:x.c}}>{x.k}</div></div>})}
-    </div>
+    </div>}
     </>}
 
     {view==="session"&&<>
@@ -1174,12 +1491,15 @@ function App(){
       /* Pour U/L (4 jours) : Upper A=Lun, Lower A=Mar, Upper B=Jeu, Lower B=Ven.
          On affiche la date du jour réel correspondant (idx 0,1,3,4 dans wd2). */
       var dateIdxUL=[0,1,3,4];
+      var dateIdx=profile.programKey!=="julien"
+        ? (DAYS_ACT.length===3?[0,2,4]:DAYS_ACT.length===4?[0,1,3,4]:[0,1,2,3,4])
+        : (wN>=23?[0,1,2,3,4]:wN>=14?dateIdxUL:[0,1,2,3,4,5]);
       return<div style={{display:"flex",gap:3,marginBottom:12,overflowX:"auto"}}>
         {DAYS_ACT.map(function(d,i){
           var active=safeDayI===i;
           var dd=wd.ds[d.key];var dc2=false;
           if(dd){var any=false,all=true;d.exs.forEach(function(ex){if(!dd[ex.id])return;if(dd[ex.id].s.some(function(s){return s.d}))any=true;else all=false});dc2=any&&all}
-          var dateLbl = wN>=23 ? wd2[i] : (wN>=14 ? wd2[dateIdxUL[i]] : wd2[i]);
+          var dateLbl = wd2[dateIdx[i]===undefined?i:dateIdx[i]];
           return<button key={i} onClick={function(){setDayI(i)}} style={{flex:"1 1 0",padding:"6px 2px 6px",borderRadius:12,border:active?"2px solid "+d.color:"1px solid rgba(255,255,255,.05)",background:active?d.color+"15":"transparent",cursor:"pointer",textAlign:"center",minWidth:44,position:"relative",transition:"all .15s"}}>
             {dc2&&!active&&<div style={{position:"absolute",top:4,right:4,width:5,height:5,borderRadius:"50%",background:"#10B981"}}/>}
             <div style={{fontSize:8,color:active?d.color:"rgba(255,255,255,.2)",fontWeight:800,letterSpacing:.3}}>{d.day.substring(0,3).toUpperCase()}</div>
@@ -1267,7 +1587,8 @@ function App(){
     {/* EXPORT / IMPORT */}
     <div style={{display:"flex",gap:8,marginBottom:6}}>
       <button onClick={function(){
-        var blob=new Blob([JSON.stringify(st,null,2)],{type:"application/json"});
+        var bundle={format:"colosse-v35",exportedAt:new Date().toISOString(),profile:profile,training:st,challenges:challengeData};
+        var blob=new Blob([JSON.stringify(bundle,null,2)],{type:"application/json"});
         var url=URL.createObjectURL(blob);var a=document.createElement("a");
         a.href=url;a.download="colosse-S"+wN+"-"+new Date().toISOString().slice(0,10)+".json";
         a.click();URL.revokeObjectURL(url);
@@ -1280,9 +1601,13 @@ function App(){
           reader.onload=function(ev){
             try{
               var d=JSON.parse(ev.target.result);
-              if(!d.wk){alert("Fichier invalide");return}
+              var training=d.training||d;
+              if(!training.wk){alert("Fichier invalide");return}
               if(!confirm("Remplace toutes tes données. Continuer ?"))return;
-              save(d);setSt(d);var cw=(d.cw||2)-1;setWk(cw);setRd(getPhaseRest(PHASES[cw].p));
+              training=migrateData(training);save(training);setSt(training);
+              if(d.profile){var restoredProfile=enrichProfile(d.profile);saveProfile(restoredProfile);setProfile(restoredProfile)}
+              if(d.challenges){saveChallenges(d.challenges);setChallengeData(d.challenges)}
+              var cw=(training.cw||2)-1;if(cw<0)cw=0;if(cw>PHASES.length-1)cw=PHASES.length-1;setWk(cw);setRd(getPhaseRest(PHASES[cw].p));
               alert("Données restaurées !");
             }catch(err){alert("Erreur : "+err.message)}
           };reader.readAsText(f);
@@ -1295,12 +1620,12 @@ function App(){
 
     {/* NAVIGATION PRINCIPALE — toujours accessible au pouce */}
     <div style={{position:"fixed",left:"50%",transform:"translateX(-50%)",bottom:0,width:"100%",maxWidth:500,zIndex:9000,padding:"8px 12px calc(8px + env(safe-area-inset-bottom))",background:"linear-gradient(180deg,rgba(8,8,15,.76),rgba(8,8,15,.98) 28%)",backdropFilter:"blur(18px)",WebkitBackdropFilter:"blur(18px)",borderTop:"1px solid rgba(255,255,255,.07)"}}>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:7}}>
-        {[{v:"session",i:"🏋️",l:"Séance",c:day.color},{v:"tracking",i:"📊",l:"Suivi",c:"#10B981"},{v:"coach",i:"🧭",l:"Coach",c:"#60A5FA"}].map(function(x){var on=view===x.v;return<button key={x.v} onClick={function(){switchView(x.v)}} style={{minHeight:54,padding:"7px 5px",borderRadius:14,border:on?"1px solid "+x.c+"55":"1px solid transparent",background:on?x.c+"16":"transparent",color:on?x.c:"rgba(255,255,255,.3)",cursor:"pointer",fontWeight:850,fontSize:10,transition:"all .18s"}}><span style={{display:"block",fontSize:17,marginBottom:3,filter:on?"none":"grayscale(1)",opacity:on?1:.6}}>{x.i}</span>{x.l}</button>})}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:4}}>
+        {[{v:"session",i:"🏋️",l:"Séance",c:day.color},{v:"tracking",i:"📊",l:"Suivi",c:"#10B981"},{v:"challenge",i:"🏆",l:"Challenges",c:"#A78BFA"},{v:"coach",i:"🧭",l:"Coach",c:"#60A5FA"}].map(function(x){var on=view===x.v;return<button key={x.v} onClick={function(){switchView(x.v)}} style={{minHeight:54,padding:"7px 2px",borderRadius:13,border:on?"1px solid "+x.c+"55":"1px solid transparent",background:on?x.c+"16":"transparent",color:on?x.c:"rgba(255,255,255,.3)",cursor:"pointer",fontWeight:850,fontSize:9,transition:"all .18s"}}><span style={{display:"block",fontSize:17,marginBottom:3,filter:on?"none":"grayscale(1)",opacity:on?1:.6}}>{x.i}</span>{x.l}</button>})}
       </div>
     </div>
 
-    {tmr&&<Timer key={tmrKey} sec={rd} c={day.color} onEnd={function(){setTmr(false)}} onSkip={function(){setTmr(false)}} onDC={function(d){setRd(d)}}/>}
+    {view==="session"&&tmr&&<Timer key={tmrKey} sec={rd} c={day.color} onEnd={function(){setTmr(false)}} onSkip={function(){setTmr(false)}} onDC={function(d){setRd(d)}}/>}
   </div>;
 }
 
