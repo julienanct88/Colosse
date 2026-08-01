@@ -54,7 +54,7 @@
 <div id="root"></div>
 <script type="text/plain" id="app-src">
 const{useState,useEffect,useRef}=React;
-const APP_VERSION="v33";
+const APP_VERSION="v34";
 const APP_UPDATED="1 août 2026";
 
 /* ═══ WAKE LOCK ═══ */
@@ -591,8 +591,18 @@ function getAllTimeBest(exId,allWks,currentWkNum){
 
 /* ═══ VOLUME SESSION ═══ */
 function calcVol(dData,exs){
-  var t=0;exs.forEach(function(ex){var d=dData[ex.id];if(!d||!d.s)return;d.s.forEach(function(s){if(s.d&&s.w&&s.r)t+=(parseFloat(s.w)||0)*(parseInt(s.r)||0)})});
+  var t=0;exs.forEach(function(ex){if(ex.isTimer)return;var d=dData[ex.id];if(!d||!d.s)return;d.s.forEach(function(s){if(s.d&&s.w&&s.r)t+=(parseFloat(s.w)||0)*(parseInt(s.r)||0)})});
   return Math.round(t);
+}
+
+function isAbsExercise(ex){
+  var n=(ex&&ex.name?ex.name:"").toLowerCase();
+  return /abdo|crunch|planche|gainage|relevé|relevés|ab wheel|mountain climber/.test(n);
+}
+function getDayAbsStatus(dayDef,weekData){
+  var absExs=dayDef.exs.filter(isAbsExercise),done=0,total=0;
+  absExs.forEach(function(ex){var d=weekData&&weekData.ds&&weekData.ds[dayDef.key]?weekData.ds[dayDef.key][ex.id]:null;if(!d||!d.s)return;total+=d.s.length;done+=d.s.filter(function(s){return s.d}).length});
+  return{planned:absExs.length>0,done:total>0&&done===total,setsDone:done,setsTotal:total,count:absExs.length};
 }
 
 function getOrderedExs(dayDef,order){
@@ -663,9 +673,9 @@ function Timer({sec,c,onEnd,onSkip,onDC}){
 }
 
 /* ═══ EXERCISE CARD ═══ */
-function ExCard({ex,data,prev,color,upd,onDone,isLk,canUp,canDn,onUp,onDn,phaseName,atb,allWks,wkNum,dayKey}){
+function ExCard({ex,data,prev,color,upd,onDone,onAsk,isLk,canUp,canDn,onUp,onDn,phaseName,atb,allWks,wkNum,dayKey}){
   if(!data||!data.s)return null;
-  var rng=getRepRange(ex,phaseName);
+  var rng=ex.isTimer?{lo:ex.rLo||30,hi:ex.rHi||60}:getRepRange(ex,phaseName);
   /* Variant-aware progression */
   var curVar=data.variant||null;
   var hasVar=ex.variants&&ex.variants.length>0;
@@ -676,12 +686,15 @@ function ExCard({ex,data,prev,color,upd,onDone,isLk,canUp,canDn,onUp,onDn,phaseN
   var tW=parseFloat(dW)||0,tR=parseInt(dR)||0;
   var isAuto=!data.tw&&!data.tr&&ao&&ao.w;
   var dn=data.s.filter(function(s){return s.d}),dc=dn.length,tc=data.s.length;
-  var allH=tW>0&&tR>0&&dc>=Math.max(tc-1,1)&&dn.every(function(s){return(parseFloat(s.w)||0)>=tW&&(parseInt(s.r)||0)>=tR});
+  var allH=ex.isTimer
+    ? dc>=Math.max(tc-1,1)&&dn.every(function(s){return(parseInt(s.r)||0)>=rng.lo})
+    : tW>0&&tR>0&&dc>=Math.max(tc-1,1)&&dn.every(function(s){return(parseFloat(s.w)||0)>=tW&&(parseInt(s.r)||0)>=tR});
   var inc=INC[varTp||ex.tp]||2.5;
   var pB=0,pBR=0;
   if(effPrev){var pd=effPrev.s.filter(function(s){return s.d&&s.w&&parseFloat(s.w)>0});if(pd.length){var pl=pd[pd.length-1];pB=parseFloat(pl.w)||0;pBR=parseInt(pl.r)||0}}
   var isPR=atb>0&&tW>atb;
-  var sessVol=0;dn.forEach(function(s){sessVol+=(parseFloat(s.w)||0)*(parseInt(s.r)||0)});
+  var sessVol=0;if(!ex.isTimer)dn.forEach(function(s){sessVol+=(parseFloat(s.w)||0)*(parseInt(s.r)||0)});
+  var loadHint=ex.isTimer?"secondes · lest optionnel":(ex.tp==="dumbbell"?"kg par haltère":ex.tp==="barbell"?"kg total, barre comprise":"kg affichés sur la machine");
 
   return<div style={{borderRadius:16,background:"rgba(255,255,255,.025)",border:"1px solid "+(allH?"rgba(16,185,129,.3)":"rgba(255,255,255,.06)"),overflow:"hidden",marginBottom:10,boxShadow:allH?"0 4px 24px rgba(16,185,129,.08)":"none",transition:"box-shadow .4s"}}>
     <div style={{padding:"12px 14px 10px",background:allH?"rgba(16,185,129,.07)":color+"07",borderBottom:"1px solid "+(allH?"rgba(16,185,129,.15)":color+"12"),display:"flex",alignItems:"flex-start",gap:8}}>
@@ -689,16 +702,18 @@ function ExCard({ex,data,prev,color,upd,onDone,isLk,canUp,canDn,onUp,onDn,phaseN
         <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:3,flexWrap:"wrap"}}>
           {isLk&&<span style={{fontSize:9,color:"rgba(255,255,255,.15)"}}>🔒</span>}
           <span style={{fontSize:14,fontWeight:800,color:"#fff",lineHeight:1.2}}>{ex.name}</span>
-          {ex.yt&&<a href={YT+ex.yt} target="_blank" rel="noopener" style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:20,height:20,borderRadius:5,background:"rgba(255,0,0,.12)",border:"1px solid rgba(255,0,0,.2)",color:"#FF4444",fontSize:9,fontWeight:800,textDecoration:"none",flexShrink:0}}>▶</a>}
+          {ex.yt&&<a href={YT+ex.yt} target="_blank" rel="noopener" style={{display:"inline-flex",alignItems:"center",justifyContent:"center",height:20,padding:"0 7px",borderRadius:6,background:"rgba(255,0,0,.12)",border:"1px solid rgba(255,0,0,.2)",color:"#FF6B6B",fontSize:8,fontWeight:800,textDecoration:"none",flexShrink:0}}>▶ Technique</a>}
           {isPR&&<span style={{padding:"1px 6px",borderRadius:12,background:"rgba(255,215,0,.12)",border:"1px solid rgba(255,215,0,.35)",fontSize:9,fontWeight:800,color:"#FFD700",animation:"prPop .4s ease-out"}}>🏆 PR</span>}
         </div>
         <div style={{fontSize:10,color:"rgba(255,255,255,.28)",display:"flex",alignItems:"center",gap:5,flexWrap:"wrap"}}>
-          <span>{ex.isTimer?ex.sets+"× chrono":ex.sets+"×"+(rng.lo===rng.hi?rng.lo:rng.lo+"-"+rng.hi)+" reps"} · {ex.tp}</span>
+          <span>{ex.isTimer?ex.sets+"× "+rng.lo+"-"+rng.hi+" sec":ex.sets+"×"+(rng.lo===rng.hi?rng.lo:rng.lo+"-"+rng.hi)+" reps"}</span>
           {ex.rest&&<span style={{padding:"1px 6px",borderRadius:5,background:"rgba(255,255,255,.05)",fontSize:9,fontWeight:700}}>⏱{ex.rest>=60?Math.floor(ex.rest/60)+"m":""}:{(ex.rest%60).toString().padStart(2,"0")}</span>}
           {pB>0&&<span>Préc: {pB}kg×{pBR}</span>}
           {sessVol>0&&<span style={{color:color+"aa",fontWeight:700}}>{sessVol}kg</span>}
         </div>
+        <div style={{fontSize:8,color:"rgba(255,255,255,.2)",marginTop:4}}>Saisie : {loadHint}</div>
         {ex.variants&&<div style={{display:"flex",gap:3,marginTop:5,flexWrap:"wrap"}}>{ex.variants.map(function(v){var sel=data.variant===v;return<button key={v} onClick={function(){upd("variant",v)}} style={{padding:"2px 8px",borderRadius:6,border:sel?"1px solid "+color+"70":"1px solid rgba(255,255,255,.08)",background:sel?color+"15":"transparent",color:sel?color:"rgba(255,255,255,.3)",fontSize:9,fontWeight:700,cursor:"pointer"}}>{v}</button>})}</div>}
+        {onAsk&&<button onClick={onAsk} style={{marginTop:7,padding:"5px 9px",borderRadius:8,border:"1px solid rgba(96,165,250,.2)",background:"rgba(59,130,246,.07)",color:"#60A5FA",fontSize:8,fontWeight:800,cursor:"pointer"}}>❓ Poser une question sur cet exercice</button>}
       </div>
       <div style={{display:"flex",alignItems:"center",gap:4,flexShrink:0}}>
         {!isLk&&<div style={{display:"flex",flexDirection:"column",gap:2}}>
@@ -706,7 +721,10 @@ function ExCard({ex,data,prev,color,upd,onDone,isLk,canUp,canDn,onUp,onDn,phaseN
           <button onClick={onDn} disabled={!canDn} style={{width:20,height:18,borderRadius:4,border:"none",background:canDn?"rgba(255,255,255,.07)":"transparent",color:canDn?"rgba(255,255,255,.4)":"rgba(255,255,255,.08)",fontSize:10,cursor:canDn?"pointer":"default",display:"flex",alignItems:"center",justifyContent:"center",padding:0}}>▼</button>
         </div>}
         <div style={{textAlign:"right",minWidth:64}}>
-          {tW>0?<div>
+          {ex.isTimer?<div>
+            <div style={{fontSize:9,fontWeight:800,color:allH?"#10B981":color,letterSpacing:.5,marginBottom:1}}>{allH?"✓ FAIT":"🎯 OBJECTIF"}</div>
+            <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:17,fontWeight:900,color:allH?"#10B981":"#fff"}}>{rng.lo}-{rng.hi}<span style={{fontSize:9,color:"rgba(255,255,255,.3)",marginLeft:2}}>sec</span></div>
+          </div>:tW>0?<div>
             <div style={{fontSize:9,fontWeight:800,color:allH?"#10B981":isPR?"#FFD700":color,letterSpacing:.5,marginBottom:1}}>{allH?"✓ FAIT":isPR?"🏆":"🎯"} {allH?"":"OBJ"}</div>
             <div style={{display:"flex",alignItems:"baseline",gap:1,justifyContent:"flex-end"}}>
               <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:20,fontWeight:900,color:allH?"#10B981":isPR?"#FFD700":"#fff"}}>{dW}</span>
@@ -729,18 +747,28 @@ function ExCard({ex,data,prev,color,upd,onDone,isLk,canUp,canDn,onUp,onDn,phaseN
     <div style={{padding:"8px 14px 12px"}}>
       {data.s.map(function(set,i){
         var w=parseFloat(set.w)||0,r=parseInt(set.r)||0;
-        var hit=tW>0&&tR>0&&w>=tW&&r>=tR&&set.d;
+        var hit=ex.isTimer?(set.d&&r>=rng.lo):(tW>0&&tR>0&&w>=tW&&r>=tR&&set.d);
         return<div key={i} style={{display:"flex",alignItems:"center",gap:6,marginBottom:5,opacity:set.d?1:.5}}>
           <span style={{fontSize:10,color:"rgba(255,255,255,.2)",fontWeight:700,width:16,textAlign:"center",flexShrink:0}}>{i+1}</span>
           <Chk on={set.d} toggle={function(){upd("s_"+i+"_d",!set.d);if(!set.d)onDone()}} c={hit?"#10B981":color}/>
-          <Inp value={set.w} onChange={function(v){upd("s_"+i+"_w",v)}} ph={tW>0?String(tW):"kg"} width={56}/>
-          <span style={{fontSize:10,color:"rgba(255,255,255,.15)",flexShrink:0}}>kg×</span>
-          <Inp value={set.r} onChange={function(v){upd("s_"+i+"_r",v)}} ph={tR>0?String(tR):""} width={42}/>
-          {ex.isTimer&&<span style={{fontSize:9,color:"rgba(255,255,255,.2)"}}>s</span>}
+          {ex.isTimer?<>
+            <Inp value={set.r} onChange={function(v){upd("s_"+i+"_r",v)}} ph={String(rng.lo)} width={48}/>
+            <span style={{fontSize:9,color:"rgba(255,255,255,.25)",flexShrink:0}}>sec</span>
+            <span style={{fontSize:9,color:"rgba(255,255,255,.14)",flexShrink:0}}>+</span>
+            <Inp value={set.w} onChange={function(v){upd("s_"+i+"_w",v)}} ph="0" width={44}/>
+            <span style={{fontSize:8,color:"rgba(255,255,255,.22)",flexShrink:0}}>kg lest</span>
+          </>:<>
+            <Inp value={set.w} onChange={function(v){upd("s_"+i+"_w",v)}} ph={tW>0?String(tW):"kg"} width={56}/>
+            <span style={{fontSize:10,color:"rgba(255,255,255,.15)",flexShrink:0}}>kg×</span>
+            <Inp value={set.r} onChange={function(v){upd("s_"+i+"_r",v)}} ph={tR>0?String(tR):""} width={42}/>
+          </>}
           {set.d&&hit&&<span style={{fontSize:12,color:"#10B981",fontWeight:800,marginLeft:2}}>✓</span>}
-          {set.d&&!hit&&tW>0&&<span style={{fontSize:9,color:"rgba(255,255,255,.15)",marginLeft:2}}>{w<tW?"↗ +"+(tW-w).toFixed(1)+"kg":r+"/"+tR+" reps"}</span>}
+          {set.d&&!hit&&!ex.isTimer&&tW>0&&<span style={{fontSize:9,color:"rgba(255,255,255,.15)",marginLeft:2}}>{w<tW?"↗ +"+(tW-w).toFixed(1)+"kg":r+"/"+tR+" reps"}</span>}
         </div>;
       })}
+      {ex.isTimer&&<div style={{marginTop:7,padding:"8px 10px",borderRadius:10,background:"rgba(59,130,246,.055)",border:"1px solid rgba(59,130,246,.14)",fontSize:9,color:"rgba(255,255,255,.42)",lineHeight:1.5}}>
+        <strong style={{color:"#93C5FD"}}>Pour l’instant : poids du corps.</strong> Entre ton temps en secondes et laisse « kg lest » à 0. On n’ajoutera une charge que plus tard, quand la position restera propre pendant {rng.hi} secondes.
+      </div>}
       {allH&&(function(){
         var lr=dn[dn.length-1],lR2=parseInt(lr?lr.r:0)||0,goUp=lR2>=rng.hi;
         return<div style={{marginTop:8,padding:"8px 12px",borderRadius:10,background:"rgba(16,185,129,.07)",border:"1px solid rgba(16,185,129,.15)",fontSize:11,color:"#10B981",fontWeight:800,display:"flex",gap:6,alignItems:"center"}}>
@@ -939,6 +967,7 @@ function App(){
   const[wk,setWk]=useState(0);
   const[dayI,setDayI]=useState(0);
   const[view,setView]=useState("session");
+  const[guideOpen,setGuideOpen]=useState(false);
   const[sav,setSav]=useState(false);
   const[tmr,setTmr]=useState(false);
   const[tmrKey,setTmrKey]=useState(0);
@@ -1005,14 +1034,15 @@ function App(){
   function buildCoachReport(){
     var done=[];
     DAYS_ACT.forEach(function(d){var dd=wd.ds[d.key];if(!dd)return;var any=false;d.exs.forEach(function(ex){if(dd[ex.id]&&dd[ex.id].s.some(function(s){return s.d}))any=true});if(any)done.push(d.day+" "+d.name)});
-    var keys=getWeekDateKeys(wN),nut=0,card=0,abs=0;
-    keys.forEach(function(k){var h=st.hb&&st.hb[k];if(!h)return;if(h.nutrition)nut++;if(h.cardio)card++;if(h.abs)abs++});
+    var keys=getWeekDateKeys(wN),nut=0,card=0,absDone=0,absPlanned=0;
+    keys.forEach(function(k){var h=st.hb&&st.hb[k];if(!h)return;if(h.nutrition)nut++;if(h.cardio)card++});
+    DAYS_ACT.forEach(function(d){var a=getDayAbsStatus(d,wd);if(a.planned){absPlanned++;if(a.done)absDone++}});
     var measures=MEAS.map(function(m){var v=wd.ms[m.id];return v?m.nm+" : "+v+" "+m.u:null}).filter(Boolean);
     return "COLOSSE — BILAN COACH S"+wN+"\n"+
       "Période : "+getWeekDates(wN)[0]+" → "+getWeekDates(wN)[5]+"\n"+
       "Phase : "+ph.p+" · objectif "+ph.cal+" kcal/j · 220 g protéines\n"+
       "Séances commencées : "+done.length+"/"+DAYS_ACT.length+(done.length?" — "+done.join(", "):"")+"\n"+
-      "Habitudes cochées : nutrition "+nut+"/7 · cardio/marche "+card+"/7 · abdos "+abs+"/7\n"+
+      "Suivi : nutrition validée "+nut+"/7 · cardio/marche fait "+card+"/7 · séances abdos terminées "+absDone+"/"+absPlanned+"\n"+
       (measures.length?"Mesures : "+measures.join(" · ")+"\n":"")+
       (wd.mood?"Ressenti : "+wd.mood+"\n":"")+
       (wd.nt?"Notes : "+wd.nt+"\n":"")+
@@ -1023,6 +1053,19 @@ function App(){
     if(navigator.share){try{await navigator.share({title:"Bilan Colosse S"+wN,text:report});return}catch(e){if(e&&e.name==="AbortError")return}}
     try{await navigator.clipboard.writeText(report);alert("Bilan copié. Colle-le dans notre conversation.")}
     catch(e){var ta=document.createElement("textarea");ta.value=report;document.body.appendChild(ta);ta.select();document.execCommand("copy");ta.remove();alert("Bilan copié. Colle-le dans notre conversation.")}
+  }
+  async function askAboutExercise(ex){
+    var rr=ex.isTimer?{lo:ex.rLo||30,hi:ex.rHi||60}:getRepRange(ex,ph.p);
+    var instruction=ex.isTimer
+      ? ex.sets+" séries de "+rr.lo+" à "+rr.hi+" secondes, au poids du corps"
+      : ex.sets+" séries de "+rr.lo+" à "+rr.hi+" répétitions";
+    var question="QUESTION COLOSSE — S"+wN+" · "+day.day+" "+day.name+"\n"+
+      "Exercice : "+ex.name+"\n"+
+      "Programme : "+instruction+"\n\n"+
+      "Ma question : ";
+    if(navigator.share){try{await navigator.share({title:"Question Colosse — "+ex.name,text:question});return}catch(e){if(e&&e.name==="AbortError")return}}
+    try{await navigator.clipboard.writeText(question);alert("Question copiée. Colle-la dans notre conversation ChatGPT et complète-la.")}
+    catch(e){var ta=document.createElement("textarea");ta.value=question;document.body.appendChild(ta);ta.select();document.execCommand("copy");ta.remove();alert("Question copiée. Colle-la dans notre conversation ChatGPT et complète-la.")}
   }
   function reorder(dk,eid,dir){
     setSt(function(p){
@@ -1048,8 +1091,10 @@ function App(){
   var isToday=(function(){var dow=new Date().getDay();return dow>=1&&dow<=6&&dayI===dow-1})();
   var weekDone=0;
   DAYS_ACT.forEach(function(d){var dd=wd.ds[d.key];if(!dd)return;var any=false,all=true;d.exs.forEach(function(ex){if(!dd[ex.id])return;if(dd[ex.id].s.some(function(s){return s.d}))any=true;else all=false});if(any&&all)weekDone++});
-  var weekHabitKeys=getWeekDateKeys(wN),weekHabits={nutrition:0,cardio:0,abs:0};
-  weekHabitKeys.forEach(function(k){var h=st.hb&&st.hb[k];if(!h)return;if(h.nutrition)weekHabits.nutrition++;if(h.cardio)weekHabits.cardio++;if(h.abs)weekHabits.abs++});
+  var weekHabitKeys=getWeekDateKeys(wN),weekHabits={nutrition:0,cardio:0};
+  weekHabitKeys.forEach(function(k){var h=st.hb&&st.hb[k];if(!h)return;if(h.nutrition)weekHabits.nutrition++;if(h.cardio)weekHabits.cardio++});
+  var todayAbs=getDayAbsStatus(day,wd),weekAbs={done:0,planned:0};
+  DAYS_ACT.forEach(function(d){var a=getDayAbsStatus(d,wd);if(a.planned){weekAbs.planned++;if(a.done)weekAbs.done++}});
 
   function switchView(v){setView(v);try{window.scrollTo({top:0,behavior:"smooth"})}catch(e){window.scrollTo(0,0)}}
 
@@ -1081,18 +1126,26 @@ function App(){
         <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:22,fontWeight:900,color:weekDone===DAYS_ACT.length?"#10B981":"#fff"}}>{weekDone}<span style={{fontSize:11,color:"rgba(255,255,255,.28)"}}>/{DAYS_ACT.length}</span></div>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:7}}>
-        {[{l:"Nutrition",v:weekHabits.nutrition+"/7",c:"#F59E0B"},{l:"Cardio/marche",v:weekHabits.cardio+"/7",c:"#3B82F6"},{l:"Abdos",v:weekHabits.abs+"/2",c:"#EF4444"}].map(function(x){return<div key={x.l} style={{padding:"10px 5px",borderRadius:12,textAlign:"center",background:"rgba(8,8,15,.45)",border:"1px solid rgba(255,255,255,.06)"}}><div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:16,fontWeight:900,color:x.c}}>{x.v}</div><div style={{fontSize:8,color:"rgba(255,255,255,.3)",marginTop:3,fontWeight:700}}>{x.l}</div></div>})}
+        {[{l:"Nutrition validée",v:weekHabits.nutrition+"/7",c:"#F59E0B"},{l:"Cardio fait",v:weekHabits.cardio+"/7",c:"#3B82F6"},{l:"Séances abdos",v:weekAbs.done+"/"+weekAbs.planned,c:"#EF4444"}].map(function(x){return<div key={x.l} style={{padding:"10px 5px",borderRadius:12,textAlign:"center",background:"rgba(8,8,15,.45)",border:"1px solid rgba(255,255,255,.06)"}}><div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:16,fontWeight:900,color:x.c}}>{x.v}</div><div style={{fontSize:8,color:"rgba(255,255,255,.3)",marginTop:3,fontWeight:700}}>{x.l}</div></div>})}
       </div>
     </div>
 
-    {/* CONTRAT DU JOUR */}
+    {/* ACTIONS DU JOUR : manuel vs automatique */}
     <div style={{marginBottom:12,padding:"12px 14px",borderRadius:16,background:"rgba(16,185,129,.045)",border:"1px solid rgba(16,185,129,.16)"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:9}}>
-        <div><div style={{fontSize:9,fontWeight:900,letterSpacing:1.4,color:"#10B981"}}>CONTRAT DU JOUR</div><div style={{fontSize:9,color:"rgba(255,255,255,.25)",marginTop:2}}>Objectif nutrition · {ph.cal} kcal · 220 g protéines</div></div>
+        <div><div style={{fontSize:9,fontWeight:900,letterSpacing:1.4,color:"#10B981"}}>À VALIDER APRÈS L’AVOIR FAIT</div><div style={{fontSize:9,color:"rgba(255,255,255,.3)",marginTop:3,lineHeight:1.45}}>Tu coches nutrition et cardio. Les abdos se valident dans la séance.</div></div>
         <div style={{fontSize:10,fontWeight:800,color:sessComplete?"#10B981":"rgba(255,255,255,.25)"}}>{sessComplete?"SÉANCE ✓":"SÉANCE À FAIRE"}</div>
       </div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6}}>
-        {[{k:"nutrition",icon:"🍽️",l:"Nutrition"},{k:"cardio",icon:"🚶",l:"Cardio/marche"},{k:"abs",icon:"🔥",l:"Abdos prévus"}].map(function(x){var on=!!hb[x.k];return<button key={x.k} onClick={function(){toggleHabit(x.k)}} style={{padding:"11px 4px",minHeight:60,borderRadius:12,border:on?"1px solid rgba(16,185,129,.45)":"1px solid rgba(255,255,255,.06)",background:on?"rgba(16,185,129,.12)":"rgba(255,255,255,.025)",color:on?"#10B981":"rgba(255,255,255,.45)",fontSize:9,fontWeight:800,cursor:"pointer"}}><span style={{fontSize:15,display:"block",marginBottom:4}}>{on?"✓":x.icon}</span>{x.l}</button>})}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:7}}>
+        {[{k:"nutrition",icon:"🍽️",l:"Nutrition tenue",sub:ph.cal+" kcal · 220 g prot."},{k:"cardio",icon:"🚶",l:"Cardio/marche fait",sub:"Coche seulement après"}].map(function(x){var on=!!hb[x.k];return<button key={x.k} onClick={function(){toggleHabit(x.k)}} style={{padding:"11px 8px",minHeight:78,borderRadius:12,border:on?"1px solid rgba(16,185,129,.45)":"1px solid rgba(255,255,255,.06)",background:on?"rgba(16,185,129,.12)":"rgba(255,255,255,.025)",color:on?"#10B981":"rgba(255,255,255,.55)",fontSize:10,fontWeight:800,cursor:"pointer",textAlign:"left"}}><span style={{fontSize:16,display:"block",marginBottom:5}}>{on?"✓":x.icon}</span>{x.l}<span style={{display:"block",fontSize:8,fontWeight:600,color:on?"rgba(16,185,129,.7)":"rgba(255,255,255,.25)",marginTop:3}}>{on?"FAIT AUJOURD’HUI":x.sub}</span></button>})}
+      </div>
+      <div style={{marginTop:7,padding:"11px 12px",borderRadius:12,background:todayAbs.done?"rgba(16,185,129,.1)":"rgba(239,68,68,.045)",border:"1px solid "+(todayAbs.done?"rgba(16,185,129,.3)":"rgba(239,68,68,.14)"),display:"flex",alignItems:"center",gap:10}}>
+        <span style={{fontSize:18}}>{todayAbs.done?"✓":todayAbs.planned?"🔥":"—"}</span>
+        <div style={{flex:1}}>
+          <div style={{fontSize:10,fontWeight:850,color:todayAbs.done?"#10B981":"rgba(255,255,255,.58)"}}>{todayAbs.done?"Abdos terminés avec la séance":todayAbs.planned?"Abdos prévus dans "+day.name:"Pas d’abdos prévus dans cette séance"}</div>
+          <div style={{fontSize:8,color:"rgba(255,255,255,.27)",marginTop:3}}>{todayAbs.planned?todayAbs.setsDone+"/"+todayAbs.setsTotal+" séries validées · aucune case à cocher ici":"Tu n’as rien à valider ici aujourd’hui."}</div>
+        </div>
+        <span style={{fontSize:8,fontWeight:900,color:"rgba(255,255,255,.2)",letterSpacing:.7}}>AUTO</span>
       </div>
     </div>
     </>}
@@ -1165,11 +1218,22 @@ function App(){
       </div>
     </div>
 
+    {/* GUIDE DE SAISIE */}
+    <div style={{marginBottom:12,borderRadius:12,background:"rgba(59,130,246,.045)",border:"1px solid rgba(59,130,246,.14)",overflow:"hidden"}}>
+      <button onClick={function(){setGuideOpen(function(v){return!v})}} style={{width:"100%",padding:"10px 12px",border:"none",background:"transparent",color:"#93C5FD",fontSize:9,fontWeight:850,cursor:"pointer",textAlign:"left",display:"flex",justifyContent:"space-between",alignItems:"center"}}><span>ℹ️ Comment noter les charges et les chronos ?</span><span>{guideOpen?"▲":"▼"}</span></button>
+      {guideOpen&&<div style={{padding:"0 12px 11px",fontSize:9,color:"rgba(255,255,255,.42)",lineHeight:1.65}}>
+        <div><strong style={{color:"#fff"}}>Machine / câble :</strong> le nombre affiché par la machine.</div>
+        <div><strong style={{color:"#fff"}}>Haltères :</strong> le poids d’un seul haltère.</div>
+        <div><strong style={{color:"#fff"}}>Barre :</strong> le poids total, barre comprise.</div>
+        <div><strong style={{color:"#fff"}}>Planche / chrono :</strong> le temps en secondes. « kg lest » reste à 0 au poids du corps.</div>
+      </div>}
+    </div>
+
     {/* EXERCISES */}
     <div style={{paddingBottom:tmr?240:0}}>
       {orderedExs.map(function(ex){
         var fI=freeExs.indexOf(ex);
-        return<ExCard key={ex.id} ex={ex} data={dData[ex.id]} prev={pDData&&pDData[ex.id]?pDData[ex.id]:null} color={day.color} upd={function(f,v){upEx(ex.id,f,v)}} onDone={function(){var r=ex.rest||rd;setRd(r);setTmr(true);setTmrKey(function(k){return k+1})}} isLk={!!ex.lk} canUp={!ex.lk&&fI>0} canDn={!ex.lk&&fI>=0&&fI<freeExs.length-1} onUp={function(){reorder(day.key,ex.id,"up")}} onDn={function(){reorder(day.key,ex.id,"down")}} phaseName={ph.p} atb={getAllTimeBest(ex.id,st.wk,wN)} allWks={st.wk} wkNum={wN} dayKey={day.key}/>;
+        return<ExCard key={ex.id} ex={ex} data={dData[ex.id]} prev={pDData&&pDData[ex.id]?pDData[ex.id]:null} color={day.color} upd={function(f,v){upEx(ex.id,f,v)}} onDone={function(){var r=ex.rest||rd;setRd(r);setTmr(true);setTmrKey(function(k){return k+1})}} onAsk={function(){askAboutExercise(ex)}} isLk={!!ex.lk} canUp={!ex.lk&&fI>0} canDn={!ex.lk&&fI>=0&&fI<freeExs.length-1} onUp={function(){reorder(day.key,ex.id,"up")}} onDn={function(){reorder(day.key,ex.id,"down")}} phaseName={ph.p} atb={getAllTimeBest(ex.id,st.wk,wN)} allWks={st.wk} wkNum={wN} dayKey={day.key}/>;
       })}
     </div>
     </>}
