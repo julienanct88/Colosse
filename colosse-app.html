@@ -54,6 +54,8 @@
 <div id="root"></div>
 <script type="text/plain" id="app-src">
 const{useState,useEffect,useRef}=React;
+const APP_VERSION="v32";
+const APP_UPDATED="1 août 2026";
 
 /* ═══ WAKE LOCK ═══ */
 function useWakeLock(on){
@@ -223,16 +225,66 @@ const DAYS_R5=[
   ]},
 ];
 
+/* ═══ CYCLE AOÛT → SEPTEMBRE (S27+, lundi 3 août 2026) ═══
+   5 séances du lundi au vendredi. Aucune séance ne mélange pectoraux et dos.
+   Objectif : relancer la musculation, réduire le tour de taille et faire
+   ressortir les muscles avant le prochain cycle d'octobre. */
+const DAYS_AUG26=[
+  {id:0,key:"augPecs",name:"Pectoraux",label:"Pecs · Triceps",day:"Lundi",color:"#EF4444",exs:[
+    {id:"ap1",name:"Développé couché machine",tp:"machine",sets:4,rLo:8,rHi:10,lk:true,rest:120,variants:["Machine convergente","Smith"],yt:"développé+couché+machine+convergente+technique"},
+    {id:"ap2",name:"Développé incliné",tp:"machine",sets:3,rLo:8,rHi:12,lk:true,rest:105,variants:["Machine convergente","Smith","Haltères"],yt:"développé+incliné+machine+haut+pectoraux+technique"},
+    {id:"ap3",name:"Pec deck (butterfly)",tp:"machine",sets:3,rLo:12,rHi:15,rest:75,yt:"pec+deck+butterfly+machine+technique"},
+    {id:"ap4",name:"Écarté poulie vis-à-vis",tp:"cable",sets:2,rLo:12,rHi:15,rest:60,yt:"écarté+poulie+vis+à+vis+pectoraux+technique"},
+    {id:"ap5",name:"Triceps pushdown corde",tp:"cable",sets:3,rLo:10,rHi:15,rest:75,yt:"triceps+pushdown+corde+poulie+haute+technique"},
+    {id:"ap6",name:"Extension triceps au-dessus de la tête",tp:"cable",sets:2,rLo:10,rHi:15,rest:60,yt:"extension+triceps+overhead+poulie+technique"},
+  ]},
+  {id:1,key:"augDosA",name:"Dos A",label:"Dos · Biceps",day:"Mardi",color:"#3B82F6",exs:[
+    {id:"ad1",name:"Tirage vertical poulie haute",tp:"machine",sets:4,rLo:8,rHi:10,lk:true,rest:120,variants:["Prise neutre","Prise large","Prise serrée"],yt:"tirage+vertical+poulie+haute+dos+technique"},
+    {id:"ad2",name:"Rowing machine avec appui poitrine",tp:"machine",sets:4,rLo:8,rHi:12,lk:true,rest:105,yt:"rowing+machine+chest+supported+row+technique"},
+    {id:"ad3",name:"Rowing unilatéral poulie",tp:"cable",sets:3,rLo:10,rHi:12,rest:75,yt:"rowing+unilatéral+poulie+basse+dos+technique"},
+    {id:"ad4",name:"Pull-over poulie bras tendus",tp:"cable",sets:2,rLo:12,rHi:15,rest:60,yt:"pull+over+poulie+bras+tendus+dos+technique"},
+    {id:"ad5",name:"Curl biceps machine",tp:"machine",sets:3,rLo:10,rHi:15,rest:75,yt:"curl+biceps+machine+technique"},
+    {id:"ad6",name:"Curl marteau haltères",tp:"dumbbell",sets:2,rLo:10,rHi:15,rest:60,yt:"curl+marteau+haltères+biceps+technique"},
+  ]},
+  {id:2,key:"augJambes",name:"Jambes",label:"Jambes · Mollets · Abdos",day:"Mercredi",color:"#10B981",exs:[
+    {id:"aj1",name:"Presse cuisses 45°",tp:"machine",sets:4,rLo:8,rHi:12,lk:true,rest:135,yt:"presse+cuisses+45+leg+press+technique"},
+    {id:"aj2",name:"Soulevé de terre roumain",tp:"machine",sets:3,rLo:8,rHi:12,lk:true,rest:120,variants:["Smith","Haltères"],yt:"soulevé+de+terre+roumain+smith+ischios+technique"},
+    {id:"aj3",name:"Leg curl assis ou couché",tp:"machine",sets:3,rLo:10,rHi:15,rest:90,variants:["Assis","Couché"],yt:"leg+curl+ischios+technique"},
+    {id:"aj4",name:"Leg extension",tp:"machine",sets:3,rLo:12,rHi:15,rest:75,yt:"leg+extension+quadriceps+technique"},
+    {id:"aj5",name:"Mollets machine",tp:"machine",sets:3,rLo:12,rHi:20,rest:60,yt:"mollets+machine+calf+raise+technique"},
+    {id:"aj6",name:"Crunch machine ou poulie",tp:"machine",sets:3,rLo:12,rHi:20,rest:60,variants:["Machine","Poulie"],yt:"crunch+machine+poulie+abdos+technique"},
+    {id:"aj7",name:"Relevés de jambes",tp:"barbell",sets:3,rLo:10,rHi:15,rest:60,yt:"relevés+de+jambes+abdos+technique"},
+  ]},
+  {id:3,key:"augEpaules",name:"Épaules",label:"Épaules · Haut de pecs · Triceps",day:"Jeudi",color:"#F59E0B",exs:[
+    {id:"ae1",name:"Développé épaules machine",tp:"machine",sets:4,rLo:8,rHi:12,lk:true,rest:120,variants:["Machine","Smith","Haltères"],yt:"développé+épaules+machine+technique"},
+    {id:"ae2",name:"Élévations latérales",tp:"machine",sets:4,rLo:12,rHi:20,rest:75,variants:["Machine","Haltères","Poulie"],yt:"élévations+latérales+machine+technique"},
+    {id:"ae3",name:"Pec deck inversé",tp:"machine",sets:3,rLo:12,rHi:20,rest:75,yt:"pec+deck+inversé+deltoïde+postérieur+technique"},
+    {id:"ae4",name:"Développé incliné convergent",tp:"machine",sets:3,rLo:10,rHi:12,rest:90,variants:["Machine convergente","Smith","Haltères"],yt:"développé+incliné+convergent+haut+pectoraux+technique"},
+    {id:"ae5",name:"Écarté poulie bas vers haut",tp:"cable",sets:3,rLo:12,rHi:15,rest:60,yt:"écarté+poulie+bas+vers+haut+haut+pectoraux+technique"},
+    {id:"ae6",name:"Extension triceps unilatérale",tp:"cable",sets:3,rLo:10,rHi:15,rest:60,yt:"extension+triceps+unilatérale+poulie+technique"},
+  ]},
+  {id:4,key:"augDosB",name:"Dos B",label:"Dos · Biceps · Abdos",day:"Vendredi",color:"#8B5CF6",exs:[
+    {id:"ab1",name:"Tirage vertical prise neutre",tp:"machine",sets:3,rLo:10,rHi:12,lk:true,rest:105,yt:"tirage+vertical+prise+neutre+dos+technique"},
+    {id:"ab2",name:"Rowing poulie basse",tp:"cable",sets:3,rLo:10,rHi:12,lk:true,rest:90,variants:["Embout triangle","Barre"],yt:"rowing+poulie+basse+dos+technique"},
+    {id:"ab3",name:"Rowing unilatéral machine",tp:"machine",sets:3,rLo:10,rHi:15,rest:75,yt:"rowing+unilatéral+machine+dos+technique"},
+    {id:"ab4",name:"Curl incliné haltères",tp:"dumbbell",sets:3,rLo:10,rHi:15,rest:75,yt:"curl+incliné+haltères+biceps+technique"},
+    {id:"ab5",name:"Curl câble barre",tp:"cable",sets:2,rLo:12,rHi:15,rest:60,yt:"curl+câble+barre+biceps+technique"},
+    {id:"ab6",name:"Crunch câble",tp:"cable",sets:3,rLo:12,rHi:20,rest:60,yt:"crunch+câble+poulie+haute+abdos+technique"},
+    {id:"ab7",name:"Planche",tp:"barbell",sets:2,rLo:40,rHi:60,rest:60,isTimer:true,yt:"planche+gainage+abdos+technique"},
+  ]},
+];
+
 /* ═══ HELPERS DAYS / DOW MAPPING ═══ */
 /* S1-S13 : PPL 6 jours. S14-S22 : U/L 4 jours (historique).
-   S23+ (lundi 6 juil 2026) : REPRISE 5 jours, présence d'abord.
+   S23-S26 : reprise 5 jours historique. S27+ : cycle août-septembre.
    Note: les semaines sont 1-indexées dans le PWA (wN), mais wk est 0-indexé. */
 function getDays(wN){
+  if(wN>=27)return DAYS_AUG26;
   if(wN>=23)return DAYS_R5;
   return wN>=14 ? DAYS_UL : DAYS;
 }
-/* Tous les jours (PPL + U/L + R5) — utile pour migration, init, recherche PR all-time. */
-const ALL_DAYS = DAYS.concat(DAYS_UL).concat(DAYS_R5);
+/* Tous les jours — utile pour migration, init et recherche PR all-time. */
+const ALL_DAYS = DAYS.concat(DAYS_UL).concat(DAYS_R5).concat(DAYS_AUG26);
 /* Mapping jour de la semaine → index dans le tableau DAYS de la phase active.
    PPL : Lun=0..Sam=5. U/L : Lun=0, Mar=1, Jeu=2, Ven=3.
    R5 : Lun=0, Mar=1, Mer=2, Jeu=3, Ven=4 (week-end → Ven affiché). */
@@ -299,20 +351,21 @@ const PHASES=[
   /* S23-24 Reprise : réhabituer le corps, déficit doux, charges -40% */
   {w:23,p:"Reprise",c:"#3ECF8A",d:"6 juil",cal:2700},
   {w:24,p:"Reprise",c:"#3ECF8A",d:"13 juil",cal:2700},
-  /* S25-27 Sèche installée (-500) */
+  /* S25-26 Sèche installée — historique */
   {w:25,p:"Sèche",c:"#DC2626",d:"20 juil",cal:2500},
   {w:26,p:"Sèche",c:"#DC2626",d:"27 juil",cal:2500},
-  {w:27,p:"Sèche",c:"#DC2626",d:"3 août",cal:2500},
-  /* S28-30 Sèche soutenue */
-  {w:28,p:"Sèche",c:"#DC2626",d:"10 août",cal:2450},
-  {w:29,p:"Sèche",c:"#DC2626",d:"17 août",cal:2450},
-  {w:30,p:"Sèche",c:"#DC2626",d:"24 août",cal:2450},
-  /* S31-35 Finition septembre (PLANCHER 2400) */
-  {w:31,p:"Sèche",c:"#DC2626",d:"31 août",cal:2400},
-  {w:32,p:"Sèche",c:"#DC2626",d:"7 sept",cal:2400},
-  {w:33,p:"Sèche",c:"#DC2626",d:"14 sept",cal:2400},
-  {w:34,p:"Sèche",c:"#DC2626",d:"21 sept",cal:2400},
-  {w:35,p:"Sèche",c:"#DC2626",d:"28 sept",cal:2400},
+  /* === NOUVEAU DÉPART — 3 AOÛT → 30 SEPTEMBRE ===
+     Les calories sont un point de départ. Le poids moyen et le tour de taille
+     du jeudi servent à ajuster sans descendre sous 2450 kcal sans réévaluation. */
+  {w:27,p:"Reprise",c:"#3ECF8A",d:"3 août",cal:2700},
+  {w:28,p:"Reprise",c:"#3ECF8A",d:"10 août",cal:2700},
+  {w:29,p:"Progression",c:"#F59E0B",d:"17 août",cal:2550},
+  {w:30,p:"Progression",c:"#F59E0B",d:"24 août",cal:2550},
+  {w:31,p:"Progression",c:"#F59E0B",d:"31 août",cal:2550},
+  {w:32,p:"Progression",c:"#F59E0B",d:"7 sept",cal:2550},
+  {w:33,p:"Définition",c:"#DC2626",d:"14 sept",cal:2450},
+  {w:34,p:"Définition",c:"#DC2626",d:"21 sept",cal:2450},
+  {w:35,p:"Définition",c:"#DC2626",d:"28 sept",cal:2450},
 ];
 
 const PCFG={
@@ -335,6 +388,8 @@ const PCFG={
   "Peak Week":{cLo:12,cHi:15,iLo:12,iHi:15,rest:60,desc:"S29 = Peak finale, Jour J sam 23 août. Volume -40% (activation seulement). Lun-Mer: 2400 kcal. JEU: 2300 (déplétion). VEN: 3400 (RECHARGE FINALE, 480g glucides, repos). SAM: protocole + photos comparaison J0 (18 mai). LISS 2× 30 min (stop jeudi)."},
   /* Reprise 5j (S23-24) — présence d'abord, entrée en déficit doux */
   "Reprise":{cLo:8,cHi:10,iLo:12,iHi:15,rest:90,desc:"UN SEUL SCORE : présences /5. Charges -40%, RIR 3-4, tu sors FRAIS. 45 min max. Flemme ? Règle des 20 min : 3 exos × 2 séries = présence validée. Déficit doux (~2700). Pesée jeudi uniquement, pas de photos 3 semaines."},
+  "Progression":{cLo:8,cHi:12,iLo:10,iHi:15,rest:105,desc:"Objectif 5/5. Garde 2 répétitions en réserve. Quand toutes les séries atteignent le haut de la fourchette, augmente légèrement la charge. 220 g de protéines, marche/cardio régulier et sommeil prioritaire."},
+  "Définition":{cLo:8,cHi:12,iLo:12,iHi:15,rest:90,desc:"Conserve les charges et la qualité d'exécution. Pas de séries inutiles : 5 séances propres, 220 g de protéines et suivi du tour de taille. Vendredi matin si la soirée est prise."},
   /* Post-sèche */
   "Post-sèche":{cLo:8,cHi:10,iLo:10,iHi:12,rest:120,desc:"Après le 23 août : maintenance / mini lean bulk / prolongation. À décider à tête froide le 24 août."},
 };
@@ -424,6 +479,17 @@ function getWeekDates(wNum){
   return out;
 }
 
+function localDateKey(d){
+  d=d||new Date();
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+}
+function getWeekDateKeys(wNum){
+  var s1Mon=new Date(2026,1,2);
+  var mon=new Date(s1Mon.getTime()+(wNum-1)*7*24*60*60*1000);
+  var out=[];for(var i=0;i<7;i++)out.push(localDateKey(new Date(mon.getTime()+i*24*60*60*1000)));
+  return out;
+}
+
 function mkS(n){var a=[];for(var i=0;i<n;i++)a.push({w:"",r:"",d:false});return a}
 function emptyW(){
   /* Initialiser les 2 tableaux de jours (PPL + U/L) pour qu'une semaine puisse
@@ -492,9 +558,10 @@ function migrateData(st){
   });
   if(!st.ord){st.ord={};ALL_DAYS.forEach(function(d){st.ord[d.key]=d.exs.map(function(e){return e.id})});changed=true}
   else{ALL_DAYS.forEach(function(d){if(!st.ord[d.key])st.ord[d.key]=d.exs.map(function(e){return e.id});else{d.exs.forEach(function(e){if(st.ord[d.key].indexOf(e.id)===-1){st.ord[d.key].push(e.id);changed=true}})}})}
+  if(!st.hb){st.hb={};changed=true}
   if(changed)save(st);return st;
 }
-function init(){var wk={};for(var i=1;i<=35;i++)wk[i]=emptyW();wk[1]=buildS1();var ord={};ALL_DAYS.forEach(function(d){ord[d.key]=d.exs.map(function(e){return e.id})});return{wk:wk,cw:2,ord:ord}}
+function init(){var wk={};for(var i=1;i<=35;i++)wk[i]=emptyW();wk[1]=buildS1();var ord={};ALL_DAYS.forEach(function(d){ord[d.key]=d.exs.map(function(e){return e.id})});return{wk:wk,cw:2,ord:ord,hb:{}}}
 
 /* ═══ PROGRESSION DOUBLE — RÉFÉRENCE = DERNIÈRE SÉRIE ═══ */
 function compObj(exDef,prev,rng,tpOverride){
@@ -931,6 +998,31 @@ function App(){
   function upM(k,v){setSt(function(p){var n=JSON.parse(JSON.stringify(p));n.wk[wN].ms[k]=v;return n})}
   function upN(v){setSt(function(p){var n=JSON.parse(JSON.stringify(p));n.wk[wN].nt=v;return n})}
   function upMood(v){setSt(function(p){var n=JSON.parse(JSON.stringify(p));n.wk[wN].mood=(n.wk[wN].mood===v?"":v);return n})}
+  var todayKey=localDateKey();
+  var hb=(st.hb&&st.hb[todayKey])||{nutrition:false,cardio:false,abs:false};
+  function toggleHabit(k){setSt(function(p){var n=JSON.parse(JSON.stringify(p));if(!n.hb)n.hb={};if(!n.hb[todayKey])n.hb[todayKey]={nutrition:false,cardio:false,abs:false};n.hb[todayKey][k]=!n.hb[todayKey][k];return n})}
+  function buildCoachReport(){
+    var done=[];
+    DAYS_ACT.forEach(function(d){var dd=wd.ds[d.key];if(!dd)return;var any=false;d.exs.forEach(function(ex){if(dd[ex.id]&&dd[ex.id].s.some(function(s){return s.d}))any=true});if(any)done.push(d.day+" "+d.name)});
+    var keys=getWeekDateKeys(wN),nut=0,card=0,abs=0;
+    keys.forEach(function(k){var h=st.hb&&st.hb[k];if(!h)return;if(h.nutrition)nut++;if(h.cardio)card++;if(h.abs)abs++});
+    var measures=MEAS.map(function(m){var v=wd.ms[m.id];return v?m.nm+" : "+v+" "+m.u:null}).filter(Boolean);
+    return "COLOSSE — BILAN COACH S"+wN+"\n"+
+      "Période : "+getWeekDates(wN)[0]+" → "+getWeekDates(wN)[5]+"\n"+
+      "Phase : "+ph.p+" · objectif "+ph.cal+" kcal/j · 220 g protéines\n"+
+      "Séances commencées : "+done.length+"/"+DAYS_ACT.length+(done.length?" — "+done.join(", "):"")+"\n"+
+      "Habitudes cochées : nutrition "+nut+"/7 · cardio/marche "+card+"/7 · abdos "+abs+"/7\n"+
+      (measures.length?"Mesures : "+measures.join(" · ")+"\n":"")+
+      (wd.mood?"Ressenti : "+wd.mood+"\n":"")+
+      (wd.nt?"Notes : "+wd.nt+"\n":"")+
+      "Application : "+APP_VERSION+" · mise à jour "+APP_UPDATED;
+  }
+  async function shareCoachReport(){
+    var report=buildCoachReport();
+    if(navigator.share){try{await navigator.share({title:"Bilan Colosse S"+wN,text:report});return}catch(e){if(e&&e.name==="AbortError")return}}
+    try{await navigator.clipboard.writeText(report);alert("Bilan copié. Colle-le dans notre conversation.")}
+    catch(e){var ta=document.createElement("textarea");ta.value=report;document.body.appendChild(ta);ta.select();document.execCommand("copy");ta.remove();alert("Bilan copié. Colle-le dans notre conversation.")}
+  }
   function reorder(dk,eid,dir){
     setSt(function(p){
       var n=JSON.parse(JSON.stringify(p));if(!n.ord)n.ord={};
@@ -964,7 +1056,8 @@ function App(){
     <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:14}}>
       <div>
         <div style={{fontSize:24,fontWeight:900,letterSpacing:-1,lineHeight:1}}>COLOSSE</div>
-        <div style={{fontSize:9,fontWeight:700,letterSpacing:2,color:"rgba(255,255,255,.22)",textTransform:"uppercase",marginTop:2}}>{ph.cal||3800} kcal · {wN>=23?"Sèche 5j · 2×/muscle":wN>=14?"Sèche Push/Pull":"PPL 6j"} · Présence d'abord</div>
+        <div style={{fontSize:8,fontWeight:900,letterSpacing:1.1,color:"#10B981",textTransform:"uppercase",marginTop:4}}>MIS À JOUR · {APP_UPDATED} · {APP_VERSION}</div>
+        <div style={{fontSize:9,fontWeight:700,letterSpacing:1.2,color:"rgba(255,255,255,.22)",textTransform:"uppercase",marginTop:3}}>{ph.cal||3800} kcal · {wN>=27?"Cycle août-sept. · 5 jours":wN>=23?"Reprise 5 jours":wN>=14?"Sèche Push/Pull":"PPL 6j"}</div>
       </div>
       <div style={{display:"flex",alignItems:"center",gap:10}}>
         {sav&&<div style={{fontSize:9,color:"#10B981",fontWeight:700,display:"flex",alignItems:"center",gap:3}}><span style={{width:5,height:5,borderRadius:"50%",background:"#10B981",display:"inline-block"}}/>Sauvé</div>}
@@ -972,6 +1065,17 @@ function App(){
           <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:16,fontWeight:800,color:weekDone>0?"#10B981":"rgba(255,255,255,.3)"}}>{weekDone}<span style={{fontSize:9,color:"rgba(255,255,255,.25)",fontWeight:400}}>/{DAYS_ACT.length}</span></div>
           <div style={{fontSize:8,color:"rgba(255,255,255,.2)",marginTop:1}}>séances S{wN}</div>
         </div>
+      </div>
+    </div>
+
+    {/* CONTRAT DU JOUR */}
+    <div style={{marginBottom:12,padding:"12px 14px",borderRadius:16,background:"rgba(16,185,129,.045)",border:"1px solid rgba(16,185,129,.16)"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:9}}>
+        <div><div style={{fontSize:9,fontWeight:900,letterSpacing:1.4,color:"#10B981"}}>CONTRAT DU JOUR</div><div style={{fontSize:9,color:"rgba(255,255,255,.25)",marginTop:2}}>Objectif nutrition · {ph.cal} kcal · 220 g protéines</div></div>
+        <div style={{fontSize:10,fontWeight:800,color:sessComplete?"#10B981":"rgba(255,255,255,.25)"}}>{sessComplete?"SÉANCE ✓":"SÉANCE À FAIRE"}</div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6}}>
+        {[{k:"nutrition",icon:"🍽️",l:"Nutrition"},{k:"cardio",icon:"🚶",l:"Cardio/marche"},{k:"abs",icon:"🔥",l:"Abdos"}].map(function(x){var on=!!hb[x.k];return<button key={x.k} onClick={function(){toggleHabit(x.k)}} style={{padding:"9px 4px",borderRadius:11,border:on?"1px solid rgba(16,185,129,.45)":"1px solid rgba(255,255,255,.06)",background:on?"rgba(16,185,129,.12)":"rgba(255,255,255,.025)",color:on?"#10B981":"rgba(255,255,255,.45)",fontSize:9,fontWeight:800,cursor:"pointer"}}><span style={{fontSize:14,display:"block",marginBottom:3}}>{on?"✓":x.icon}</span>{x.l}</button>})}
       </div>
     </div>
 
@@ -1054,6 +1158,9 @@ function App(){
       <textarea value={wd.nt} onChange={function(e){upN(e.target.value)}} placeholder="Ressenti, pump, douleurs, observations..." rows={2} style={{width:"100%",padding:"8px 10px",borderRadius:10,border:"1px solid rgba(255,255,255,.07)",background:"rgba(255,255,255,.03)",color:"#fff",fontSize:12,lineHeight:1.6,resize:"vertical",outline:"none",boxSizing:"border-box"}} onFocus={function(e){e.target.style.borderColor="rgba(255,255,255,.18)"}} onBlur={function(e){e.target.style.borderColor="rgba(255,255,255,.07)"}}/>
     </div>
 
+    {/* BILAN COACH */}
+    <button onClick={shareCoachReport} style={{width:"100%",padding:"12px",marginBottom:8,borderRadius:12,border:"1px solid rgba(59,130,246,.3)",background:"rgba(59,130,246,.09)",color:"#60A5FA",fontSize:11,fontWeight:900,cursor:"pointer",textAlign:"center"}}>📋 Partager le bilan avec le coach</button>
+
     {/* EXPORT / IMPORT */}
     <div style={{display:"flex",gap:8,marginBottom:6}}>
       <button onClick={function(){
@@ -1080,7 +1187,7 @@ function App(){
       }} style={{flex:1,padding:"10px",borderRadius:12,border:"1px solid rgba(255,255,255,.07)",background:"rgba(255,255,255,.03)",color:"rgba(255,255,255,.3)",fontSize:11,fontWeight:800,cursor:"pointer",textAlign:"center"}}>📤 Importer</button>
     </div>
 
-    <div style={{textAlign:"center",marginTop:10,fontSize:8,color:"rgba(255,255,255,.07)",letterSpacing:1.5,textTransform:"uppercase"}}>Colosse · Transformation 2026 · Double Progression</div>
+    <div style={{textAlign:"center",marginTop:10,fontSize:8,color:"rgba(255,255,255,.13)",letterSpacing:1.2,textTransform:"uppercase"}}>Colosse {APP_VERSION} · Mis à jour le {APP_UPDATED}</div>
 
     {tmr&&<Timer key={tmrKey} sec={rd} c={day.color} onEnd={function(){setTmr(false)}} onSkip={function(){setTmr(false)}} onDC={function(d){setRd(d)}}/>}
   </div>;
