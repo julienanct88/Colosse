@@ -54,7 +54,7 @@
 <div id="root"></div>
 <script type="text/plain" id="app-src">
 const{useState,useEffect,useRef}=React;
-const APP_VERSION="v32";
+const APP_VERSION="v33";
 const APP_UPDATED="1 août 2026";
 
 /* ═══ WAKE LOCK ═══ */
@@ -938,6 +938,7 @@ function App(){
   const[st,setSt]=useState(null);
   const[wk,setWk]=useState(0);
   const[dayI,setDayI]=useState(0);
+  const[view,setView]=useState("session");
   const[sav,setSav]=useState(false);
   const[tmr,setTmr]=useState(false);
   const[tmrKey,setTmrKey]=useState(0);
@@ -1047,17 +1048,21 @@ function App(){
   var isToday=(function(){var dow=new Date().getDay();return dow>=1&&dow<=6&&dayI===dow-1})();
   var weekDone=0;
   DAYS_ACT.forEach(function(d){var dd=wd.ds[d.key];if(!dd)return;var any=false,all=true;d.exs.forEach(function(ex){if(!dd[ex.id])return;if(dd[ex.id].s.some(function(s){return s.d}))any=true;else all=false});if(any&&all)weekDone++});
+  var weekHabitKeys=getWeekDateKeys(wN),weekHabits={nutrition:0,cardio:0,abs:0};
+  weekHabitKeys.forEach(function(k){var h=st.hb&&st.hb[k];if(!h)return;if(h.nutrition)weekHabits.nutrition++;if(h.cardio)weekHabits.cardio++;if(h.abs)weekHabits.abs++});
+
+  function switchView(v){setView(v);try{window.scrollTo({top:0,behavior:"smooth"})}catch(e){window.scrollTo(0,0)}}
 
   var MOODS=[{v:"💀",l:"Mort"},{v:"😫",l:"Épuisé"},{v:"😐",l:"Moyen"},{v:"💪",l:"Solide"},{v:"🔥",l:"ON FIRE"}];
 
-  return<div style={{minHeight:"100vh",background:"#08080f",color:"#fff",fontFamily:"'DM Sans',sans-serif",padding:"14px 12px 48px",maxWidth:500,margin:"0 auto"}}>
+  return<div style={{minHeight:"100vh",background:"#08080f",color:"#fff",fontFamily:"'DM Sans',sans-serif",padding:"14px 12px 116px",maxWidth:500,margin:"0 auto"}}>
 
     {/* HEADER */}
     <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:14}}>
       <div>
         <div style={{fontSize:24,fontWeight:900,letterSpacing:-1,lineHeight:1}}>COLOSSE</div>
         <div style={{fontSize:8,fontWeight:900,letterSpacing:1.1,color:"#10B981",textTransform:"uppercase",marginTop:4}}>MIS À JOUR · {APP_UPDATED} · {APP_VERSION}</div>
-        <div style={{fontSize:9,fontWeight:700,letterSpacing:1.2,color:"rgba(255,255,255,.22)",textTransform:"uppercase",marginTop:3}}>{ph.cal||3800} kcal · {wN>=27?"Cycle août-sept. · 5 jours":wN>=23?"Reprise 5 jours":wN>=14?"Sèche Push/Pull":"PPL 6j"}</div>
+        <div style={{fontSize:9,fontWeight:700,letterSpacing:1.2,color:"rgba(255,255,255,.3)",textTransform:"uppercase",marginTop:3}}>{view==="session"?"TA SÉANCE":view==="tracking"?"TON SUIVI":"TON COACH"} · S{wN}</div>
       </div>
       <div style={{display:"flex",alignItems:"center",gap:10}}>
         {sav&&<div style={{fontSize:9,color:"#10B981",fontWeight:700,display:"flex",alignItems:"center",gap:3}}><span style={{width:5,height:5,borderRadius:"50%",background:"#10B981",display:"inline-block"}}/>Sauvé</div>}
@@ -1068,6 +1073,18 @@ function App(){
       </div>
     </div>
 
+    {view==="tracking"&&<>
+    {/* SYNTHÈSE SUIVI */}
+    <div style={{marginBottom:12,padding:"16px",borderRadius:18,background:"linear-gradient(135deg,rgba(16,185,129,.12),rgba(16,185,129,.035))",border:"1px solid rgba(16,185,129,.22)"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:13}}>
+        <div><div style={{fontSize:10,fontWeight:900,letterSpacing:1.5,color:"#10B981"}}>TA SEMAINE EN UN COUP D’ŒIL</div><div style={{fontSize:11,color:"rgba(255,255,255,.35)",marginTop:4}}>Ce qui compte vraiment, sans bruit.</div></div>
+        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:22,fontWeight:900,color:weekDone===DAYS_ACT.length?"#10B981":"#fff"}}>{weekDone}<span style={{fontSize:11,color:"rgba(255,255,255,.28)"}}>/{DAYS_ACT.length}</span></div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:7}}>
+        {[{l:"Nutrition",v:weekHabits.nutrition+"/7",c:"#F59E0B"},{l:"Cardio/marche",v:weekHabits.cardio+"/7",c:"#3B82F6"},{l:"Abdos",v:weekHabits.abs+"/2",c:"#EF4444"}].map(function(x){return<div key={x.l} style={{padding:"10px 5px",borderRadius:12,textAlign:"center",background:"rgba(8,8,15,.45)",border:"1px solid rgba(255,255,255,.06)"}}><div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:16,fontWeight:900,color:x.c}}>{x.v}</div><div style={{fontSize:8,color:"rgba(255,255,255,.3)",marginTop:3,fontWeight:700}}>{x.l}</div></div>})}
+      </div>
+    </div>
+
     {/* CONTRAT DU JOUR */}
     <div style={{marginBottom:12,padding:"12px 14px",borderRadius:16,background:"rgba(16,185,129,.045)",border:"1px solid rgba(16,185,129,.16)"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:9}}>
@@ -1075,13 +1092,29 @@ function App(){
         <div style={{fontSize:10,fontWeight:800,color:sessComplete?"#10B981":"rgba(255,255,255,.25)"}}>{sessComplete?"SÉANCE ✓":"SÉANCE À FAIRE"}</div>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6}}>
-        {[{k:"nutrition",icon:"🍽️",l:"Nutrition"},{k:"cardio",icon:"🚶",l:"Cardio/marche"},{k:"abs",icon:"🔥",l:"Abdos"}].map(function(x){var on=!!hb[x.k];return<button key={x.k} onClick={function(){toggleHabit(x.k)}} style={{padding:"9px 4px",borderRadius:11,border:on?"1px solid rgba(16,185,129,.45)":"1px solid rgba(255,255,255,.06)",background:on?"rgba(16,185,129,.12)":"rgba(255,255,255,.025)",color:on?"#10B981":"rgba(255,255,255,.45)",fontSize:9,fontWeight:800,cursor:"pointer"}}><span style={{fontSize:14,display:"block",marginBottom:3}}>{on?"✓":x.icon}</span>{x.l}</button>})}
+        {[{k:"nutrition",icon:"🍽️",l:"Nutrition"},{k:"cardio",icon:"🚶",l:"Cardio/marche"},{k:"abs",icon:"🔥",l:"Abdos prévus"}].map(function(x){var on=!!hb[x.k];return<button key={x.k} onClick={function(){toggleHabit(x.k)}} style={{padding:"11px 4px",minHeight:60,borderRadius:12,border:on?"1px solid rgba(16,185,129,.45)":"1px solid rgba(255,255,255,.06)",background:on?"rgba(16,185,129,.12)":"rgba(255,255,255,.025)",color:on?"#10B981":"rgba(255,255,255,.45)",fontSize:9,fontWeight:800,cursor:"pointer"}}><span style={{fontSize:15,display:"block",marginBottom:4}}>{on?"✓":x.icon}</span>{x.l}</button>})}
       </div>
+    </div>
+    </>}
+
+    {view==="coach"&&<>
+    {/* COACH — CAP ET SEMAINE */}
+    <div style={{marginBottom:12,padding:"17px 16px",borderRadius:18,background:"linear-gradient(135deg,rgba(59,130,246,.14),rgba(139,92,246,.05))",border:"1px solid rgba(59,130,246,.24)"}}>
+      <div style={{fontSize:10,fontWeight:900,letterSpacing:1.6,color:"#60A5FA",marginBottom:5}}>CAP · 30 SEPTEMBRE</div>
+      <div style={{fontSize:20,fontWeight:900,letterSpacing:-.4}}>Plus sec. Plus visible. Régulier.</div>
+      <div style={{fontSize:11,color:"rgba(255,255,255,.38)",lineHeight:1.55,marginTop:6}}>Le plan s’ajuste avec tes séances, ton tour de taille du jeudi et ton ressenti — pas avec une promesse inventée.</div>
     </div>
 
     {/* WEEK CAROUSEL */}
     <WeekCarousel phases={PHASES} wk={wk} setWk={setWk} st={st} setRd={setRd} setSt={setSt}/>
 
+    <div style={{marginBottom:12,padding:"15px",borderRadius:16,background:"rgba(255,255,255,.025)",border:"1px solid rgba(255,255,255,.06)"}}>
+      <div style={{fontSize:9,fontWeight:900,letterSpacing:1.4,color:"rgba(255,255,255,.42)",marginBottom:11}}>LA ROUTE JUSQU’À OCTOBRE</div>
+      {[{p:"Reprise",d:"3 → 16 août",k:"2700 kcal",c:"#10B981",t:"Retour propre, charges contrôlées."},{p:"Progression",d:"17 août → 13 sept.",k:"2550 kcal",c:"#F59E0B",t:"Double progression et régularité."},{p:"Définition",d:"14 → 30 sept.",k:"2450 kcal",c:"#EF4444",t:"Maintenir les charges, affiner la taille."}].map(function(x,i){return<div key={x.p} style={{display:"grid",gridTemplateColumns:"28px 1fr auto",gap:9,alignItems:"center",padding:i===0?"0 0 11px":"11px 0",borderBottom:i<2?"1px solid rgba(255,255,255,.055)":"none"}}><div style={{width:28,height:28,borderRadius:9,display:"flex",alignItems:"center",justifyContent:"center",background:x.c+"18",color:x.c,fontSize:11,fontWeight:900}}>{i+1}</div><div><div style={{fontSize:12,fontWeight:850,color:"#fff"}}>{x.p} <span style={{fontSize:9,fontWeight:500,color:"rgba(255,255,255,.3)"}}>· {x.d}</span></div><div style={{fontSize:9,color:"rgba(255,255,255,.27)",marginTop:2}}>{x.t}</div></div><div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:9,fontWeight:800,color:x.c}}>{x.k}</div></div>})}
+    </div>
+    </>}
+
+    {view==="session"&&<>
     {/* DAY SELECTOR */}
     {(function(){
       var wd2=getWeekDates(wN);
@@ -1139,10 +1172,14 @@ function App(){
         return<ExCard key={ex.id} ex={ex} data={dData[ex.id]} prev={pDData&&pDData[ex.id]?pDData[ex.id]:null} color={day.color} upd={function(f,v){upEx(ex.id,f,v)}} onDone={function(){var r=ex.rest||rd;setRd(r);setTmr(true);setTmrKey(function(k){return k+1})}} isLk={!!ex.lk} canUp={!ex.lk&&fI>0} canDn={!ex.lk&&fI>=0&&fI<freeExs.length-1} onUp={function(){reorder(day.key,ex.id,"up")}} onDn={function(){reorder(day.key,ex.id,"down")}} phaseName={ph.p} atb={getAllTimeBest(ex.id,st.wk,wN)} allWks={st.wk} wkNum={wN} dayKey={day.key}/>;
       })}
     </div>
+    </>}
 
+    {view==="tracking"&&<>
     {/* MESURES */}
     <MeasCard wd={wd} pmw={pmw} upM={upM}/>
+    </>}
 
+    {view==="session"&&<>
     {/* NOTES + MOOD */}
     <div style={{borderRadius:16,background:"rgba(255,255,255,.025)",border:"1px solid rgba(255,255,255,.06)",padding:"14px 16px",marginBottom:12}}>
       <div style={{fontSize:9,fontWeight:800,color:"rgba(255,255,255,.3)",textTransform:"uppercase",letterSpacing:1.5,marginBottom:10}}>📝 SÉANCE</div>
@@ -1157,9 +1194,11 @@ function App(){
       </div>
       <textarea value={wd.nt} onChange={function(e){upN(e.target.value)}} placeholder="Ressenti, pump, douleurs, observations..." rows={2} style={{width:"100%",padding:"8px 10px",borderRadius:10,border:"1px solid rgba(255,255,255,.07)",background:"rgba(255,255,255,.03)",color:"#fff",fontSize:12,lineHeight:1.6,resize:"vertical",outline:"none",boxSizing:"border-box"}} onFocus={function(e){e.target.style.borderColor="rgba(255,255,255,.18)"}} onBlur={function(e){e.target.style.borderColor="rgba(255,255,255,.07)"}}/>
     </div>
+    </>}
 
+    {view==="coach"&&<>
     {/* BILAN COACH */}
-    <button onClick={shareCoachReport} style={{width:"100%",padding:"12px",marginBottom:8,borderRadius:12,border:"1px solid rgba(59,130,246,.3)",background:"rgba(59,130,246,.09)",color:"#60A5FA",fontSize:11,fontWeight:900,cursor:"pointer",textAlign:"center"}}>📋 Partager le bilan avec le coach</button>
+    <button onClick={shareCoachReport} style={{width:"100%",padding:"15px",marginBottom:9,borderRadius:14,border:"1px solid rgba(59,130,246,.38)",background:"linear-gradient(135deg,rgba(59,130,246,.18),rgba(139,92,246,.1))",color:"#93C5FD",fontSize:12,fontWeight:900,cursor:"pointer",textAlign:"center"}}>📋 Partager mon bilan avec le coach</button>
 
     {/* EXPORT / IMPORT */}
     <div style={{display:"flex",gap:8,marginBottom:6}}>
@@ -1188,6 +1227,14 @@ function App(){
     </div>
 
     <div style={{textAlign:"center",marginTop:10,fontSize:8,color:"rgba(255,255,255,.13)",letterSpacing:1.2,textTransform:"uppercase"}}>Colosse {APP_VERSION} · Mis à jour le {APP_UPDATED}</div>
+    </>}
+
+    {/* NAVIGATION PRINCIPALE — toujours accessible au pouce */}
+    <div style={{position:"fixed",left:"50%",transform:"translateX(-50%)",bottom:0,width:"100%",maxWidth:500,zIndex:9000,padding:"8px 12px calc(8px + env(safe-area-inset-bottom))",background:"linear-gradient(180deg,rgba(8,8,15,.76),rgba(8,8,15,.98) 28%)",backdropFilter:"blur(18px)",WebkitBackdropFilter:"blur(18px)",borderTop:"1px solid rgba(255,255,255,.07)"}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:7}}>
+        {[{v:"session",i:"🏋️",l:"Séance",c:day.color},{v:"tracking",i:"📊",l:"Suivi",c:"#10B981"},{v:"coach",i:"🧭",l:"Coach",c:"#60A5FA"}].map(function(x){var on=view===x.v;return<button key={x.v} onClick={function(){switchView(x.v)}} style={{minHeight:54,padding:"7px 5px",borderRadius:14,border:on?"1px solid "+x.c+"55":"1px solid transparent",background:on?x.c+"16":"transparent",color:on?x.c:"rgba(255,255,255,.3)",cursor:"pointer",fontWeight:850,fontSize:10,transition:"all .18s"}}><span style={{display:"block",fontSize:17,marginBottom:3,filter:on?"none":"grayscale(1)",opacity:on?1:.6}}>{x.i}</span>{x.l}</button>})}
+      </div>
+    </div>
 
     {tmr&&<Timer key={tmrKey} sec={rd} c={day.color} onEnd={function(){setTmr(false)}} onSkip={function(){setTmr(false)}} onDC={function(d){setRd(d)}}/>}
   </div>;
