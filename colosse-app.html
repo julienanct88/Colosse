@@ -62,8 +62,8 @@
 <div id="root"></div>
 <script type="text/plain" id="app-src">
 const{useState,useEffect,useRef}=React;
-const APP_VERSION="v35-beta";
-const APP_UPDATED="1 août 2026";
+const APP_VERSION="v36-beta";
+const APP_UPDATED="2 août 2026";
 
 /* ═══ WAKE LOCK ═══ */
 function useWakeLock(on){
@@ -291,22 +291,96 @@ function getDays(wN){
   if(wN>=23)return DAYS_R5;
   return wN>=14 ? DAYS_UL : DAYS;
 }
-/* Nouveaux profils bêta : 3 à 5 jours, sans modifier le programme historique de Julien. */
-const DAYS_BETA3=[
-  Object.assign({},DAYS_AUG26[0],{day:"Lundi"}),
-  Object.assign({},DAYS_AUG26[4],{day:"Mercredi"}),
-  Object.assign({},DAYS_AUG26[2],{day:"Vendredi"})
-];
-const DAYS_BETA4=[
-  Object.assign({},DAYS_AUG26[0],{day:"Lundi"}),
-  Object.assign({},DAYS_AUG26[1],{day:"Mardi"}),
-  Object.assign({},DAYS_AUG26[2],{day:"Jeudi"}),
-  Object.assign({},DAYS_AUG26[3],{day:"Vendredi"})
-];
+/* Nouveaux profils bêta : le programme historique de Julien reste strictement intact.
+   Pour les autres profils, Colosse construit des séances déterministes selon le nombre
+   de jours, la durée, le niveau, l'objectif et les limites déclarées. */
+const BETA_EXTRA_EXERCISES={
+  corePallof:{id:"corePallof",name:"Pallof press à la poulie",tp:"cable",sets:3,rLo:10,rHi:15,rest:60,yt:"pallof+press+poulie+anti+rotation+gainage+technique"},
+  coreDeadBug:{id:"coreDeadBug",name:"Dead bug contrôlé",tp:"barbell",sets:3,rLo:8,rHi:12,rest:60,yt:"dead+bug+abdos+gainage+technique"}
+};
+const BETA_PROGRAMS={
+  3:[
+    {id:0,key:"beta3Push",name:"Push",label:"Pecs · Épaules · Triceps",day:"Lundi",color:"#EF4444",ids:["ap1","ap2","ae2","ap5","ap3","ae6"]},
+    {id:1,key:"beta3Pull",name:"Pull",label:"Dos · Biceps · Gainage",day:"Mercredi",color:"#3B82F6",ids:["ad1","ad2","ad3","corePallof","ad5","ad4"]},
+    {id:2,key:"beta3Legs",name:"Jambes",label:"Jambes · Mollets · Gainage",day:"Vendredi",color:"#10B981",ids:["aj1","aj2","aj3","coreDeadBug","aj5","aj4"]}
+  ],
+  4:[
+    {id:0,key:"beta4Pecs",name:"Pectoraux",label:"Pecs · Triceps",day:"Lundi",color:"#EF4444",ids:["ap1","ap2","ap3","ap5","ap4","ap6"]},
+    {id:1,key:"beta4Dos",name:"Dos",label:"Dos · Biceps · Gainage",day:"Mardi",color:"#3B82F6",ids:["ad1","ad2","ad3","corePallof","ad5","ad4"]},
+    {id:2,key:"beta4Legs",name:"Jambes",label:"Jambes · Mollets · Gainage",day:"Jeudi",color:"#10B981",ids:["aj1","aj2","aj3","coreDeadBug","aj5","aj4"]},
+    {id:3,key:"beta4Shoulders",name:"Épaules",label:"Épaules · Haut de pecs · Triceps",day:"Vendredi",color:"#F59E0B",ids:["ae1","ae2","ae3","ae4","ae6","ae5"]}
+  ],
+  5:[
+    {id:0,key:"beta5Pecs",name:"Pectoraux",label:"Pecs · Triceps",day:"Lundi",color:"#EF4444",ids:["ap1","ap2","ap3","ap5","ap4","ap6"]},
+    {id:1,key:"beta5DosA",name:"Dos A",label:"Dos · Biceps",day:"Mardi",color:"#3B82F6",ids:["ad1","ad2","ad3","ad5","ad4","ad6"]},
+    {id:2,key:"beta5Legs",name:"Jambes",label:"Jambes · Mollets · Gainage",day:"Mercredi",color:"#10B981",ids:["aj1","aj2","aj3","coreDeadBug","aj5","aj4"]},
+    {id:3,key:"beta5Shoulders",name:"Épaules",label:"Épaules · Haut de pecs · Triceps",day:"Jeudi",color:"#F59E0B",ids:["ae1","ae2","ae3","ae4","ae6","ae5"]},
+    {id:4,key:"beta5DosB",name:"Dos B",label:"Dos · Biceps · Gainage",day:"Vendredi",color:"#8B5CF6",ids:["ab1","ab2","ab3","corePallof","ab4","ab5"]}
+  ]
+};
+function findAugustExercise(id){
+  if(BETA_EXTRA_EXERCISES[id])return BETA_EXTRA_EXERCISES[id];
+  for(var i=0;i<DAYS_AUG26.length;i++)for(var j=0;j<DAYS_AUG26[i].exs.length;j++)if(DAYS_AUG26[i].exs[j].id===id)return DAYS_AUG26[i].exs[j];
+  return null;
+}
+function localDayNumber(date){return Math.floor(Date.UTC(date.getFullYear(),date.getMonth(),date.getDate())/(24*60*60*1000))}
+function appWeekIndexForDate(date){return Math.floor((localDayNumber(date)-localDayNumber(new Date(2026,1,2)))/7)}
+function profileProgramWeek(profile){
+  var start=profile&&profile.startDate?new Date(profile.startDate):profile&&profile.createdAt?new Date(profile.createdAt):new Date(),now=new Date();
+  var n=Math.floor((localDayNumber(now)-localDayNumber(start))/7)+1;
+  return Math.max(1,n);
+}
+function selectedProfileWeek(profile,wN){
+  var selectedMonday=new Date(2026,1,2+(wN-1)*7),start=profile&&profile.startDate?new Date(profile.startDate):profile&&profile.createdAt?new Date(profile.createdAt):new Date();
+  var startDow=start.getDay(),toMonday=startDow===0?-6:1-startDow;
+  start.setHours(0,0,0,0);start.setDate(start.getDate()+toMonday);
+  return Math.max(1,Math.floor((localDayNumber(selectedMonday)-localDayNumber(start))/7)+1);
+}
+function adaptExerciseConstraints(ex,profile){
+  var n=Object.assign({},ex),cs=(profile&&profile.constraints)||[],id=n.id;
+  if(cs.indexOf("knee")>=0){
+    if(id==="aj1")Object.assign(n,{name:"Hip thrust machine · amplitude indolore",tp:"machine",rLo:10,rHi:15,yt:"hip+thrust+machine+technique"});
+    if(id==="aj4")Object.assign(n,{name:"Abducteurs machine · amplitude indolore",tp:"machine",rLo:12,rHi:20,yt:"abducteurs+machine+technique"});
+  }
+  if(cs.indexOf("back")>=0){
+    if(id==="aj2")Object.assign(n,{name:"Hip thrust machine · dos neutre",tp:"machine",rLo:10,rHi:15,yt:"hip+thrust+machine+dos+neutre+technique"});
+    if(isAbsExercise(n))Object.assign(n,{name:"Pallof press léger · sans douleur",tp:"cable",rLo:10,rHi:15,isTimer:false,yt:"pallof+press+poulie+anti+rotation+technique"});
+  }
+  if(cs.indexOf("shoulder")>=0){
+    if(id==="ae1")Object.assign(n,{name:"Presse épaules guidée prise neutre · amplitude indolore",tp:"machine",rLo:12,rHi:15,variants:["Machine prise neutre"],yt:"shoulder+press+machine+prise+neutre+technique"});
+    if(id==="ap1")Object.assign(n,{name:"Presse poitrine horizontale prise neutre · amplitude indolore",tp:"machine",rLo:10,rHi:15,variants:["Machine prise neutre"],yt:"chest+press+machine+prise+neutre+technique"});
+    if(id==="ap2"||id==="ae4")Object.assign(n,{name:"Presse poitrine inclinée prise neutre · amplitude indolore",tp:"machine",rLo:10,rHi:15,variants:["Machine prise neutre"],yt:"incline+chest+press+machine+prise+neutre+technique"});
+    if(id==="ap6"||id==="ae6")Object.assign(n,{name:"Extension triceps croisée à la poulie · sans douleur",tp:"cable",rLo:12,rHi:15,variants:["Poulie"],yt:"crossbody+triceps+extension+cable+technique"});
+  }
+  if(cs.indexOf("wrist")>=0){
+    if(n.tp==="dumbbell"||/barre|haltère/i.test(n.name))Object.assign(n,{name:n.name.replace(/haltères?|barre/ig,"prise neutre machine"),tp:"machine",yt:"musculation+machine+prise+neutre+technique"});
+  }
+  return n;
+}
+function adaptExerciseVolume(ex,profile,index){
+  var n=adaptExerciseConstraints(ex,profile),duration=parseInt(profile.duration)||45;
+  var restart=profile.level==="restart"&&profileProgramWeek(profile)<=2;
+  if(restart)n.sets=Math.min(n.sets,index<2?3:2);
+  else if(profile.level==="beginner")n.sets=Math.min(n.sets,3);
+  if(duration<=30)n.sets=Math.min(n.sets,index<2?3:2);
+  if(profile.goal==="muscle"&&profile.level==="intermediate"&&duration>=60&&index<2)n.sets=Math.max(n.sets,3);
+  if(restart){n.rLo=n.lk?10:12;n.rHi=n.lk?12:15}
+  else if(profile.goal==="muscle"){n.rLo=n.lk?8:10;n.rHi=n.lk?12:15}
+  n.customRange=true;
+  n.sets=Math.max(2,n.sets||2);
+  return n;
+}
+function buildBetaDays(profile){
+  var n=parseInt(profile.days)||3;if(n<=3)n=3;else if(n===4)n=4;else n=5;
+  var duration=parseInt(profile.duration)||45,maxEx=duration<=30?4:duration<=45?5:6;
+  return BETA_PROGRAMS[n].map(function(day){
+    var exs=day.ids.slice(0,maxEx).map(function(id,index){var ex=findAugustExercise(id);return ex?adaptExerciseVolume(Object.assign({},ex),profile,index):null}).filter(Boolean);
+    return{id:day.id,key:day.key,name:day.name,label:day.label,day:day.day,color:day.color,exs:exs,sessionMinutes:duration};
+  });
+}
 function getDaysForProfile(profile,wN){
   if(!profile||profile.programKey==="julien")return getDays(wN);
-  var n=parseInt(profile.days)||3;
-  return n<=3?DAYS_BETA3:n===4?DAYS_BETA4:DAYS_AUG26;
+  return buildBetaDays(profile);
 }
 /* Tous les jours — utile pour migration, init et recherche PR all-time. */
 const ALL_DAYS = DAYS.concat(DAYS_UL).concat(DAYS_R5).concat(DAYS_AUG26);
@@ -434,7 +508,7 @@ const PCFG={
   /* Post-sèche */
   "Post-sèche":{cLo:8,cHi:10,iLo:10,iHi:12,rest:120,desc:"Après le 23 août : maintenance / mini lean bulk / prolongation. À décider à tête froide le 24 août."},
 };
-function getRepRange(ex,p){var c=PCFG[p]||PCFG["Hypertrophie"];return ex.lk?{lo:c.cLo,hi:c.cHi}:{lo:c.iLo,hi:c.iHi}}
+function getRepRange(ex,p){if(ex.customRange&&ex.rLo&&ex.rHi)return{lo:ex.rLo,hi:ex.rHi};var c=PCFG[p]||PCFG["Hypertrophie"];return ex.lk?{lo:c.cLo,hi:c.cHi}:{lo:c.iLo,hi:c.iHi}}
 function getPhaseRest(p){return(PCFG[p]||{}).rest||120}
 
 const MEAS=[
@@ -536,8 +610,22 @@ function enrichProfile(raw){
   else if(p.goal==="fat_loss")p.profileType="Définition & maintien musculaire";
   else if(p.goal==="muscle")p.profileType="Construction musculaire";
   else p.profileType="Recomposition corporelle";
+  var days=parseInt(p.days)||3,duration=parseInt(p.duration)||45;
+  p.weeklyTrainingMinutes=days*duration;
+  p.cardioSessions=p.goal==="fat_loss"?(p.activity==="regular"?2:3):p.goal==="recomp"?2:1;
+  p.cardioMinutes=p.goal==="fat_loss"?25:20;
+  p.stepTarget=p.activity==="regular"?9000:p.activity==="light"?8000:7000;
+  p.absSessions=2;
+  p.medicalHold=(p.constraints||[]).indexOf("medical")>=0;
+  p.constraintSummary=(p.constraints||[]).filter(function(x){return x!=="none"}).length
+    ? "Séance adaptée avec prudence aux limites déclarées. Arrêt immédiat en cas de douleur."
+    : "Progression contrôlée : garde environ 2 répétitions en réserve.";
   p.programKey=p.programKey||"beta";
   p.id=p.id||makeId("p_");p.createdAt=p.createdAt||new Date().toISOString();
+  if(!p.startDate&&p.programKey!=="julien"){
+    var start=new Date(p.createdAt),dow=start.getDay(),delta=dow===0?1:dow>=5?8-dow:1-dow;
+    start.setHours(0,0,0,0);start.setDate(start.getDate()+delta);p.startDate=localDateKey(start);
+  }
   return p;
 }
 function legacyJulienProfile(){return enrichProfile({id:"julien",name:"Julien",age:38,sex:"male",height:197,weight:98.7,waist:99,goal:"fat_loss",bodyShape:"belly",level:"restart",activity:"light",days:5,duration:45,equipment:"gym",constraints:[],programKey:"julien",migrated:true})}
@@ -717,9 +805,9 @@ function getAllTimeBest(exId,allWks,currentWkNum){
   var best=0;
   for(var i=1;i<currentWkNum;i++){
     var wd=allWks[i];if(!wd||!wd.ds)continue;
-    ALL_DAYS.forEach(function(day){
-      if(!wd.ds[day.key]||!wd.ds[day.key][exId])return;
-      var d=wd.ds[day.key][exId];
+    Object.keys(wd.ds).forEach(function(dayKey){
+      if(!wd.ds[dayKey]||!wd.ds[dayKey][exId])return;
+      var d=wd.ds[dayKey][exId];
       if(d.s)d.s.forEach(function(s){if(s.d){var w=parseFloat(s.w||0);if(w>best)best=w}});
     });
   }
@@ -734,7 +822,7 @@ function calcVol(dData,exs){
 
 function isAbsExercise(ex){
   var n=(ex&&ex.name?ex.name:"").toLowerCase();
-  return /abdo|crunch|planche|gainage|relevé|relevés|ab wheel|mountain climber/.test(n);
+  return /abdo|crunch|planche|gainage|relevé|relevés|ab wheel|mountain climber|pallof|dead bug/.test(n);
 }
 function getDayAbsStatus(dayDef,weekData){
   var absExs=dayDef.exs.filter(isAbsExercise),done=0,total=0;
@@ -998,16 +1086,20 @@ function WeekCarousel({phases,wk,setWk,st,setRd,setSt,profile}){
     return function(){el.removeEventListener("touchstart",ts);el.removeEventListener("touchmove",tm);el.removeEventListener("touchend",te)};
   },[wk,phases.length]);
 
-  var ph=phases[wk],wN=wk+1;
+  var ph=phases[wk],wN=wk+1,beta=profile&&profile.programKey!=="julien";
   var pc=PCFG[ph.p]||PCFG["Hypertrophie"];
   var wd2=getWeekDates(wN);
   var wkData=st.wk[wN];
   var scMax=getDaysForProfile(profile,wN).length;
   var sc=wkData?getWeekSessionCount(wkData,wN,profile):0;
   var targetCal=profile&&profile.programKey!=="julien"&&profile.calTarget?profile.calTarget:(ph.cal||3800);
-  var phaseDesc=profile&&profile.programKey!=="julien"
+  var phaseDesc=beta
     ? profile.profileType+" · "+profile.days+" séances de "+profile.duration+" min"
     : pc.desc;
+  var cardColor=beta?"#10B981":ph.c;
+  var weekMark=beta?"S"+selectedProfileWeek(profile,wN):"S"+wN;
+  var weekTitle=beta?"Parcours personnalisé":ph.p;
+  var rangeText=beta?"2 reps en réserve · progression":pc.cLo+"-"+pc.cHi+" compo · "+pc.iLo+"-"+pc.iHi+" iso";
   var vt=getLatestVTaper(st.wk,wN);
   var vtColor=vt?(vt.num>=1.45?"#10B981":vt.num>=1.35?"#F59E0B":"#EF4444"):null;
 
@@ -1020,20 +1112,20 @@ function WeekCarousel({phases,wk,setWk,st,setRd,setSt,profile}){
   return<div style={{marginBottom:12}}>
     <div ref={ref} style={{position:"relative",overflow:"hidden",borderRadius:16,cursor:"grab"}}>
       <div style={{transform:"translateX("+offX+"px)",transition:anim?"transform .3s ease":"none",
-        background:"linear-gradient(135deg,"+ph.c+"18,"+ph.c+"08)",
-        border:"1px solid "+ph.c+"30",borderRadius:16,padding:"16px 18px 14px"}}>
+        background:"linear-gradient(135deg,"+cardColor+"18,"+cardColor+"08)",
+        border:"1px solid "+cardColor+"30",borderRadius:16,padding:"16px 18px 14px"}}>
 
         {/* Row 1: Week + Phase + Calories */}
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:28,fontWeight:900,color:ph.c}}>S{wN}</span>
+            <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:28,fontWeight:900,color:cardColor}}>{weekMark}</span>
             <div>
-              <div style={{fontSize:13,fontWeight:800,color:"#fff"}}>{ph.p}</div>
+              <div style={{fontSize:13,fontWeight:800,color:"#fff"}}>{weekTitle}</div>
               <div style={{fontSize:9,color:"rgba(255,255,255,.3)"}}>{wd2[0]} → {wd2[5]}</div>
             </div>
           </div>
           <div style={{textAlign:"right"}}>
-            <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:18,fontWeight:800,color:ph.c}}>{targetCal}</div>
+            <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:18,fontWeight:800,color:cardColor}}>{targetCal}</div>
             <div style={{fontSize:8,color:"rgba(255,255,255,.25)"}}>kcal/jour</div>
           </div>
         </div>
@@ -1056,7 +1148,7 @@ function WeekCarousel({phases,wk,setWk,st,setRd,setSt,profile}){
             <div style={{fontSize:8,fontWeight:800,color:"rgba(255,255,255,.25)",letterSpacing:.5,marginBottom:3}}>💪 SÉANCES</div>
             <div style={{display:"flex",alignItems:"center",gap:6}}>
               <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:18,fontWeight:900,color:sc>=scMax?"#10B981":"#fff"}}>{sc}<span style={{fontSize:11,color:"rgba(255,255,255,.25)",fontWeight:400}}>/{scMax}</span></span>
-              <div style={{flex:1}}><MBar v={sc} mx={scMax} c={sc>=scMax?"#10B981":ph.c} h={4}/></div>
+              <div style={{flex:1}}><MBar v={sc} mx={scMax} c={sc>=scMax?"#10B981":cardColor} h={4}/></div>
             </div>
           </div>
         </div>
@@ -1064,7 +1156,7 @@ function WeekCarousel({phases,wk,setWk,st,setRd,setSt,profile}){
         {/* Row 3: Description + Reps */}
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div style={{fontSize:10,color:"rgba(255,255,255,.35)",fontStyle:"italic",flex:1}}>{phaseDesc}</div>
-          <span style={{fontSize:9,color:"rgba(255,255,255,.2)",flexShrink:0,marginLeft:8}}>{pc.cLo}-{pc.cHi} compo · {pc.iLo}-{pc.iHi} iso</span>
+          <span style={{fontSize:9,color:"rgba(255,255,255,.2)",flexShrink:0,marginLeft:8}}>{rangeText}</span>
         </div>
 
         {/* Arrows */}
@@ -1074,13 +1166,13 @@ function WeekCarousel({phases,wk,setWk,st,setRd,setSt,profile}){
     </div>
 
     {/* Phase dots */}
-    <div style={{display:"flex",gap:2,justifyContent:"center",marginTop:6,flexWrap:"wrap"}}>
+    {!beta&&<div style={{display:"flex",gap:2,justifyContent:"center",marginTop:6,flexWrap:"wrap"}}>
       {phases.map(function(p,i){
         var act=i===wk;
         return<button key={i} onClick={function(){setWk(i);setRd(getPhaseRest(p.p));setSt(function(prev){var n=JSON.parse(JSON.stringify(prev));n.cw=i+1;return n})}}
           style={{width:act?14:6,height:6,borderRadius:3,border:"none",background:act?p.c:i<wk?p.c+"55":"rgba(255,255,255,.1)",cursor:"pointer",padding:0,transition:"all .2s"}}/>;
       })}
-    </div>
+    </div>}
   </div>;
 }
 
@@ -1091,8 +1183,8 @@ function ProfileOnboarding({onCreate}){
   function set(k,v){setForm(function(p){var n=Object.assign({},p);n[k]=v;return n})}
   function toggleConstraint(v){setForm(function(p){var n=Object.assign({},p),a=(p.constraints||[]).slice();if(v==="none"){a=a.indexOf("none")>=0?[]:["none"]}else{a=a.filter(function(x){return x!=="none"});var i=a.indexOf(v);if(i>=0)a.splice(i,1);else a.push(v)}n.constraints=a;return n})}
   function canNext(){
-    if(step===0)return form.name.trim()&&form.age&&form.sex;
-    if(step===1)return form.height&&form.weight;
+    if(step===0)return form.name.trim()&&parseInt(form.age)>=18&&parseInt(form.age)<=90&&form.sex;
+    if(step===1)return parseFloat(form.height)>=130&&parseFloat(form.height)<=230&&parseFloat(form.weight)>=35&&parseFloat(form.weight)<=300;
     if(step===2)return form.goal&&form.bodyShape;
     if(step===3)return form.level&&form.activity&&form.days&&form.duration&&form.equipment;
     return true;
@@ -1110,12 +1202,12 @@ function ProfileOnboarding({onCreate}){
     <div style={{fontSize:24,fontWeight:950,letterSpacing:-.6,lineHeight:1.05}}>{titles[step]}</div><div style={{fontSize:11,color:"rgba(255,255,255,.38)",lineHeight:1.55,marginTop:8,marginBottom:22}}>{subs[step]}</div>
     {step===0&&<div style={{display:"grid",gap:13}}>
       <label style={{fontSize:9,color:"rgba(255,255,255,.4)",fontWeight:800}}>PRÉNOM OU PSEUDO<input autoFocus value={form.name} onChange={function(e){set("name",e.target.value)}} placeholder="Ex. Thomas" style={Object.assign({},fieldStyle,{marginTop:6})}/></label>
-      <label style={{fontSize:9,color:"rgba(255,255,255,.4)",fontWeight:800}}>ÂGE<input type="number" inputMode="numeric" value={form.age} onChange={function(e){set("age",e.target.value)}} placeholder="38" style={Object.assign({},fieldStyle,{marginTop:6})}/></label>
+      <label style={{fontSize:9,color:"rgba(255,255,255,.4)",fontWeight:800}}>ÂGE · 18 ANS MINIMUM<input type="number" min="18" max="90" inputMode="numeric" value={form.age} onChange={function(e){set("age",e.target.value)}} placeholder="38" style={Object.assign({},fieldStyle,{marginTop:6})}/></label>
       <div><div style={{fontSize:9,color:"rgba(255,255,255,.4)",fontWeight:800,marginBottom:7}}>SEXE — POUR L’ESTIMATION ÉNERGÉTIQUE</div><Choices value={form.sex} onChange={function(v){set("sex",v)}} cols="repeat(3,1fr)" items={[{v:"male",l:"Homme"},{v:"female",l:"Femme"},{v:"other",l:"Autre"}]}/></div>
     </div>}
     {step===1&&<div style={{display:"grid",gap:13}}>
-      <label style={{fontSize:9,color:"rgba(255,255,255,.4)",fontWeight:800}}>TAILLE (CM)<input type="number" inputMode="decimal" value={form.height} onChange={function(e){set("height",e.target.value)}} placeholder="180" style={Object.assign({},fieldStyle,{marginTop:6})}/></label>
-      <label style={{fontSize:9,color:"rgba(255,255,255,.4)",fontWeight:800}}>POIDS ACTUEL (KG)<input type="number" inputMode="decimal" value={form.weight} onChange={function(e){set("weight",e.target.value)}} placeholder="85" style={Object.assign({},fieldStyle,{marginTop:6})}/></label>
+      <label style={{fontSize:9,color:"rgba(255,255,255,.4)",fontWeight:800}}>TAILLE (CM)<input type="number" min="130" max="230" inputMode="decimal" value={form.height} onChange={function(e){set("height",e.target.value)}} placeholder="180" style={Object.assign({},fieldStyle,{marginTop:6})}/></label>
+      <label style={{fontSize:9,color:"rgba(255,255,255,.4)",fontWeight:800}}>POIDS ACTUEL (KG)<input type="number" min="35" max="300" inputMode="decimal" value={form.weight} onChange={function(e){set("weight",e.target.value)}} placeholder="85" style={Object.assign({},fieldStyle,{marginTop:6})}/></label>
       <label style={{fontSize:9,color:"rgba(255,255,255,.4)",fontWeight:800}}>TOUR DE TAILLE (CM) · FACULTATIF<input type="number" inputMode="decimal" value={form.waist} onChange={function(e){set("waist",e.target.value)}} placeholder="Mesure au niveau du nombril" style={Object.assign({},fieldStyle,{marginTop:6})}/></label>
       <div style={{padding:"11px 12px",borderRadius:12,background:"rgba(59,130,246,.06)",border:"1px solid rgba(59,130,246,.15)",fontSize:9,color:"rgba(255,255,255,.38)",lineHeight:1.5}}>Ces données sont enregistrées localement. Elles ne seront pas envoyées dans le classement des challenges.</div>
     </div>}
@@ -1132,8 +1224,9 @@ function ProfileOnboarding({onCreate}){
       <div><div style={{fontSize:9,color:"rgba(255,255,255,.4)",fontWeight:800,marginBottom:8}}>DOULEURS OU LIMITES · PLUSIEURS CHOIX POSSIBLES</div><Choices value={form.constraints} onChange={toggleConstraint} cols="repeat(2,1fr)" items={[{v:"knee",l:"Genou"},{v:"back",l:"Dos"},{v:"shoulder",l:"Épaule"},{v:"wrist",l:"Poignet"},{v:"medical",l:"Restriction médicale"},{v:"none",l:"Aucune"}]}/></div>
     </div>}
     {step===4&&<div>
-      <div style={{padding:"18px",borderRadius:18,background:"linear-gradient(135deg,rgba(16,185,129,.14),rgba(16,185,129,.04))",border:"1px solid rgba(16,185,129,.28)",marginBottom:12}}><div style={{fontSize:9,color:"#6EE7B7",fontWeight:900,letterSpacing:1.2}}>PROFIL COLOSSE</div><div style={{fontSize:23,fontWeight:950,marginTop:6}}>{preview.profileType}</div><div style={{fontSize:11,color:"rgba(255,255,255,.4)",marginTop:6}}>{form.days} séances · {form.duration} min · {form.equipment==="gym"?"salle":"salle + maison"}</div></div>
+      <div style={{padding:"18px",borderRadius:18,background:"linear-gradient(135deg,rgba(16,185,129,.14),rgba(16,185,129,.04))",border:"1px solid rgba(16,185,129,.28)",marginBottom:12}}><div style={{fontSize:9,color:"#6EE7B7",fontWeight:900,letterSpacing:1.2}}>TON PROGRAMME COLOSSE</div><div style={{fontSize:23,fontWeight:950,marginTop:6}}>{preview.profileType}</div><div style={{fontSize:11,color:"rgba(255,255,255,.4)",marginTop:6}}>{form.days} séances réellement calibrées à {form.duration} min · {preview.weeklyTrainingMinutes} min de musculation par semaine.</div></div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:12}}>{[{l:"IMC repère",v:preview.bmi||"—"},{l:"Énergie estimée",v:preview.calTarget?preview.calTarget+" kcal":"—"},{l:"Protéines repère",v:preview.proteinTarget?preview.proteinTarget+" g":"—"}].map(function(x){return<div key={x.l} style={{padding:"12px 6px",borderRadius:12,textAlign:"center",background:"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.06)"}}><div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:14,fontWeight:900}}>{x.v}</div><div style={{fontSize:7,color:"rgba(255,255,255,.28)",marginTop:4}}>{x.l}</div></div>})}</div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:12}}>{[{l:"Cardio",v:preview.cardioSessions+"×"+preview.cardioMinutes+" min"},{l:"Marche",v:preview.stepTarget+" pas/j"},{l:"Abdos",v:preview.absSessions+"×/sem."}].map(function(x){return<div key={x.l} style={{padding:"11px 5px",borderRadius:12,textAlign:"center",background:"rgba(59,130,246,.05)",border:"1px solid rgba(59,130,246,.12)"}}><div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,fontWeight:900,color:"#93C5FD"}}>{x.v}</div><div style={{fontSize:7,color:"rgba(255,255,255,.28)",marginTop:4}}>{x.l}</div></div>})}</div>
       <div style={{fontSize:9,color:"rgba(255,255,255,.35)",lineHeight:1.6,padding:"12px",borderRadius:12,background:"rgba(255,255,255,.025)",border:"1px solid rgba(255,255,255,.06)"}}>Ce sont des points de départ, pas un diagnostic. Colosse ajustera progressivement selon tes séances, ton ressenti et tes résultats.{form.constraints.indexOf("medical")>=0&&<strong style={{display:"block",color:"#FCA5A5",marginTop:6}}>Ta restriction médicale doit être validée avec un professionnel avant de démarrer.</strong>}</div>
     </div>}
     <div style={{display:"flex",gap:9,marginTop:25}}>{step>0&&<button onClick={function(){setStep(function(s){return s-1})}} style={{padding:"13px 18px",borderRadius:13,border:"1px solid rgba(255,255,255,.09)",background:"transparent",color:"rgba(255,255,255,.55)",fontWeight:800,cursor:"pointer"}}>Retour</button>}<button disabled={!canNext()} onClick={function(){if(step<4)setStep(function(s){return s+1});else onCreate(preview)}} style={{flex:1,padding:"14px",borderRadius:13,border:"none",background:canNext()?"#10B981":"rgba(255,255,255,.08)",color:canNext()?"#04150f":"rgba(255,255,255,.2)",fontSize:12,fontWeight:950,cursor:canNext()?"pointer":"default"}}>{step<4?"Continuer":"Créer mon profil"}</button></div>
@@ -1265,11 +1358,11 @@ function App(){
     /* Migration silencieuse : l'appareil de Julien conserve toutes ses données historiques. */
     if(s&&s.wk&&!p){p=legacyJulienProfile();saveProfile(p)}
     if(!p){setProfile(null);return}
-    setProfile(p);
+    p=enrichProfile(p);saveProfile(p);setProfile(p);
     if(s&&s.wk){s=migrateData(s);setSt(s)}else{var d=initFresh();save(d);setSt(d)}
     // Epoch LUNDI 2 fév — semaine commence le lundi
-    var s1Mon=new Date(2026,1,2),now=new Date();
-    var aw=Math.floor((now-s1Mon)/(7*24*60*60*1000));
+    var s1Mon=new Date(2026,1,2),now=new Date(),initialDate=p.programKey!=="julien"&&p.startDate&&new Date(p.startDate+"T00:00:00")>now?new Date(p.startDate+"T00:00:00"):now;
+    var aw=appWeekIndexForDate(initialDate);
     if(aw<0)aw=0;if(aw>PHASES.length-1)aw=PHASES.length-1;
     setWk(aw);setRd(getPhaseRest(PHASES[aw].p));
     var dow=now.getDay();
@@ -1294,7 +1387,7 @@ function App(){
 
   function createFirstProfile(p){
     var fresh=initFresh();saveProfile(p);save(fresh);setProfile(p);setSt(fresh);
-    var s1Mon=new Date(2026,1,2),now=new Date(),aw=Math.floor((now-s1Mon)/(7*24*60*60*1000));
+    var s1Mon=new Date(2026,1,2),now=new Date(),initialDate=p.startDate&&new Date(p.startDate+"T00:00:00")>now?new Date(p.startDate+"T00:00:00"):now,aw=appWeekIndexForDate(initialDate);
     if(aw<0)aw=0;if(aw>PHASES.length-1)aw=PHASES.length-1;
     setWk(aw);setRd(getPhaseRest(PHASES[aw].p));setDayI(dowToDayI(aw+1,now.getDay(),p));
   }
@@ -1352,6 +1445,7 @@ function App(){
       "Période : "+getWeekDates(wN)[0]+" → "+getWeekDates(wN)[5]+"\n"+
       "Profil : "+profile.name+" · "+profile.profileType+"\n"+
       "Repères : "+dailyCal+" kcal/j · "+dailyProtein+" g protéines\n"+
+      (profile.programKey!=="julien"?"Plan : "+profile.days+"×"+profile.duration+" min musculation · "+profile.cardioSessions+"×"+profile.cardioMinutes+" min cardio · "+profile.stepTarget+" pas/j\n":"")+
       "Séances commencées : "+done.length+"/"+DAYS_ACT.length+(done.length?" — "+done.join(", "):"")+"\n"+
       "Suivi : nutrition validée "+nut+"/7 · cardio/marche fait "+card+"/7 · séances abdos terminées "+absDone+"/"+absPlanned+"\n"+
       (measures.length?"Mesures : "+measures.join(" · ")+"\n":"")+
@@ -1450,7 +1544,7 @@ function App(){
         <div style={{fontSize:10,fontWeight:800,color:sessComplete?"#10B981":"rgba(255,255,255,.25)"}}>{sessComplete?"SÉANCE ✓":"SÉANCE À FAIRE"}</div>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:7}}>
-        {[{k:"nutrition",icon:"🍽️",l:"Nutrition tenue",sub:dailyCal+" kcal · "+dailyProtein+" g prot."},{k:"cardio",icon:"🚶",l:"Cardio/marche fait",sub:"Coche seulement après"}].map(function(x){var on=!!hb[x.k];return<button key={x.k} onClick={function(){toggleHabit(x.k)}} style={{padding:"11px 8px",minHeight:78,borderRadius:12,border:on?"1px solid rgba(16,185,129,.45)":"1px solid rgba(255,255,255,.06)",background:on?"rgba(16,185,129,.12)":"rgba(255,255,255,.025)",color:on?"#10B981":"rgba(255,255,255,.55)",fontSize:10,fontWeight:800,cursor:"pointer",textAlign:"left"}}><span style={{fontSize:16,display:"block",marginBottom:5}}>{on?"✓":x.icon}</span>{x.l}<span style={{display:"block",fontSize:8,fontWeight:600,color:on?"rgba(16,185,129,.7)":"rgba(255,255,255,.25)",marginTop:3}}>{on?"FAIT AUJOURD’HUI":x.sub}</span></button>})}
+        {[{k:"nutrition",icon:"🍽️",l:"Nutrition tenue",sub:dailyCal+" kcal · "+dailyProtein+" g prot."},{k:"cardio",icon:"🚶",l:"Cardio/marche fait",sub:profile.programKey!=="julien"?profile.cardioSessions+"×"+profile.cardioMinutes+" min/sem. · "+profile.stepTarget+" pas/j":"Coche seulement après"}].map(function(x){var on=!!hb[x.k];return<button key={x.k} onClick={function(){toggleHabit(x.k)}} style={{padding:"11px 8px",minHeight:78,borderRadius:12,border:on?"1px solid rgba(16,185,129,.45)":"1px solid rgba(255,255,255,.06)",background:on?"rgba(16,185,129,.12)":"rgba(255,255,255,.025)",color:on?"#10B981":"rgba(255,255,255,.55)",fontSize:10,fontWeight:800,cursor:"pointer",textAlign:"left"}}><span style={{fontSize:16,display:"block",marginBottom:5}}>{on?"✓":x.icon}</span>{x.l}<span style={{display:"block",fontSize:8,fontWeight:600,color:on?"rgba(16,185,129,.7)":"rgba(255,255,255,.25)",marginTop:3}}>{on?"FAIT AUJOURD’HUI":x.sub}</span></button>})}
       </div>
       <div style={{marginTop:7,padding:"11px 12px",borderRadius:12,background:todayAbs.done?"rgba(16,185,129,.1)":"rgba(239,68,68,.045)",border:"1px solid "+(todayAbs.done?"rgba(16,185,129,.3)":"rgba(239,68,68,.14)"),display:"flex",alignItems:"center",gap:10}}>
         <span style={{fontSize:18}}>{todayAbs.done?"✓":todayAbs.planned?"🔥":"—"}</span>
@@ -1472,11 +1566,17 @@ function App(){
     </div>:<div style={{marginBottom:12,padding:"17px 16px",borderRadius:18,background:"linear-gradient(135deg,rgba(59,130,246,.14),rgba(139,92,246,.05))",border:"1px solid rgba(59,130,246,.24)"}}>
       <div style={{fontSize:10,fontWeight:900,letterSpacing:1.6,color:"#60A5FA",marginBottom:5}}>{profile.name.toUpperCase()} · PROFIL PERSONNALISÉ</div>
       <div style={{fontSize:20,fontWeight:900,letterSpacing:-.4}}>{profile.profileType}</div>
-      <div style={{fontSize:11,color:"rgba(255,255,255,.38)",lineHeight:1.55,marginTop:6}}>{profile.days} séances de {profile.duration} min · repère {dailyCal} kcal et {dailyProtein} g de protéines. Point de départ à ajuster selon les résultats et le ressenti.</div>
+      <div style={{fontSize:11,color:"rgba(255,255,255,.38)",lineHeight:1.55,marginTop:6}}>{profile.days} séances réellement calibrées à {profile.duration} min · {profile.weeklyTrainingMinutes} min de musculation par semaine. Repère {dailyCal} kcal et {dailyProtein} g de protéines.</div>
     </div>}
 
     {/* WEEK CAROUSEL */}
     <WeekCarousel phases={PHASES} wk={wk} setWk={setWk} st={st} setRd={setRd} setSt={setSt} profile={profile}/>
+
+    {profile.programKey!=="julien"&&<div style={{marginBottom:12,padding:"15px",borderRadius:16,background:"rgba(255,255,255,.025)",border:"1px solid rgba(255,255,255,.06)"}}>
+      <div style={{fontSize:9,fontWeight:900,letterSpacing:1.4,color:"rgba(255,255,255,.42)",marginBottom:10}}>TON PLAN DE LA SEMAINE</div>
+      {DAYS_ACT.map(function(d,i){var sets=d.exs.reduce(function(t,e){return t+e.sets},0);return<div key={d.key} style={{display:"grid",gridTemplateColumns:"28px 1fr auto",gap:9,alignItems:"center",padding:i?"10px 0":"0 0 10px",borderBottom:i<DAYS_ACT.length-1?"1px solid rgba(255,255,255,.05)":"none"}}><div style={{width:28,height:28,borderRadius:9,display:"flex",alignItems:"center",justifyContent:"center",background:d.color+"18",color:d.color,fontSize:10,fontWeight:900}}>{d.day.slice(0,3)}</div><div><div style={{fontSize:11,fontWeight:850}}>{d.name}</div><div style={{fontSize:8,color:"rgba(255,255,255,.28)",marginTop:2}}>{d.label}</div></div><div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:8,color:d.color,fontWeight:800,textAlign:"right"}}>{d.exs.length} ex.<br/>{sets} séries</div></div>})}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:7,marginTop:11}}>{[{l:"Cardio",v:profile.cardioSessions+"×"+profile.cardioMinutes+" min"},{l:"Marche",v:profile.stepTarget+"/j"},{l:"Abdos",v:profile.absSessions+"×/sem."}].map(function(x){return<div key={x.l} style={{padding:"9px 4px",borderRadius:10,background:"rgba(59,130,246,.05)",textAlign:"center"}}><div style={{fontSize:10,fontWeight:900,color:"#93C5FD"}}>{x.v}</div><div style={{fontSize:7,color:"rgba(255,255,255,.25)",marginTop:3}}>{x.l}</div></div>})}</div>
+    </div>}
 
     {profile.programKey==="julien"&&<div style={{marginBottom:12,padding:"15px",borderRadius:16,background:"rgba(255,255,255,.025)",border:"1px solid rgba(255,255,255,.06)"}}>
       <div style={{fontSize:9,fontWeight:900,letterSpacing:1.4,color:"rgba(255,255,255,.42)",marginBottom:11}}>LA ROUTE JUSQU’À OCTOBRE</div>
@@ -1511,6 +1611,8 @@ function App(){
       </div>;
     })()}
 
+    {profile.programKey!=="julien"&&<div style={{marginBottom:10,padding:"11px 13px",borderRadius:13,background:profile.medicalHold?"rgba(239,68,68,.08)":"rgba(245,158,11,.05)",border:"1px solid "+(profile.medicalHold?"rgba(239,68,68,.28)":"rgba(245,158,11,.16)")}}><div style={{fontSize:9,fontWeight:900,color:profile.medicalHold?"#FCA5A5":"#FCD34D",letterSpacing:.7}}>{profile.medicalHold?"VALIDATION PROFESSIONNELLE REQUISE":"PROGRAMME ADAPTÉ"}</div><div style={{fontSize:9,color:"rgba(255,255,255,.38)",lineHeight:1.5,marginTop:4}}>{profile.medicalHold?"Ne démarre pas ce programme avant la validation de ton médecin ou kiné.":profile.constraintSummary}</div></div>}
+
     {/* SESSION HEADER */}
     <div style={{marginBottom:10,padding:"14px 16px",borderRadius:16,background:sessComplete?"rgba(16,185,129,.08)":"linear-gradient(135deg,"+day.color+"0d,"+day.color+"04)",border:"1px solid "+(sessComplete?"rgba(16,185,129,.3)":day.color+"20"),boxShadow:sessComplete?"0 4px 28px rgba(16,185,129,.1)":"none",transition:"all .4s"}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
@@ -1519,7 +1621,7 @@ function App(){
             <span style={{fontSize:22,fontWeight:900,color:sessComplete?"#10B981":day.color,letterSpacing:-.5}}>{day.name}</span>
             {isToday&&<span style={{padding:"2px 8px",borderRadius:12,background:day.color+"20",border:"1px solid "+day.color+"40",fontSize:9,fontWeight:800,color:day.color}}>AUJOURD'HUI</span>}
           </div>
-          <div style={{fontSize:11,color:"rgba(255,255,255,.3)"}}>{day.label} · {day.exs.length} exercices{sessVol>0?" · "+(sessVol/1000).toFixed(1)+"t vol.":""}</div>
+          <div style={{fontSize:11,color:"rgba(255,255,255,.3)"}}>{day.label} · {day.exs.length} exercices{day.sessionMinutes?" · ≈ "+day.sessionMinutes+" min":""}{sessVol>0?" · "+(sessVol/1000).toFixed(1)+"t vol.":""}</div>
         </div>
         <div style={{textAlign:"right"}}>
           <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:28,fontWeight:900,color:sessComplete?"#10B981":"#fff",lineHeight:1}}>{dTot>0?Math.round(dDone/dTot*100):0}<span style={{fontSize:13,color:"rgba(255,255,255,.25)",fontWeight:400}}>%</span></div>
