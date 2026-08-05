@@ -1,0 +1,26 @@
+{
+  "version": "3.0.1",
+  "cacheVersion": "colosse-adaptive-v3-78d2caa3465b",
+  "assets": [
+    "./",
+    "./app.js",
+    "./colosse-app.html",
+    "./data/database.js",
+    "./data/legacy.js",
+    "./defaults.js",
+    "./engine/duration.js",
+    "./engine/math.js",
+    "./engine/progression.js",
+    "./engine/recovery.js",
+    "./engine/weight.js",
+    "./icon-192.png",
+    "./icon-512.png",
+    "./index.html",
+    "./manifest.json",
+    "./program.js",
+    "./pwa.js",
+    "./styles.css",
+    "./types.js",
+    "./ui/templates.js"
+  ]
+}
