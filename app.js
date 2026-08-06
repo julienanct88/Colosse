@@ -50,8 +50,10 @@ export class ColosseApp {
     async init() {
         this.root.innerHTML = '<div class="splash"><div class="splash-mark">C</div><strong>COLOSSE</strong><span>Initialisation du moteur adaptatif…</span></div>';
         this.snapshot = await loadSnapshot();
-        if (!TRAINING_DAYS.some((day) => day.id === this.snapshot.settings.selectedDayId)) {
-            this.snapshot.settings.selectedDayId = defaultDayForDate().id;
+        const todayDayId = defaultDayForDate().id;
+        if (this.snapshot.settings.selectedDayId !== todayDayId) {
+            this.snapshot.settings.selectedDayId = todayDayId;
+            await saveSettings(this.snapshot.settings);
         }
         this.viewWeekStart = startOfWeek(new Date());
         await this.ensureCurrentSession();
@@ -668,7 +670,12 @@ export class ColosseApp {
                 this.render();
                 break;
             case 'week-today':
-                this.viewWeekStart = startOfWeek(new Date());
+                {
+                    const today = new Date();
+                    this.viewWeekStart = startOfWeek(today);
+                    this.snapshot.settings.selectedDayId = defaultDayForDate(today).id;
+                    await saveSettings(this.snapshot.settings);
+                }
                 await this.ensureCurrentSession();
                 this.render();
                 break;
