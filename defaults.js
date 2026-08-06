@@ -1,7 +1,7 @@
 import { defaultDayForDate, findDay, getExercisePlan } from './program.js';
 import { isoDate, uid, weekIndexFromStart } from './engine/math.js';
-export const APP_VERSION = '3.0.2';
-export const SCHEMA_VERSION = 3;
+export const APP_VERSION = '3.1.0';
+export const SCHEMA_VERSION = 4;
 export function defaultProfile(today = new Date()) {
     return {
         name: '',
@@ -15,7 +15,9 @@ export function defaultProfile(today = new Date()) {
         fatG: 80,
         minimumCalories: 2400,
         maximumCalories: 3800,
-        dailyStepTarget: 10000,
+        dailyStepTarget: 5000,
+        stepsOnlyTarget: 10000,
+        bikeMinutesTarget: 25,
         sessionLimitMinutes: 60,
     };
 }
@@ -81,6 +83,8 @@ export function emptyDailyLog(date = isoDate()) {
         calories: null,
         adherencePct: null,
         steps: null,
+        bikeMinutes: null,
+        bikeIntensity: 'moderate',
         sleepHours: null,
         fatigue: null,
         notes: '',

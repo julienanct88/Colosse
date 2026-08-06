@@ -1,5 +1,5 @@
 /* Colosse Adaptive — generated service worker */
-const CACHE_VERSION = 'colosse-adaptive-v3-594269de53c2';
+const CACHE_VERSION = 'colosse-adaptive-v3-activity-bike-311';
 const CACHE_NAME = CACHE_VERSION;
 const PRECACHE_URLS = [
   "./",
@@ -9,6 +9,7 @@ const PRECACHE_URLS = [
   "./data/legacy.js",
   "./defaults.js",
   "./engine/duration.js",
+  "./engine/activity.js",
   "./engine/math.js",
   "./engine/progression.js",
   "./engine/recovery.js",

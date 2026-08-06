@@ -6,6 +6,7 @@ import { nextPrescription, prescriptionFromHistory, suggestNextSet, summarizeSes
 import { estimateSessionDuration, remainingSessionSeconds, trimSuggestions, } from './engine/duration.js';
 import { analyzeWeightTrend, macrosForCalories, targetWeight, weeklyTargets, } from './engine/weight.js';
 import { analyzeRecovery, analyzeStrengthTrend, } from './engine/recovery.js';
+import { activityGoalLabel, activityModeLabel, activityProgress, activitySummary, } from './engine/activity.js';
 import { addDays, isoDate, startOfWeek, uid, weekIndexFromStart, } from './engine/math.js';
 import { decisionMeta, escapeHtml, formatClock, formatDateFr, formatKg, numberInputValue, pct, sparklineSvg, } from './ui/templates.js';
 const YOUTUBE_SEARCH = 'https://www.youtube.com/results?search_query=';
@@ -275,7 +276,7 @@ export class ColosseApp {
         <div class="phase-metrics">
           <span><b>${planned.minutes} min</b> prévues</span>
           <span><b>${this.snapshot.profile.currentCalories}</b> kcal</span>
-          <span><b>${this.snapshot.profile.dailyStepTarget.toLocaleString('fr-FR')}</b> pas</span>
+          <span><b>${this.snapshot.profile.bikeMinutesTarget} min vélo</b> activité</span>
         </div>
       </section>
 
@@ -432,6 +433,7 @@ export class ColosseApp {
             return { date, weight: targetWeight(this.snapshot.profile, date) };
         });
         const recentLogs = [...this.snapshot.dailyLogs].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 14);
+        const activity = activityProgress(log, this.snapshot.profile);
         return `
       <section class="weight-hero">
         <div><span class="eyebrow">PILOTAGE DU POIDS</span><h1>${formatKg(analysis.currentAverageKg || log.weightKg, 2)} kg</h1><p>Moyenne glissante sur 7 jours, décision sur une tendance de 14 jours.</p></div>
@@ -454,13 +456,35 @@ export class ColosseApp {
           <div><span>Adhérence</span><strong>${pct(analysis.adherencePct, 0)}</strong></div>
         </div>
         ${analysis.action === 'CALORIES' && analysis.calorieDelta !== 0 ? `<button class="primary-button" data-action="apply-calorie-adjustment">Appliquer ${analysis.calorieDelta > 0 ? '+' : ''}${analysis.calorieDelta} kcal → ${analysis.proposedCalories} kcal</button>` : ''}
-        ${analysis.action === 'STEPS' ? '<button class="primary-button" data-action="apply-step-adjustment">Ajouter 1 250 pas/jour</button>' : ''}
+        ${analysis.action === 'ACTIVITY' ? '<button class="primary-button" data-action="apply-activity-adjustment">Ajouter 5 min de vélo/jour</button>' : ''}
         ${(strength.alert || recovery.alert) ? `<div class="alert-strip"><strong>Récupération sous surveillance</strong><span>${escapeHtml([strength.alert ? strength.reason : '', ...recovery.reasons].filter(Boolean).join(' '))}</span></div>` : ''}
       </section>
 
       <section class="card chart-card">
         <div class="card-title"><div><span class="eyebrow">28 JOURS</span><h2>Poids réel vs trajectoire</h2></div><div class="chart-legend"><span class="actual">Réel</span><span class="target">Cible</span></div></div>
         ${sparklineSvg(this.snapshot.dailyLogs, targetPoints)}
+      </section>
+
+      <section class="card activity-card ${activity.complete ? 'complete' : ''}">
+        <div class="card-title">
+          <div><span class="eyebrow">ACTIVITÉ DU JOUR</span><h2>Pas, vélo ou les deux</h2></div>
+          <span class="activity-status">${activity.complete ? '✓ Objectif atteint' : `${activity.percent}%`}</span>
+        </div>
+        <p class="activity-rule">${escapeHtml(activityGoalLabel(this.snapshot.profile))}</p>
+        <div class="progress-track activity-progress"><i style="width:${activity.percent}%"></i></div>
+        <div class="form-grid activity-fields">
+          ${this.dailyField('steps', 'Pas mesurés par l’iPhone', 'pas', log.steps, '1', 0)}
+          ${this.dailyField('bikeMinutes', 'Vélo', 'min', log.bikeMinutes, '1', 0, 240)}
+          <label>Intensité du vélo
+            <select data-daily-text-field="bikeIntensity">
+              <option value="easy" ${log.bikeIntensity === 'easy' ? 'selected' : ''}>Facile</option>
+              <option value="moderate" ${log.bikeIntensity === 'moderate' ? 'selected' : ''}>Modérée</option>
+              <option value="vigorous" ${log.bikeIntensity === 'vigorous' ? 'selected' : ''}>Soutenue</option>
+            </select>
+          </label>
+          <div class="activity-mode"><span>Mode détecté</span><strong>${activityModeLabel(log)}</strong><small>${activity.bikeMinutes ? `${activity.bikeEquivalentMinutes} min modérées comptées` : 'Saisie manuelle'}</small></div>
+        </div>
+        <p class="activity-help">Pas de vitesse imposée : modérée = tu peux parler, pas chanter ; soutenue = seulement quelques mots.</p>
       </section>
 
       <section class="card daily-form">
@@ -470,7 +494,6 @@ export class ColosseApp {
           ${this.dailyField('waistCm', 'Tour de taille', 'cm', log.waistCm, '0.1')}
           ${this.dailyField('calories', 'Calories réelles', 'kcal', log.calories, '1')}
           ${this.dailyField('adherencePct', 'Adhérence', '%', log.adherencePct, '1', 0, 100)}
-          ${this.dailyField('steps', 'Pas', 'pas', log.steps, '1')}
           ${this.dailyField('sleepHours', 'Sommeil', 'h', log.sleepHours, '0.25', 0, 14)}
           ${this.dailyField('fatigue', 'Fatigue', '/5', log.fatigue, '1', 1, 5)}
         </div>
@@ -486,7 +509,7 @@ export class ColosseApp {
 
       <section class="card recent-checkins">
         <div class="card-title"><div><span class="eyebrow">DONNÉES</span><h2>Derniers check-ins</h2></div></div>
-        ${recentLogs.length ? `<div class="log-list">${recentLogs.map((item) => `<div><span>${formatDateFr(item.date, { weekday: 'short', day: 'numeric', month: 'short' })}</span><strong>${formatKg(item.weightKg, 2)} kg</strong><small>${item.adherencePct !== null ? `${item.adherencePct}%` : '—'} · ${item.steps !== null ? `${item.steps.toLocaleString('fr-FR')} pas` : '—'}</small></div>`).join('')}</div>` : '<p class="empty-state">Aucune donnée quotidienne.</p>'}
+        ${recentLogs.length ? `<div class="log-list">${recentLogs.map((item) => `<div><span>${formatDateFr(item.date, { weekday: 'short', day: 'numeric', month: 'short' })}</span><strong>${formatKg(item.weightKg, 2)} kg</strong><small>${item.adherencePct !== null ? `${item.adherencePct}%` : '—'} · ${activitySummary(item)}</small></div>`).join('')}</div>` : '<p class="empty-state">Aucune donnée quotidienne.</p>'}
       </section>`;
     }
     dailyField(field, label, unit, value, step, min, max) {
@@ -596,8 +619,11 @@ export class ColosseApp {
           ${this.profileField('fatG', 'Lipides', profile.fatG, 'g', '5', 40, 200)}
           ${this.profileField('minimumCalories', 'Plancher', profile.minimumCalories, 'kcal', '50', 1500, 5000)}
           ${this.profileField('maximumCalories', 'Plafond', profile.maximumCalories, 'kcal', '50', 2000, 7000)}
-          ${this.profileField('dailyStepTarget', 'Objectif pas', profile.dailyStepTarget, 'pas', '250', 3000, 30000)}
+          ${this.profileField('dailyStepTarget', 'Socle de pas', profile.dailyStepTarget, 'pas', '250', 1000, 20000)}
+          ${this.profileField('stepsOnlyTarget', 'Objectif 100 % pas', profile.stepsOnlyTarget, 'pas', '250', 3000, 30000)}
+          ${this.profileField('bikeMinutesTarget', 'Vélo modéré', profile.bikeMinutesTarget, 'min', '5', 5, 120)}
         </div>
+        <p class="subtle-block settings-help">Colosse valide l’activité avec l’objectif de pas complet, ou avec le socle de pas accompagné du vélo.</p>
       </section>
 
       <section class="card settings-section">
@@ -729,10 +755,10 @@ export class ColosseApp {
             case 'apply-calorie-adjustment':
                 await this.applyCalorieAdjustment();
                 break;
-            case 'apply-step-adjustment':
-                this.snapshot.profile.dailyStepTarget = Math.min(25000, this.snapshot.profile.dailyStepTarget + 1250);
+            case 'apply-activity-adjustment':
+                this.snapshot.profile.bikeMinutesTarget = Math.min(60, this.snapshot.profile.bikeMinutesTarget + 5);
                 await saveProfile(this.snapshot.profile);
-                this.showToast(`Nouvel objectif : ${this.snapshot.profile.dailyStepTarget.toLocaleString('fr-FR')} pas/jour.`, 'success');
+                this.showToast(`Nouvel objectif : ${this.snapshot.profile.bikeMinutesTarget} min de vélo modéré.`, 'success');
                 this.render();
                 break;
             case 'delete-session':
@@ -798,6 +824,14 @@ export class ColosseApp {
         if (dailyField) {
             const log = this.dailyLog(isoDate());
             log[dailyField] = parseNumber(target.value);
+            await saveDailyLog(log);
+            this.render();
+            return;
+        }
+        const dailyTextField = target.dataset.dailyTextField;
+        if (dailyTextField) {
+            const log = this.dailyLog(isoDate());
+            log[dailyTextField] = target.value;
             await saveDailyLog(log);
             this.render();
             return;

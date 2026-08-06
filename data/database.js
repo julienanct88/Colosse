@@ -1,4 +1,4 @@
-import { defaultSnapshot, SCHEMA_VERSION } from '../defaults.js';
+import { defaultSnapshot, emptyDailyLog, SCHEMA_VERSION } from '../defaults.js';
 import { convertLegacyState } from './legacy.js';
 const DB_NAME = 'colosse-adaptive-db';
 const DB_VERSION = 1;
@@ -123,12 +123,20 @@ function writeFallback(snapshot) {
 }
 function normalizeSnapshot(snapshot) {
     const defaults = defaultSnapshot();
+    const profile = { ...defaults.profile, ...(snapshot.profile ?? {}) };
+    if (snapshot.profile && snapshot.profile.bikeMinutesTarget === undefined) {
+        profile.dailyStepTarget = 5000;
+        profile.stepsOnlyTarget = 10000;
+        profile.bikeMinutesTarget = 25;
+    }
     return {
         schemaVersion: SCHEMA_VERSION,
-        profile: { ...defaults.profile, ...(snapshot.profile ?? {}) },
+        profile,
         settings: { ...defaults.settings, ...(snapshot.settings ?? {}) },
         sessions: Array.isArray(snapshot.sessions) ? snapshot.sessions : [],
-        dailyLogs: Array.isArray(snapshot.dailyLogs) ? snapshot.dailyLogs : [],
+        dailyLogs: Array.isArray(snapshot.dailyLogs)
+            ? snapshot.dailyLogs.map((log) => ({ ...emptyDailyLog(log.date), ...log }))
+            : [],
         adjustments: Array.isArray(snapshot.adjustments) ? snapshot.adjustments : [],
         legacyArchive: snapshot.legacyArchive ?? null,
     };
