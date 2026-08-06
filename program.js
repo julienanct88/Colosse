@@ -486,7 +486,7 @@ export function getTrainingPhase(weekIndex) {
     if (cycleWeek <= 11)
         return {
             name: 'Hypertrophie', color: '#dc2626',
-            description: 'Augmente d’abord les répétitions, puis la charge, tout en gardant la marge demandée.',
+            description: 'Augmente d’abord les répétitions, puis la charge, tout en respectant le nombre de répétitions à garder.',
         };
     if (cycleWeek <= 17)
         return {

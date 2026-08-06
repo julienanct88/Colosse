@@ -1,5 +1,5 @@
 /* Colosse Adaptive — generated service worker */
-const CACHE_VERSION = 'colosse-adaptive-v3-ux-polish-311';
+const CACHE_VERSION = 'colosse-adaptive-v3-session-order-320';
 const CACHE_NAME = CACHE_VERSION;
 const PRECACHE_URLS = [
   "./",

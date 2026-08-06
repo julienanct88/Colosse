@@ -142,7 +142,7 @@ export function suggestNextSet(set, plan, exercise, incrementKg) {
     else if (normalized.reps >= plan.repMax && rir >= plan.targetRir + 1) {
         raw = normalized.weightKg + increment;
         action = 'INCREASE';
-        label = 'Marge supérieure à la cible : ajoute un incrément.';
+        label = 'Tu pouvais encore faire plus de répétitions que prévu : ajoute un incrément.';
     }
     return {
         action,
@@ -223,7 +223,7 @@ export function prescriptionFromHistory(history, plan, exercise, incrementKg, re
         decreaseRaw = Math.min(decreaseRaw, current - increment);
         load = roundToIncrement(capLoadChange(current, decreaseRaw, exercise.category, 'down'), increment, 'down');
         targetTotal = plan.sets * plan.repMin;
-        reason = 'Plusieurs signes montrent que la charge est trop lourde : baisse contrôlée pour retrouver la marge prévue.';
+        reason = 'Plusieurs signes montrent que la charge est trop lourde : baisse-la pour retrouver le nombre de répétitions encore possibles prévu.';
     }
     else if (last.allAtTop && (last.averageRir === null || last.averageRir >= plan.targetRir - 0.5)) {
         const easy = last.averageRir !== null && last.averageRir >= plan.targetRir + 1.5;
@@ -239,8 +239,8 @@ export function prescriptionFromHistory(history, plan, exercise, incrementKg, re
         decision = easy ? 'INCREASE_FAST' : 'INCREASE';
         targetTotal = plan.sets * plan.repMin;
         reason = easy
-            ? 'Haut de fourchette validé avec beaucoup de marge : hausse accélérée mais plafonnée.'
-            : 'Toutes les séries sont en haut de la fourchette avec la marge prévue : augmente d’un incrément.';
+            ? 'Haut de fourchette validé en pouvant encore faire plusieurs répétitions : hausse accélérée mais plafonnée.'
+            : 'Toutes les séries sont en haut de la fourchette avec le nombre de répétitions encore possibles prévu : augmente d’un incrément.';
     }
     else if (last.allInRange) {
         decision = 'ADD_REP';

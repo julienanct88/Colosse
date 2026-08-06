@@ -107,6 +107,12 @@ export class ColosseApp {
     }
     syncSession(session, day, weekIndex) {
         session.weekIndex = weekIndex;
+        const validExerciseIds = day.exercises.map((exercise) => exercise.id);
+        const savedOrder = Array.isArray(session.exerciseOrder) ? session.exerciseOrder : [];
+        session.exerciseOrder = [
+            ...savedOrder.filter((exerciseId, index) => validExerciseIds.includes(exerciseId) && savedOrder.indexOf(exerciseId) === index),
+            ...validExerciseIds.filter((exerciseId) => !savedOrder.includes(exerciseId)),
+        ];
         day.exercises.forEach((exercise) => {
             const plan = getExercisePlan(exercise, weekIndex);
             let log = session.exercises[exercise.id];
@@ -125,6 +131,12 @@ export class ColosseApp {
                     set.pain = null;
             });
         });
+    }
+    orderedExercises(day, session) {
+        const byId = new Map(day.exercises.map((exercise) => [exercise.id, exercise]));
+        return (session.exerciseOrder ?? [])
+            .map((exerciseId) => byId.get(exerciseId))
+            .filter(Boolean);
     }
     seedSessionPrescriptions(session, day, date, weekIndex) {
         const recoveryAlert = analyzeRecovery(this.snapshot.dailyLogs).alert;
@@ -247,6 +259,7 @@ export class ColosseApp {
     }
     renderTrainingPage() {
         const context = this.currentContext();
+        const orderedExercises = this.orderedExercises(context.day, context.session);
         const phase = getTrainingPhase(context.weekIndex);
         const target = weeklyTargets(this.snapshot.profile, 1, context.weekIndex)[0];
         const planned = estimateSessionDuration(context.day, (exercise) => getExercisePlan(exercise, context.weekIndex), this.snapshot.profile.sessionLimitMinutes);
@@ -254,7 +267,7 @@ export class ColosseApp {
         const progress = setCount.total ? Math.round((setCount.done / setCount.total) * 100) : 0;
         const elapsed = sessionDurationSeconds(context.session);
         const completedCounts = {};
-        context.day.exercises.forEach((exercise) => {
+        orderedExercises.forEach((exercise) => {
             const plan = getExercisePlan(exercise, context.weekIndex);
             const log = context.session.exercises[exercise.id];
             completedCounts[exercise.id] = log?.skipped ? plan.sets : (log?.sets.slice(0, plan.sets).filter((set) => set.done).length ?? 0);
@@ -318,7 +331,7 @@ export class ColosseApp {
       ${this.renderReadiness(context.session)}
       ${trim.skipExerciseIds.length ? this.renderTrimCard(trim.skipExerciseIds, trim.savedSeconds) : ''}
       <section class="exercise-list">
-        ${context.day.exercises.map((exercise, index) => this.renderExerciseCard(context, exercise, index)).join('')}
+        ${orderedExercises.map((exercise, index) => this.renderExerciseCard(context, exercise, index, orderedExercises.length)).join('')}
       </section>
       <section class="notes-card card">
         <label for="session-notes">Notes de séance</label>
@@ -341,7 +354,7 @@ export class ColosseApp {
       <button data-action="apply-trim" data-exercises="${exerciseIds.join(',')}">Gagner ${Math.ceil(savedSeconds / 60)} min</button>
     </section>`;
     }
-    renderExerciseCard(context, exercise, index) {
+    renderExerciseCard(context, exercise, index, exerciseCount) {
         const plan = getExercisePlan(exercise, context.weekIndex);
         const log = context.session.exercises[exercise.id];
         const variant = exercise.variants.find((item) => item.id === log.variantId) ?? exercise.variants[0];
@@ -375,15 +388,23 @@ export class ColosseApp {
         <div class="exercise-index">${String(index + 1).padStart(2, '0')}</div>
         <div class="exercise-title">
           <div class="exercise-name-row"><h3>${escapeHtml(exercise.name)}</h3>${exercise.optional ? '<span class="badge">BONUS</span>' : ''}${exercise.superset ? `<span class="badge muted">SUPERSET ${escapeHtml(exercise.superset.split('-').at(-1) ?? '')}</span>` : ''}</div>
-          <div class="exercise-plan"><b>${plan.sets} × ${plan.repMin}–${plan.repMax} reps</b><span>marge ${plan.targetRir} reps</span><span>repos ${formatClock(plan.restSec)}</span></div>
+          <div class="exercise-plan"><b>${plan.sets} × ${plan.repMin}–${plan.repMax} reps</b><span>garde ${plan.targetRir} reps</span><span>repos ${formatClock(plan.restSec)}</span></div>
         </div>
         <a class="video-link" href="${YOUTUBE_SEARCH}${encodeURIComponent(exercise.name + ' technique musculation')}" target="_blank" rel="noopener" aria-label="Voir la technique">▶</a>
+      </div>
+
+      <div class="exercise-order-bar" aria-label="Changer la position de ${escapeHtml(exercise.name)}">
+        <span>Ordre dans la séance</span>
+        <div>
+          <button data-action="move-exercise" data-exercise="${exercise.id}" data-direction="up" ${index === 0 ? 'disabled' : ''}>↑ Monter</button>
+          <button data-action="move-exercise" data-exercise="${exercise.id}" data-direction="down" ${index === exerciseCount - 1 ? 'disabled' : ''}>↓ Descendre</button>
+        </div>
       </div>
 
       <div class="prescription ${meta.className}">
         <div><span>${meta.icon} ${meta.label}</span><strong>${targetText}</strong></div>
         <p>${escapeHtml(displayedReason)}</p>
-        ${prescription.smoothedE1RM > 0 ? `<small>Force estimée ${formatKg(prescription.smoothedE1RM)} kg · fiabilité ${confidenceLabel}${prescription.averageRir !== null ? ` · marge moyenne ${formatKg(prescription.averageRir)} reps` : ''}</small>` : '<small>Après ta première série, Colosse ajustera la charge suivante.</small>'}
+        ${prescription.smoothedE1RM > 0 ? `<small>Force estimée ${formatKg(prescription.smoothedE1RM)} kg · fiabilité ${confidenceLabel}${prescription.averageRir !== null ? ` · encore ${formatKg(prescription.averageRir)} reps possibles en moyenne` : ''}</small>` : '<small>Après ta première série, Colosse ajustera la charge suivante.</small>'}
       </div>
 
       <div class="variant-row">
@@ -396,12 +417,11 @@ export class ColosseApp {
       </div>
 
       <div class="set-table">
-        <div class="set-help">Marge = nombre de répétitions que tu aurais encore pu faire.</div>
-        <div class="set-head"><span>#</span><span>KG</span><span>REPS</span><span>MARGE</span><span>FORME</span><span>DOUL.</span><span>OK</span></div>
+        <div class="set-help"><strong>Après chaque série</strong><span>Indique ce que tu as réellement ressenti. Si tu hésites, choisis « Je ne sais pas ».</span></div>
         ${activeSets.map((set, setIndex) => this.renderSetRow(exercise, set, setIndex, prescription, plan)).join('')}
       </div>
 
-      ${nextSet && nextSet.action !== 'WAIT' ? `<div class="next-set ${nextSet.action === 'STOP_OR_SWAP' ? 'danger' : ''}"><div><span>SÉRIE ${lastDoneIndex + 2}</span><strong>${nextSet.loadKg ? `${formatKg(nextSet.loadKg)} kg` : 'Arrêt'} · ${plan.repMin}–${plan.repMax} reps · marge ${plan.targetRir}</strong><p>${escapeHtml(nextSet.label)}</p></div>${nextSet.loadKg ? `<button data-action="apply-next-load" data-exercise="${exercise.id}" data-set="${lastDoneIndex + 1}" data-load="${nextSet.loadKg}">Appliquer</button>` : ''}</div>` : ''}
+      ${nextSet && nextSet.action !== 'WAIT' ? `<div class="next-set ${nextSet.action === 'STOP_OR_SWAP' ? 'danger' : ''}"><div><span>SÉRIE ${lastDoneIndex + 2}</span><strong>${nextSet.loadKg ? `${formatKg(nextSet.loadKg)} kg` : 'Arrêt'} · ${plan.repMin}–${plan.repMax} reps · garde ${plan.targetRir} reps</strong><p>${escapeHtml(nextSet.label)}</p></div>${nextSet.loadKg ? `<button data-action="apply-next-load" data-exercise="${exercise.id}" data-set="${lastDoneIndex + 1}" data-load="${nextSet.loadKg}">Appliquer</button>` : ''}</div>` : ''}
       ${nextSession ? `<div class="next-session"><span>PROCHAINE EXPOSITION</span><strong>${formatKg(nextSession.loadKg)} kg · objectif ${nextSession.targetTotalReps} reps totales</strong><p>${escapeHtml(nextSession.reason)}</p></div>` : ''}
       <div class="cue"><span>COACHING</span><p>${escapeHtml(exercise.coachingCue)}</p></div>
       <div class="exercise-footer">
@@ -418,13 +438,17 @@ export class ColosseApp {
             && set.technique === 'good'
             && Number(set.pain ?? 0) <= 3;
         return `<div class="set-row ${set.done ? 'done' : ''} ${hit ? 'hit' : ''}" data-set-row data-exercise="${exercise.id}" data-set="${setIndex}">
-      <span class="set-number">${setIndex + 1}</span>
-      <input type="number" inputmode="decimal" min="0" step="0.25" data-set-field="weightKg" value="${numberInputValue(suggestedWeight)}" placeholder="kg" aria-label="Charge série ${setIndex + 1}"/>
-      <input type="number" inputmode="numeric" min="0" max="50" step="1" data-set-field="reps" value="${numberInputValue(set.reps)}" placeholder="reps" aria-label="Répétitions série ${setIndex + 1}"/>
-      <select data-set-field="rir" aria-label="Répétitions encore possibles après la série ${setIndex + 1}"><option value="">—</option>${[0, 1, 2, 3, 4, 5, 6].map((value) => `<option value="${value}" ${set.rir === value ? 'selected' : ''}>${value}</option>`).join('')}</select>
-      <select data-set-field="technique" aria-label="Technique série ${setIndex + 1}"><option value="" ${set.technique === null ? 'selected' : ''}>—</option><option value="good" ${set.technique === 'good' ? 'selected' : ''}>✓</option><option value="degraded" ${set.technique === 'degraded' ? 'selected' : ''}>△</option></select>
-      <select data-set-field="pain" aria-label="Douleur série ${setIndex + 1}"><option value="" ${set.pain === null ? 'selected' : ''}>—</option>${[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((value) => `<option value="${value}" ${set.pain === value ? 'selected' : ''}>${value}</option>`).join('')}</select>
-      <button class="set-check" data-action="toggle-set" data-exercise="${exercise.id}" data-set="${setIndex}" aria-label="Valider série ${setIndex + 1}">${set.done ? '✓' : ''}</button>
+      <div class="set-primary">
+        <span class="set-number"><small>Série</small>${setIndex + 1}</span>
+        <label><span>Charge (kg)</span><input type="number" inputmode="decimal" min="0" step="0.25" data-set-field="weightKg" value="${numberInputValue(suggestedWeight)}" placeholder="0" aria-label="Charge série ${setIndex + 1}"/></label>
+        <label><span>Répétitions</span><input type="number" inputmode="numeric" min="0" max="50" step="1" data-set-field="reps" value="${numberInputValue(set.reps)}" placeholder="0" aria-label="Répétitions série ${setIndex + 1}"/></label>
+        <button class="set-check" data-action="toggle-set" data-exercise="${exercise.id}" data-set="${setIndex}" aria-label="Valider série ${setIndex + 1}">${set.done ? '✓ Fait' : 'Valider'}</button>
+      </div>
+      <div class="set-feedback">
+        <label><span>Encore possible</span><select data-set-field="rir" aria-label="Répétitions encore possibles après la série ${setIndex + 1}"><option value="" ${set.rir === null ? 'selected' : ''}>Je ne sais pas</option><option value="0" ${set.rir === 0 ? 'selected' : ''}>Aucune</option>${[1, 2, 3, 4, 5].map((value) => `<option value="${value}" ${set.rir === value ? 'selected' : ''}>${value} rep${value > 1 ? 's' : ''}</option>`).join('')}<option value="6" ${set.rir === 6 ? 'selected' : ''}>6 reps ou +</option></select></label>
+        <label><span>Mouvement</span><select data-set-field="technique" aria-label="Qualité du mouvement série ${setIndex + 1}"><option value="" ${set.technique === null ? 'selected' : ''}>Je ne sais pas</option><option value="good" ${set.technique === 'good' ? 'selected' : ''}>Propre</option><option value="degraded" ${set.technique === 'degraded' ? 'selected' : ''}>Dégradé</option></select></label>
+        <label><span>Douleur</span><select data-set-field="pain" aria-label="Douleur série ${setIndex + 1}"><option value="" ${set.pain === null ? 'selected' : ''}>Non notée</option><option value="0" ${set.pain === 0 ? 'selected' : ''}>Aucune</option>${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((value) => `<option value="${value}" ${set.pain === value ? 'selected' : ''}>${value}/10</option>`).join('')}</select></label>
+      </div>
       ${set.restActualSec ? `<small class="rest-actual">repos ${formatClock(set.restActualSec)}</small>` : ''}
     </div>`;
     }
@@ -740,6 +764,9 @@ export class ColosseApp {
             case 'toggle-set':
                 await this.toggleSet(actionElement.dataset.exercise ?? '', Number(actionElement.dataset.set));
                 break;
+            case 'move-exercise':
+                await this.moveExercise(actionElement.dataset.exercise ?? '', actionElement.dataset.direction === 'up' ? -1 : 1);
+                break;
             case 'apply-next-load':
                 await this.applyNextLoad(actionElement.dataset.exercise ?? '', Number(actionElement.dataset.set), Number(actionElement.dataset.load));
                 break;
@@ -944,8 +971,8 @@ export class ColosseApp {
             this.render();
             return;
         }
-        if (!(Number(set.weightKg) > 0) || !(Number(set.reps) > 0) || set.rir === null || set.technique === null || set.pain === null) {
-            this.showToast('Renseigne la charge, les répétitions, la marge, la forme et la douleur avant de valider.', 'error');
+        if (!(Number(set.weightKg) > 0) || !(Number(set.reps) > 0)) {
+            this.showToast('Renseigne seulement la charge et les répétitions pour valider la série.', 'error');
             return;
         }
         if (this.timer)
@@ -978,7 +1005,7 @@ export class ColosseApp {
         const plan = getExercisePlan(exercise, context.weekIndex);
         if (!exercise.superset)
             return setIndex < plan.sets - 1;
-        const group = context.day.exercises.filter((item) => item.superset === exercise.superset);
+        const group = this.orderedExercises(context.day, context.session).filter((item) => item.superset === exercise.superset);
         const lastExercise = group.at(-1);
         const maxSets = Math.max(...group.map((item) => getExercisePlan(item, context.weekIndex).sets));
         return lastExercise?.id === exercise.id && setIndex < maxSets - 1;
@@ -1011,6 +1038,20 @@ export class ColosseApp {
         context.session.updatedAt = Date.now();
         await saveSession(context.session);
         this.render();
+    }
+    async moveExercise(exerciseId, offset) {
+        const context = this.currentContext();
+        const order = [...context.session.exerciseOrder];
+        const currentIndex = order.indexOf(exerciseId);
+        const targetIndex = currentIndex + offset;
+        if (currentIndex < 0 || targetIndex < 0 || targetIndex >= order.length)
+            return;
+        [order[currentIndex], order[targetIndex]] = [order[targetIndex], order[currentIndex]];
+        context.session.exerciseOrder = order;
+        context.session.updatedAt = Date.now();
+        await saveSession(context.session);
+        this.render();
+        this.showToast('Ordre de la séance mis à jour.', 'success');
     }
     async toggleSkipExercise(exerciseId) {
         const context = this.currentContext();
