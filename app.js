@@ -49,7 +49,7 @@ export class ColosseApp {
         this.root = root;
     }
     async init() {
-        this.root.innerHTML = '<div class="splash"><div class="splash-mark">C</div><strong>COLOSSE</strong><span>Initialisation du moteur adaptatif…</span></div>';
+        this.root.innerHTML = '<div class="splash"><div class="splash-mark">C</div><strong>COLOSSE</strong><span>Préparation de ton programme…</span></div>';
         this.snapshot = await loadSnapshot();
         const todayDayId = defaultDayForDate().id;
         if (this.snapshot.settings.selectedDayId !== todayDayId) {
@@ -303,10 +303,10 @@ export class ColosseApp {
           <div class="session-progress"><strong>${progress}%</strong><span>${setCount.done}/${setCount.total} séries</span></div>
         </div>
         <div class="progress-track"><i style="width:${progress}%"></i></div>
-        <div class="time-grid">
-          <div><span>Prévu</span><strong>${formatClock(planned.seconds)}</strong></div>
-          <div><span>Écoulé</span><strong id="session-elapsed">${formatClock(elapsed)}</strong></div>
-          <div class="${projected > limitSec ? 'danger' : ''}"><span>Projection</span><strong id="session-projected">${formatClock(projected)}</strong></div>
+        <div class="time-grid" aria-label="Durée de la séance">
+          <div><span>Durée prévue</span><strong>${formatClock(planned.seconds)}</strong></div>
+          <div><span>Temps passé</span><strong id="session-elapsed">${formatClock(elapsed)}</strong></div>
+          <div class="${projected > limitSec ? 'danger' : ''}"><span>Durée estimée</span><strong id="session-projected">${formatClock(projected)}</strong></div>
         </div>
         <div class="session-actions">
           ${!context.session.startedAt ? '<button class="primary-button" data-action="start-session">▶ Démarrer la séance</button>' : !context.session.endedAt ? '<button class="secondary-button" data-action="finish-session">■ Terminer</button>' : '<button class="secondary-button" data-action="resume-session">↻ Reprendre</button>'}
@@ -327,7 +327,7 @@ export class ColosseApp {
     }
     renderReadiness(session) {
         return `<section class="readiness card">
-      <div class="card-title"><div><span class="eyebrow">ÉTAT DU JOUR</span><h3>Récupération</h3></div><span class="subtle">Le moteur bloque les hausses si les signaux se dégradent.</span></div>
+      <div class="card-title"><div><span class="eyebrow">ÉTAT DU JOUR</span><h3>Récupération</h3></div><span class="subtle">Ces réponses évitent d’augmenter tes charges quand tu récupères mal.</span></div>
       <div class="readiness-grid">
         <label>Énergie<select data-readiness="energy">${[1, 2, 3, 4, 5].map((value) => `<option value="${value}" ${session.readiness.energy === value ? 'selected' : ''}>${value}/5</option>`).join('')}</select></label>
         <label>Fatigue<select data-readiness="fatigue">${[1, 2, 3, 4, 5].map((value) => `<option value="${value}" ${session.readiness.fatigue === value ? 'selected' : ''}>${value}/5</option>`).join('')}</select></label>
@@ -358,22 +358,32 @@ export class ColosseApp {
             ? nextPrescription(activeSets, this.exerciseHistory(exercise.id, log.variantId, context.date, context.session.id), plan, exercise, variant.incrementKg, analyzeRecovery(this.snapshot.dailyLogs).alert)
             : null;
         const targetText = prescription.status === 'CALIBRATION'
-            ? 'Charge de départ prudente'
+            ? 'Trouve ta charge de départ'
             : `${formatKg(prescription.loadKg)} kg × ${plan.repMin}–${plan.repMax}`;
+        const displayedReason = prescription.status === 'CALIBRATION'
+            ? `Commence prudemment : à la fin de la série, tu dois pouvoir faire encore ${plan.targetRir} répétitions.`
+            : prescription.reason;
+        const confidenceLabel = prescription.confidence === 'high'
+            ? 'élevée'
+            : prescription.confidence === 'medium'
+                ? 'moyenne'
+                : prescription.confidence === 'low'
+                    ? 'faible'
+                    : 'à établir';
         return `<article class="exercise-card ${log.skipped ? 'skipped' : ''}" style="--accent:${context.day.color}" data-exercise-card="${exercise.id}">
       <div class="exercise-head">
         <div class="exercise-index">${String(index + 1).padStart(2, '0')}</div>
         <div class="exercise-title">
           <div class="exercise-name-row"><h3>${escapeHtml(exercise.name)}</h3>${exercise.optional ? '<span class="badge">BONUS</span>' : ''}${exercise.superset ? `<span class="badge muted">SUPERSET ${escapeHtml(exercise.superset.split('-').at(-1) ?? '')}</span>` : ''}</div>
-          <div class="exercise-plan"><b>${plan.sets} × ${plan.repMin}–${plan.repMax}</b><span>RIR ${plan.targetRir}</span><span>repos ${formatClock(plan.restSec)}</span></div>
+          <div class="exercise-plan"><b>${plan.sets} × ${plan.repMin}–${plan.repMax} reps</b><span>marge ${plan.targetRir} reps</span><span>repos ${formatClock(plan.restSec)}</span></div>
         </div>
         <a class="video-link" href="${YOUTUBE_SEARCH}${encodeURIComponent(exercise.name + ' technique musculation')}" target="_blank" rel="noopener" aria-label="Voir la technique">▶</a>
       </div>
 
       <div class="prescription ${meta.className}">
         <div><span>${meta.icon} ${meta.label}</span><strong>${targetText}</strong></div>
-        <p>${escapeHtml(prescription.reason)}</p>
-        ${prescription.smoothedE1RM > 0 ? `<small>e1RM lissé ${formatKg(prescription.smoothedE1RM)} kg · confiance ${prescription.confidence}${prescription.averageRir !== null ? ` · RIR moyen ${formatKg(prescription.averageRir)}` : ''}</small>` : '<small>La première série définit la charge suivante sans test maximal.</small>'}
+        <p>${escapeHtml(displayedReason)}</p>
+        ${prescription.smoothedE1RM > 0 ? `<small>Force estimée ${formatKg(prescription.smoothedE1RM)} kg · fiabilité ${confidenceLabel}${prescription.averageRir !== null ? ` · marge moyenne ${formatKg(prescription.averageRir)} reps` : ''}</small>` : '<small>Après ta première série, Colosse ajustera la charge suivante.</small>'}
       </div>
 
       <div class="variant-row">
@@ -386,11 +396,12 @@ export class ColosseApp {
       </div>
 
       <div class="set-table">
-        <div class="set-head"><span>#</span><span>KG</span><span>REPS</span><span>RIR</span><span>TECH.</span><span>DOUL.</span><span>OK</span></div>
+        <div class="set-help">Marge = nombre de répétitions que tu aurais encore pu faire.</div>
+        <div class="set-head"><span>#</span><span>KG</span><span>REPS</span><span>MARGE</span><span>FORME</span><span>DOUL.</span><span>OK</span></div>
         ${activeSets.map((set, setIndex) => this.renderSetRow(exercise, set, setIndex, prescription, plan)).join('')}
       </div>
 
-      ${nextSet && nextSet.action !== 'WAIT' ? `<div class="next-set ${nextSet.action === 'STOP_OR_SWAP' ? 'danger' : ''}"><div><span>SÉRIE ${lastDoneIndex + 2}</span><strong>${nextSet.loadKg ? `${formatKg(nextSet.loadKg)} kg` : 'Arrêt'} · ${plan.repMin}–${plan.repMax} · RIR ${plan.targetRir}</strong><p>${escapeHtml(nextSet.label)}</p></div>${nextSet.loadKg ? `<button data-action="apply-next-load" data-exercise="${exercise.id}" data-set="${lastDoneIndex + 1}" data-load="${nextSet.loadKg}">Appliquer</button>` : ''}</div>` : ''}
+      ${nextSet && nextSet.action !== 'WAIT' ? `<div class="next-set ${nextSet.action === 'STOP_OR_SWAP' ? 'danger' : ''}"><div><span>SÉRIE ${lastDoneIndex + 2}</span><strong>${nextSet.loadKg ? `${formatKg(nextSet.loadKg)} kg` : 'Arrêt'} · ${plan.repMin}–${plan.repMax} reps · marge ${plan.targetRir}</strong><p>${escapeHtml(nextSet.label)}</p></div>${nextSet.loadKg ? `<button data-action="apply-next-load" data-exercise="${exercise.id}" data-set="${lastDoneIndex + 1}" data-load="${nextSet.loadKg}">Appliquer</button>` : ''}</div>` : ''}
       ${nextSession ? `<div class="next-session"><span>PROCHAINE EXPOSITION</span><strong>${formatKg(nextSession.loadKg)} kg · objectif ${nextSession.targetTotalReps} reps totales</strong><p>${escapeHtml(nextSession.reason)}</p></div>` : ''}
       <div class="cue"><span>COACHING</span><p>${escapeHtml(exercise.coachingCue)}</p></div>
       <div class="exercise-footer">
@@ -410,7 +421,7 @@ export class ColosseApp {
       <span class="set-number">${setIndex + 1}</span>
       <input type="number" inputmode="decimal" min="0" step="0.25" data-set-field="weightKg" value="${numberInputValue(suggestedWeight)}" placeholder="kg" aria-label="Charge série ${setIndex + 1}"/>
       <input type="number" inputmode="numeric" min="0" max="50" step="1" data-set-field="reps" value="${numberInputValue(set.reps)}" placeholder="reps" aria-label="Répétitions série ${setIndex + 1}"/>
-      <select data-set-field="rir" aria-label="RIR série ${setIndex + 1}"><option value="">—</option>${[0, 1, 2, 3, 4, 5, 6].map((value) => `<option value="${value}" ${set.rir === value ? 'selected' : ''}>${value}</option>`).join('')}</select>
+      <select data-set-field="rir" aria-label="Répétitions encore possibles après la série ${setIndex + 1}"><option value="">—</option>${[0, 1, 2, 3, 4, 5, 6].map((value) => `<option value="${value}" ${set.rir === value ? 'selected' : ''}>${value}</option>`).join('')}</select>
       <select data-set-field="technique" aria-label="Technique série ${setIndex + 1}"><option value="" ${set.technique === null ? 'selected' : ''}>—</option><option value="good" ${set.technique === 'good' ? 'selected' : ''}>✓</option><option value="degraded" ${set.technique === 'degraded' ? 'selected' : ''}>△</option></select>
       <select data-set-field="pain" aria-label="Douleur série ${setIndex + 1}"><option value="" ${set.pain === null ? 'selected' : ''}>—</option>${[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((value) => `<option value="${value}" ${set.pain === value ? 'selected' : ''}>${value}</option>`).join('')}</select>
       <button class="set-check" data-action="toggle-set" data-exercise="${exercise.id}" data-set="${setIndex}" aria-label="Valider série ${setIndex + 1}">${set.done ? '✓' : ''}</button>
@@ -436,7 +447,7 @@ export class ColosseApp {
         const activity = activityProgress(log, this.snapshot.profile);
         return `
       <section class="weight-hero">
-        <div><span class="eyebrow">PILOTAGE DU POIDS</span><h1>${formatKg(analysis.currentAverageKg || log.weightKg, 2)} kg</h1><p>Moyenne glissante sur 7 jours, décision sur une tendance de 14 jours.</p></div>
+        <div><span class="eyebrow">SUIVI DU POIDS</span><h1>${formatKg(analysis.currentAverageKg || log.weightKg, 2)} kg</h1><p>Ton poids moyen des 7 derniers jours. Colosse ajuste le plan d’après les 14 derniers jours.</p></div>
         <div class="weight-target"><span>cible dimanche</span><strong>${formatKg(currentTarget.targetWeightKg, 2)} kg</strong><small>${formatKg(currentTarget.toleranceLowKg, 2)} – ${formatKg(currentTarget.toleranceHighKg, 2)}</small></div>
       </section>
 
@@ -448,7 +459,7 @@ export class ColosseApp {
       </section>
 
       <section class="trend-card card status-${analysis.status.toLowerCase()}">
-        <div class="card-title"><div><span class="eyebrow">DÉCISION DU MOTEUR</span><h2>${this.weightStatusLabel(analysis.status)}</h2></div><span class="status-pill">${analysis.samples} pesées</span></div>
+        <div class="card-title"><div><span class="eyebrow">BILAN COLOSSE</span><h2>${this.weightStatusLabel(analysis.status)}</h2></div><span class="status-pill">${analysis.samples} pesées</span></div>
         <p>${escapeHtml(analysis.reason)}</p>
         <div class="trend-metrics">
           <div><span>Perte observée</span><strong>${analysis.enoughData ? `${formatKg(analysis.observedLossKgPerWeek, 3)} kg/sem` : '—'}</strong></div>
@@ -597,7 +608,7 @@ export class ColosseApp {
         const profile = this.snapshot.profile;
         const settings = this.snapshot.settings;
         return `
-      <section class="settings-hero"><span class="eyebrow">CONFIGURATION</span><h1>Ton moteur Colosse</h1><p>Les paramètres ci-dessous pilotent toutes les charges, cibles de poids et décisions nutritionnelles.</p></section>
+      <section class="settings-hero"><span class="eyebrow">CONFIGURATION</span><h1>Tes réglages Colosse</h1><p>Retrouve ici tes objectifs d’entraînement, de poids, d’activité et de nutrition.</p></section>
 
       <section class="card settings-section">
         <div class="card-title"><div><span class="eyebrow">PROFIL</span><h2>Données de départ</h2></div></div>
@@ -934,7 +945,7 @@ export class ColosseApp {
             return;
         }
         if (!(Number(set.weightKg) > 0) || !(Number(set.reps) > 0) || set.rir === null || set.technique === null || set.pain === null) {
-            this.showToast('Renseigne charge, répétitions, RIR, technique et douleur avant de valider.', 'error');
+            this.showToast('Renseigne la charge, les répétitions, la marge, la forme et la douleur avant de valider.', 'error');
             return;
         }
         if (this.timer)

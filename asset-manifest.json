@@ -1,6 +1,6 @@
 {
-  "version": "3.1.0",
-  "cacheVersion": "colosse-adaptive-v3-activity-bike-311",
+  "version": "3.1.1",
+  "cacheVersion": "colosse-adaptive-v3-ux-polish-311",
   "assets": [
     "./",
     "./app.js",

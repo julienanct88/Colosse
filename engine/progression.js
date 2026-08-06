@@ -223,7 +223,7 @@ export function prescriptionFromHistory(history, plan, exercise, incrementKg, re
         decreaseRaw = Math.min(decreaseRaw, current - increment);
         load = roundToIncrement(capLoadChange(current, decreaseRaw, exercise.category, 'down'), increment, 'down');
         targetTotal = plan.sets * plan.repMin;
-        reason = 'Plusieurs signaux de surcharge : baisse contrôlée pour retrouver le RIR cible.';
+        reason = 'Plusieurs signes montrent que la charge est trop lourde : baisse contrôlée pour retrouver la marge prévue.';
     }
     else if (last.allAtTop && (last.averageRir === null || last.averageRir >= plan.targetRir - 0.5)) {
         const easy = last.averageRir !== null && last.averageRir >= plan.targetRir + 1.5;
@@ -240,7 +240,7 @@ export function prescriptionFromHistory(history, plan, exercise, incrementKg, re
         targetTotal = plan.sets * plan.repMin;
         reason = easy
             ? 'Haut de fourchette validé avec beaucoup de marge : hausse accélérée mais plafonnée.'
-            : 'Toutes les séries au haut de fourchette avec le RIR prévu : hausse d’un incrément.';
+            : 'Toutes les séries sont en haut de la fourchette avec la marge prévue : augmente d’un incrément.';
     }
     else if (last.allInRange) {
         decision = 'ADD_REP';

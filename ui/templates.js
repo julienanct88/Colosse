@@ -32,7 +32,7 @@ export function pct(value, digits = 0) {
 }
 export function decisionMeta(decision) {
     switch (decision) {
-        case 'CALIBRATE': return { label: 'Calibration', icon: '🎯', className: 'decision-calibrate' };
+        case 'CALIBRATE': return { label: 'Première séance', icon: '🎯', className: 'decision-calibrate' };
         case 'INCREASE_FAST': return { label: 'Hausse accélérée', icon: '🚀', className: 'decision-up' };
         case 'INCREASE': return { label: 'Augmente', icon: '↗', className: 'decision-up' };
         case 'ADD_REP': return { label: 'Ajoute 1 rep', icon: '+1', className: 'decision-hold' };

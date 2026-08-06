@@ -3,7 +3,7 @@ export async function registerPwa() {
     if (!('serviceWorker' in navigator))
         return;
     try {
-        const registration = await navigator.serviceWorker.register('./sw.js', { scope: './' });
+        const registration = await navigator.serviceWorker.register('./sw.js', { scope: './', updateViaCache: 'none' });
         window.setInterval(() => void registration.update(), 30 * 60 * 1000);
         if (registration.waiting)
             window.dispatchEvent(new CustomEvent('colosse-update'));
@@ -23,6 +23,7 @@ export async function registerPwa() {
             refreshing = true;
             window.location.reload();
         });
+        void registration.update();
     }
     catch (error) {
         console.warn('Service worker registration failed:', error);

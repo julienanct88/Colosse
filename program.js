@@ -471,7 +471,7 @@ export function getTrainingPhase(weekIndex) {
     if (cycleWeek <= 2)
         return {
             name: 'Calibration', color: '#f59e0b',
-            description: 'Le moteur apprend tes charges. RIR 3, aucune série forcée.',
+            description: 'Colosse apprend tes charges. Garde environ 3 répétitions en réserve et ne va pas à l’échec.',
         };
     if (cycleWeek <= 5)
         return {
@@ -481,12 +481,12 @@ export function getTrainingPhase(weekIndex) {
     if (cycleWeek === 6 || cycleWeek === 12 || cycleWeek === 18 || cycleWeek === 24)
         return {
             name: 'Deload', color: '#10b981',
-            description: 'Volume réduit, RIR 4 et aucune recherche de record.',
+            description: 'Moins de séries et de charge. Garde environ 4 répétitions en réserve et ne cherche pas de record.',
         };
     if (cycleWeek <= 11)
         return {
             name: 'Hypertrophie', color: '#dc2626',
-            description: 'Progression par répétitions puis charge, pilotée par le RIR.',
+            description: 'Augmente d’abord les répétitions, puis la charge, tout en gardant la marge demandée.',
         };
     if (cycleWeek <= 17)
         return {
