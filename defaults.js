@@ -29,6 +29,7 @@ export function defaultSettings(today = new Date()) {
         vibrationEnabled: true,
         autoStartTimer: true,
         lastSeenVersion: APP_VERSION,
+        dayOrders: {},
     };
 }
 export function makeSet() {

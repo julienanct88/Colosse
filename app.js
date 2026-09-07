@@ -108,7 +108,11 @@ export class ColosseApp {
     syncSession(session, day, weekIndex) {
         session.weekIndex = weekIndex;
         const validExerciseIds = day.exercises.map((exercise) => exercise.id);
-        const savedOrder = Array.isArray(session.exerciseOrder) ? session.exerciseOrder : [];
+        const sessionOrder = Array.isArray(session.exerciseOrder) ? session.exerciseOrder : [];
+        const preferredOrder = this.snapshot?.settings?.dayOrders?.[day.id];
+        const savedOrder = sessionOrder.length
+            ? sessionOrder
+            : (Array.isArray(preferredOrder) ? preferredOrder : []);
         session.exerciseOrder = [
             ...savedOrder.filter((exerciseId, index) => validExerciseIds.includes(exerciseId) && savedOrder.indexOf(exerciseId) === index),
             ...validExerciseIds.filter((exerciseId) => !savedOrder.includes(exerciseId)),
@@ -394,7 +398,7 @@ export class ColosseApp {
       </div>
 
       <div class="exercise-order-bar" aria-label="Changer la position de ${escapeHtml(exercise.name)}">
-        <span>Ordre dans la séance</span>
+        <span>Ordre (mémorisé)</span>
         <div>
           <button data-action="move-exercise" data-exercise="${exercise.id}" data-direction="up" ${index === 0 ? 'disabled' : ''}>↑ Monter</button>
           <button data-action="move-exercise" data-exercise="${exercise.id}" data-direction="down" ${index === exerciseCount - 1 ? 'disabled' : ''}>↓ Descendre</button>
@@ -1049,9 +1053,13 @@ export class ColosseApp {
         [order[currentIndex], order[targetIndex]] = [order[targetIndex], order[currentIndex]];
         context.session.exerciseOrder = order;
         context.session.updatedAt = Date.now();
+        if (!this.snapshot.settings.dayOrders)
+            this.snapshot.settings.dayOrders = {};
+        this.snapshot.settings.dayOrders[context.day.id] = [...order];
         await saveSession(context.session);
+        await saveSettings(this.snapshot.settings);
         this.render();
-        this.showToast('Ordre de la séance mis à jour.', 'success');
+        this.showToast('Ordre mémorisé pour tous tes prochains ' + context.day.name + '.', 'success');
     }
     async toggleSkipExercise(exerciseId) {
         const context = this.currentContext();
