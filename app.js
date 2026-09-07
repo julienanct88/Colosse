@@ -110,9 +110,10 @@ export class ColosseApp {
         const validExerciseIds = day.exercises.map((exercise) => exercise.id);
         const sessionOrder = Array.isArray(session.exerciseOrder) ? session.exerciseOrder : [];
         const preferredOrder = this.snapshot?.settings?.dayOrders?.[day.id];
-        const savedOrder = sessionOrder.length
-            ? sessionOrder
-            : (Array.isArray(preferredOrder) ? preferredOrder : []);
+        const usePreferred = !session.orderCustomized
+            && Array.isArray(preferredOrder)
+            && preferredOrder.length > 0;
+        const savedOrder = usePreferred ? preferredOrder : sessionOrder;
         session.exerciseOrder = [
             ...savedOrder.filter((exerciseId, index) => validExerciseIds.includes(exerciseId) && savedOrder.indexOf(exerciseId) === index),
             ...validExerciseIds.filter((exerciseId) => !savedOrder.includes(exerciseId)),
@@ -1052,6 +1053,7 @@ export class ColosseApp {
             return;
         [order[currentIndex], order[targetIndex]] = [order[targetIndex], order[currentIndex]];
         context.session.exerciseOrder = order;
+        context.session.orderCustomized = true;
         context.session.updatedAt = Date.now();
         if (!this.snapshot.settings.dayOrders)
             this.snapshot.settings.dayOrders = {};
