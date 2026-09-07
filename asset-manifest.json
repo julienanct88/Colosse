@@ -1,6 +1,6 @@
 {
-  "version": "3.2.0",
-  "cacheVersion": "colosse-adaptive-v3-session-order-320",
+  "version": "3.2.1",
+  "cacheVersion": "colosse-adaptive-v3-arms-delts-321",
   "assets": [
     "./",
     "./app.js",

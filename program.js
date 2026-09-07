@@ -49,7 +49,7 @@ export const TRAINING_DAYS = [
             }),
             exercise({
                 id: 'push-a-lateral', name: 'Élévations latérales', shortName: 'Élévations latérales',
-                category: 'isolation', sets: 3, repMin: 12, repMax: 20, targetRir: 2, restSec: 60,
+                category: 'isolation', sets: 4, repMin: 12, repMax: 20, targetRir: 2, restSec: 60,
                 executionSec: 30, transitionSec: 45, warmupSec: 0, priority: 1, superset: 'push-a-pair',
                 coachingCue: 'Monte les coudes, pas les mains. Pas d’élan du tronc.',
                 variants: [
@@ -137,12 +137,23 @@ export const TRAINING_DAYS = [
             exercise({
                 id: 'pull-a-ezcurl', name: 'Curl barre EZ', shortName: 'Curl EZ',
                 category: 'isolation', sets: 3, repMin: 8, repMax: 12, targetRir: 2, restSec: 75,
-                executionSec: 30, transitionSec: 45, warmupSec: 0, priority: 2,
+                executionSec: 30, transitionSec: 45, warmupSec: 0, priority: 2, superset: 'pull-a-arms',
                 coachingCue: 'Coudes fixes, pas de balancier, extension presque complète.',
                 variants: [
                     variant('ez-curl', 'Barre EZ', 'barbell', 2.5),
                     variant('cable-curl', 'Poulie', 'cable', 1.25),
                     variant('machine-curl', 'Machine', 'machine', 2.5),
+                ],
+            }),
+            exercise({
+                id: 'pull-a-triceps', name: 'Extension triceps (superset curl)', shortName: 'Triceps superset',
+                category: 'isolation', sets: 3, repMin: 10, repMax: 15, targetRir: 2, restSec: 75,
+                executionSec: 30, transitionSec: 45, warmupSec: 0, priority: 2, superset: 'pull-a-arms',
+                coachingCue: 'Enchaîné juste après le curl, sans repos. Coudes fixes, verrouillage complet.',
+                variants: [
+                    variant('pushdown-rope-a', 'Pushdown corde', 'cable', 1.25),
+                    variant('pushdown-bar-a', 'Pushdown barre', 'cable', 1.25),
+                    variant('dips-machine-a', 'Dips machine', 'machine', 2.5),
                 ],
             }),
             exercise({
@@ -275,7 +286,7 @@ export const TRAINING_DAYS = [
             }),
             exercise({
                 id: 'push-b-lateral', name: 'Élévations latérales câble', shortName: 'Latérales câble',
-                category: 'isolation', sets: 3, repMin: 12, repMax: 20, targetRir: 2, restSec: 60,
+                category: 'isolation', sets: 5, repMin: 12, repMax: 20, targetRir: 2, restSec: 60,
                 executionSec: 30, transitionSec: 45, warmupSec: 0, priority: 1, superset: 'push-b-pair',
                 coachingCue: 'Tension continue, épaule basse, montée contrôlée.',
                 variants: [
@@ -362,12 +373,23 @@ export const TRAINING_DAYS = [
             exercise({
                 id: 'pull-b-preacher', name: 'Curl pupitre', shortName: 'Curl pupitre',
                 category: 'isolation', sets: 3, repMin: 8, repMax: 12, targetRir: 2, restSec: 75,
-                executionSec: 30, transitionSec: 45, warmupSec: 0, priority: 2,
+                executionSec: 30, transitionSec: 45, warmupSec: 0, priority: 2, superset: 'pull-b-arms',
                 coachingCue: 'Bras plaqués, pas de rebond en bas, flexion complète.',
                 variants: [
                     variant('preacher-machine', 'Machine', 'machine', 2.5),
                     variant('preacher-ez', 'Barre EZ', 'barbell', 2.5),
                     variant('preacher-db', 'Haltère unilatéral', 'dumbbell', 1),
+                ],
+            }),
+            exercise({
+                id: 'pull-b-triceps', name: 'Extension triceps nuque (superset curl)', shortName: 'Triceps nuque',
+                category: 'isolation', sets: 3, repMin: 10, repMax: 15, targetRir: 2, restSec: 75,
+                executionSec: 30, transitionSec: 45, warmupSec: 0, priority: 2, superset: 'pull-b-arms',
+                coachingCue: 'Enchaîné juste après le curl. Étirement complet de la longue portion.',
+                variants: [
+                    variant('overhead-rope-b', 'Corde overhead', 'cable', 1.25),
+                    variant('skullcrusher-b', 'Barre au front', 'barbell', 2.5),
+                    variant('db-overhead-b', 'Haltère', 'dumbbell', 2),
                 ],
             }),
             exercise({
