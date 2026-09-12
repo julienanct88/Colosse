@@ -121,9 +121,42 @@ function writeFallback(snapshot) {
         useMemoryFallback = true;
     }
 }
+
+// --- Migration schéma 6 (section 19) -----------------------------------------
+// N'écrase QUE les valeurs restées aux anciens défauts : tout réglage
+// volontairement personnalisé par l'utilisateur est préservé.
+const V5_DEFAULTS = {
+    startWeightKg: 97,
+    weeklyLossRatePct: 0.004,
+    currentCalories: 2900,
+    dailyStepTarget: 5000,
+    stepsOnlyTarget: 10000,
+    sessionLimitMinutes: 60,
+};
+const V6_REFERENCE = {
+    startWeightKg: 96.2,
+    weeklyLossRatePct: 0.005,
+    currentCalories: 2700,
+    dailyStepTarget: 8000,
+    stepsOnlyTarget: 12000,
+    sessionLimitMinutes: 120,
+};
+export function migrateProfileToV6(profile) {
+    const next = { ...profile };
+    for (const key of Object.keys(V6_REFERENCE)) {
+        const current = next[key];
+        if (current === undefined || current === null || current === V5_DEFAULTS[key])
+            next[key] = V6_REFERENCE[key];
+    }
+    if (next.programVersion === undefined)
+        next.programVersion = 'transformation-12s';
+    return next;
+}
 function normalizeSnapshot(snapshot) {
     const defaults = defaultSnapshot();
-    const profile = { ...defaults.profile, ...(snapshot.profile ?? {}) };
+    let profile = { ...defaults.profile, ...(snapshot.profile ?? {}) };
+    if (Number(snapshot.schemaVersion ?? 0) < 6)
+        profile = migrateProfileToV6(profile);
     if (snapshot.profile && snapshot.profile.bikeMinutesTarget === undefined) {
         profile.dailyStepTarget = 5000;
         profile.stepsOnlyTarget = 10000;
@@ -150,6 +183,11 @@ async function initializeIndexedDb() {
         await saveSnapshot(initial);
     }
     else if (Number(meta?.value ?? 0) < SCHEMA_VERSION) {
+        // Migration v5 -> v6 : aucune séance, aucun historique, aucun poids,
+        // aucune note n'est supprimé. On complète seulement le profil.
+        const existingProfile = (await getOne(STORES.profile, 'profile'))?.value;
+        if (existingProfile)
+            await putOne(STORES.profile, { id: 'profile', value: migrateProfileToV6(existingProfile) });
         await putOne(STORES.meta, { key: 'schemaVersion', value: SCHEMA_VERSION });
     }
     const migrated = await getOne(STORES.meta, 'legacyMigrated');

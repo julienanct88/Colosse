@@ -1,14 +1,33 @@
-function variant(id, label, equipment, incrementKg) {
-    return { id, label, equipment, incrementKg };
+function variant(id, label, equipment, incrementKg, loadMode = 'external') {
+    // loadMode: 'external' (charge ajoutée) | 'bodyweight' (poids du corps) | 'assistance' (moins d'aide = progression)
+    return { id, label, equipment, incrementKg, loadMode };
 }
 function exercise(input) {
-    return input;
+    return {
+        kind: 'strength',        // 'strength' | 'cardio'
+        metric: 'reps',          // 'reps' | 'seconds'
+        perSide: false,          // exécuté côté par côté
+        sideSwitchSec: 0,        // pause de changement de côté
+        roundRestSec: null,      // repos après les DEUX côtés (sinon restSec)
+        optional: false,         // jamais retiré automatiquement
+        ...input,
+    };
+}
+function cardio(input) {
+    return exercise({
+        kind: 'cardio', metric: 'seconds', category: 'cardio',
+        sets: 1, targetRir: 4, executionSec: input.durationSec, transitionSec: 60,
+        warmupSec: 0, repMin: input.durationSec, repMax: input.durationSec,
+        variants: [variant('tapis', 'Tapis inclin\u00e9', 'cardio', 0, 'bodyweight')],
+        ...input,
+    });
 }
 export const TRAINING_DAYS = [
     {
         id: 'pull-a',
         name: 'Pull A',
         weekday: 1,
+        kind: 'strength', targetMinMinutes: 80, targetMaxMinutes: 90,
         focus: 'Dos épaisseur · arrière d’épaule · biceps',
         color: '#3b82f6',
         generalWarmupSec: 360,
@@ -40,6 +59,7 @@ export const TRAINING_DAYS = [
             }),
             exercise({
                 id: 'pull-a-unilateral', name: 'Tirage unilatéral poulie vers la hanche', shortName: 'Tirage unilatéral',
+                perSide: true, sideSwitchSec: 15, roundRestSec: 90,
                 category: 'upper_compound', sets: 2, repMin: 10, repMax: 12, targetRir: 1, restSec: 90,
                 tempo: '3-1-1-1',
                 executionSec: 45, transitionSec: 50, warmupSec: 0, priority: 3,
@@ -84,12 +104,19 @@ export const TRAINING_DAYS = [
                     variant('hammer-rope', 'Corde poulie', 'cable', 1.25),
                 ],
             }),
+            cardio({
+                id: 'pull-a-incline-walk', name: 'Marche inclin\u00e9e', shortName: 'Marche inclin\u00e9e',
+                durationSec: 600, speedKmh: '5\u20135,5', inclinePct: '7\u201310', priority: 6,
+                restSec: 0, tempo: null,
+                coachingCue: 'Pas besoin de courir. Inclinaison 7\u201310 %, vitesse 5\u20135,5 km/h pendant 10 minutes.',
+            }),
         ],
     },
     {
         id: 'push-a',
         name: 'Push A',
         weekday: 2,
+        kind: 'strength', targetMinMinutes: 85, targetMaxMinutes: 95,
         focus: 'Haut des pectoraux · épaules · triceps',
         color: '#ef4444',
         generalWarmupSec: 360,
@@ -182,6 +209,7 @@ export const TRAINING_DAYS = [
         id: 'legs-a',
         name: 'Legs A',
         weekday: 3,
+        kind: 'strength', targetMinMinutes: 85, targetMaxMinutes: 95,
         focus: 'Quadriceps · fessiers · mollets · abdos',
         color: '#10b981',
         generalWarmupSec: 360,
@@ -212,6 +240,7 @@ export const TRAINING_DAYS = [
             }),
             exercise({
                 id: 'legs-a-bulgarian', name: 'Fentes bulgares', shortName: 'Bulgares',
+                perSide: true, sideSwitchSec: 20, roundRestSec: 120,
                 category: 'lower_compound', sets: 3, repMin: 8, repMax: 12, targetRir: 1, restSec: 120,
                 tempo: '3-1-1-0',
                 executionSec: 50, transitionSec: 60, warmupSec: 0, priority: 3,
@@ -272,8 +301,8 @@ export const TRAINING_DAYS = [
                 executionSec: 30, transitionSec: 40, warmupSec: 0, priority: 5,
                 coachingCue: 'Aucun élan. Bassin qui s’enroule en fin de mouvement.',
                 variants: [
-                    variant('hanging-raise', 'Suspendu', 'machine', 1),
-                    variant('captain-chair', 'Chaise romaine', 'machine', 1),
+                    variant('hanging-raise', 'Suspendu', 'machine', 1, 'bodyweight'),
+                    variant('captain-chair', 'Chaise romaine', 'machine', 1, 'bodyweight'),
                 ],
             }),
         ],
@@ -282,6 +311,7 @@ export const TRAINING_DAYS = [
         id: 'pull-b',
         name: 'Pull B',
         weekday: 4,
+        kind: 'strength', targetMinMinutes: 80, targetMaxMinutes: 90,
         focus: 'Largeur du dos · silhouette en V · biceps',
         color: '#0ea5e9',
         generalWarmupSec: 360,
@@ -365,12 +395,19 @@ export const TRAINING_DAYS = [
                     variant('incline-curl-b', 'Curl incliné', 'dumbbell', 2),
                 ],
             }),
+            cardio({
+                id: 'pull-b-incline-walk', name: 'Marche inclin\u00e9e', shortName: 'Marche inclin\u00e9e',
+                durationSec: 600, speedKmh: '5\u20135,5', inclinePct: '7\u201310', priority: 6,
+                restSec: 0, tempo: null,
+                coachingCue: 'Pas besoin de courir. Inclinaison 7\u201310 %, vitesse 5\u20135,5 km/h pendant 10 minutes.',
+            }),
         ],
     },
     {
         id: 'push-b',
         name: 'Push B',
         weekday: 5,
+        kind: 'strength', targetMinMinutes: 80, targetMaxMinutes: 90,
         focus: 'Épaules larges · pectoraux · triceps',
         color: '#f97316',
         generalWarmupSec: 360,
@@ -422,6 +459,7 @@ export const TRAINING_DAYS = [
             }),
             exercise({
                 id: 'push-b-lateral-uni', name: 'Élévation latérale unilatérale poulie', shortName: 'Latérale unilatérale',
+                perSide: true, sideSwitchSec: 15, roundRestSec: 60,
                 category: 'isolation', sets: 3, repMin: 15, repMax: 20, targetRir: 1, restSec: 60,
                 tempo: '2-1-2-1',
                 executionSec: 30, transitionSec: 45, warmupSec: 0, priority: 3,
@@ -458,6 +496,7 @@ export const TRAINING_DAYS = [
         id: 'legs-b',
         name: 'Legs B',
         weekday: 6,
+        kind: 'strength', targetMinMinutes: 85, targetMaxMinutes: 95,
         focus: 'Ischios · fessiers · chaîne postérieure · abdos',
         color: '#06b6d4',
         generalWarmupSec: 360,
@@ -489,6 +528,7 @@ export const TRAINING_DAYS = [
             }),
             exercise({
                 id: 'legs-b-lunges', name: 'Fentes arrière ou bulgares', shortName: 'Fentes arrière',
+                perSide: true, sideSwitchSec: 20, roundRestSec: 120,
                 category: 'lower_compound', sets: 3, repMin: 10, repMax: 12, targetRir: 1, restSec: 120,
                 tempo: '3-1-1-0',
                 executionSec: 50, transitionSec: 60, warmupSec: 0, priority: 3,
@@ -541,14 +581,41 @@ export const TRAINING_DAYS = [
             }),
             exercise({
                 id: 'legs-b-plank', name: 'Gainage', shortName: 'Gainage',
+                metric: 'seconds',
                 category: 'core', sets: 3, repMin: 45, repMax: 60, targetRir: 1, restSec: 60,
                 tempo: 'tenue',
                 executionSec: 45, transitionSec: 40, warmupSec: 0, priority: 5,
                 coachingCue: 'En secondes. Quand 60 s deviennent faciles, ajoute du poids plutôt que de tenir 3 minutes.',
                 variants: [
-                    variant('plank', 'Planche', 'machine', 1.25),
+                    variant('plank', 'Planche', 'machine', 1.25, 'bodyweight'),
                     variant('plank-weighted', 'Planche lestée', 'machine', 1.25),
                 ],
+            }),
+        ],
+    },
+    {
+        id: 'recovery',
+        name: 'R\u00e9cup\u00e9ration',
+        weekday: 0,
+        kind: 'recovery',
+        focus: 'Marche \u00b7 mobilit\u00e9 \u00b7 aucune musculation',
+        color: '#64748b',
+        generalWarmupSec: 0,
+        occupiedBufferSec: 0,
+        targetMinMinutes: 55,
+        targetMaxMinutes: 70,
+        exercises: [
+            cardio({
+                id: 'recovery-walk', name: 'Marche', shortName: 'Marche',
+                durationSec: 2700, speedKmh: 'confortable', inclinePct: '0\u20135', priority: 1,
+                restSec: 0, tempo: null,
+                coachingCue: '45 \u00e0 60 minutes \u00e0 allure confortable. Tu dois pouvoir tenir une conversation.',
+            }),
+            cardio({
+                id: 'recovery-mobility', name: 'Mobilit\u00e9', shortName: 'Mobilit\u00e9',
+                durationSec: 600, speedKmh: null, inclinePct: null, priority: 2,
+                restSec: 0, tempo: null,
+                coachingCue: '10 minutes maximum : hanches, chevilles, pectoraux, dorsaux. Pas une s\u00e9ance de yoga de 90 minutes.',
             }),
         ],
     },
@@ -585,32 +652,56 @@ export function getTrainingPhase(weekIndex) {
         description: 'Pas de 1RM. Tu bats simplement tes performances précédentes en répétitions, en charge ou en qualité d’exécution.',
     };
 }
+export const DELOAD_WEEK = 7;
+export const DELOAD_LOAD_FACTOR = 0.875;
+export function cycleWeekOf(weekIndex) {
+    return ((Math.max(1, weekIndex) - 1) % 12) + 1;
+}
+export function isCompoundCategory(category) {
+    return category === 'upper_compound' || category === 'lower_compound';
+}
+/**
+ * RIR cible de LA série en cours (section 13).
+ * setIndex est 0-based ; totalSets = nombre de séries prescrites.
+ */
+export function getTargetRir(exerciseDef, weekIndex, setIndex = 0, totalSets = 1) {
+    const week = cycleWeekOf(weekIndex);
+    const compound = isCompoundCategory(exerciseDef.category);
+    const isLastSet = setIndex >= Math.max(1, totalSets) - 1;
+    const isAccessory = !compound; // machines et isolations
+    if (week === DELOAD_WEEK)
+        return 4;
+    if (week === 1)
+        return compound ? 3 : 2;
+    if (week === 2)
+        return compound ? 2 : 1;
+    if (week <= 6)
+        return isAccessory && isLastSet ? 0 : 1; // dernière série d'isolation : échec autorisé
+    if (week <= 11)
+        return isAccessory && isLastSet ? 0 : 1;
+    return 1; // semaine 12 : performance, pas de 1RM
+}
 export function getExercisePlan(exerciseDef, weekIndex) {
-    const cycleWeek = ((Math.max(1, weekIndex) - 1) % 12) + 1;
-    const isCompound = exerciseDef.category === 'upper_compound' || exerciseDef.category === 'lower_compound';
-    let sets = exerciseDef.sets;
-    let targetRir = 1;
-    let warmupSec = exerciseDef.warmupSec;
-    if (cycleWeek === 7) {
-        // Décharge : moitié des séries, effort réduit. Seule phase qui retire des séries.
-        sets = Math.max(1, Math.round(exerciseDef.sets * 0.5));
-        targetRir = 4;
-        warmupSec = Math.round(exerciseDef.warmupSec * 0.75);
-    }
-    else if (cycleWeek === 1) {
-        targetRir = isCompound ? 3 : 2;
-    }
-    else if (cycleWeek === 2) {
-        targetRir = isCompound ? 2 : 1;
-    }
+    const week = cycleWeekOf(weekIndex);
+    const deload = week === DELOAD_WEEK;
+    const sets = deload ? Math.max(1, Math.round(exerciseDef.sets * 0.5)) : exerciseDef.sets;
+    const warmupSec = deload ? Math.round(exerciseDef.warmupSec * 0.75) : exerciseDef.warmupSec;
     return {
         sets,
         repMin: exerciseDef.repMin,
         repMax: exerciseDef.repMax,
-        targetRir,
+        // RIR de référence (1re série) ; l'UI utilise getTargetRir pour la série en cours.
+        targetRir: getTargetRir(exerciseDef, weekIndex, 0, sets),
+        rirBySet: Array.from({ length: sets }, (_, i) => getTargetRir(exerciseDef, weekIndex, i, sets)),
         restSec: exerciseDef.restSec,
         warmupSec,
         tempo: exerciseDef.tempo ?? null,
+        metric: exerciseDef.metric ?? 'reps',
+        perSide: !!exerciseDef.perSide,
+        sideSwitchSec: exerciseDef.sideSwitchSec ?? 0,
+        roundRestSec: exerciseDef.roundRestSec ?? null,
+        deload,
+        loadFactor: deload ? DELOAD_LOAD_FACTOR : 1,
     };
 }
 export function findDay(dayId) {
@@ -626,6 +717,13 @@ export function findExercise(exerciseId) {
 }
 export function defaultDayForDate(date = new Date()) {
     const weekday = date.getDay();
-    return TRAINING_DAYS.find((day) => day.weekday === weekday)
-        ?? (weekday === 0 ? TRAINING_DAYS[0] : TRAINING_DAYS[Math.min(TRAINING_DAYS.length - 1, Math.max(0, weekday - 1))]);
+    const match = TRAINING_DAYS.find((day) => day.weekday === weekday);
+    if (match)
+        return match;
+    // Sécurité : on ne retombe jamais sur Pull A un dimanche.
+    return TRAINING_DAYS.find((day) => day.kind === 'recovery') ?? TRAINING_DAYS[0];
+}
+export const STRENGTH_DAYS = TRAINING_DAYS.filter((day) => day.kind !== 'recovery');
+export function isRecoveryDay(day) {
+    return !!day && day.kind === 'recovery';
 }

@@ -3,7 +3,7 @@ import { APP_VERSION, defaultSnapshot, emptyDailyLog, makeExerciseLog, makeSessi
 import { clearAllData, deleteSession, loadSnapshot, saveAdjustment, saveDailyLog, saveProfile, saveSession, saveSettings, saveSnapshot, storageMode, } from './data/database.js';
 import { defaultDayForDate, findDay, findExercise, getExercisePlan, getTrainingPhase, TRAINING_DAYS, } from './program.js';
 import { nextPrescription, prescriptionFromHistory, suggestNextSet, summarizeSession, } from './engine/progression.js';
-import { estimateSessionDuration, remainingSessionSeconds, trimSuggestions, } from './engine/duration.js';
+import { estimateSessionDuration, remainingSessionSeconds, } from './engine/duration.js';
 import { analyzeWeightTrend, macrosForCalories, targetWeight, weeklyTargets, } from './engine/weight.js';
 import { analyzeRecovery, analyzeStrengthTrend, } from './engine/recovery.js';
 import { activityGoalLabel, activityModeLabel, activityProgress, activitySummary, } from './engine/activity.js';
@@ -267,23 +267,20 @@ export class ColosseApp {
         const orderedExercises = this.orderedExercises(context.day, context.session);
         const phase = getTrainingPhase(context.weekIndex);
         const target = weeklyTargets(this.snapshot.profile, 1, context.weekIndex)[0];
-        const planned = estimateSessionDuration(context.day, (exercise) => getExercisePlan(exercise, context.weekIndex), this.snapshot.profile.sessionLimitMinutes);
+        const planned = estimateSessionDuration(context.day, (exercise) => getExercisePlan(exercise, context.weekIndex));
         const setCount = this.activeSetCount(context.session, context.day);
         const progress = setCount.total ? Math.round((setCount.done / setCount.total) * 100) : 0;
+        const skippedCount = context.day.exercises.filter((exercise) => context.session.exercises[exercise.id]?.skipped).length;
         const elapsed = sessionDurationSeconds(context.session);
         const completedCounts = {};
         orderedExercises.forEach((exercise) => {
             const plan = getExercisePlan(exercise, context.weekIndex);
             const log = context.session.exercises[exercise.id];
-            completedCounts[exercise.id] = log?.skipped ? plan.sets : (log?.sets.slice(0, plan.sets).filter((set) => set.done).length ?? 0);
+            completedCounts[exercise.id] = log?.skipped ? 0 : (log?.sets.slice(0, plan.sets).filter((set) => set.done).length ?? 0);
         });
         const remaining = remainingSessionSeconds(context.day, (exercise) => getExercisePlan(exercise, context.weekIndex), completedCounts);
         const projected = context.session.startedAt ? elapsed + remaining : planned.seconds;
-        const limitSec = this.snapshot.profile.sessionLimitMinutes * 60;
-        const trim = context.session.startedAt
-            ? trimSuggestions(context.day, (exercise) => getExercisePlan(exercise, context.weekIndex), completedCounts, Math.max(0, limitSec - elapsed))
-            : { overBySec: 0, savedSeconds: 0, skipExerciseIds: [], message: '' };
-        const complete = this.isSessionComplete(context.session, context.day);
+                const complete = this.isSessionComplete(context.session, context.day);
         return `
       <section class="phase-card" style="--phase:${phase.color}">
         <div class="phase-top">
@@ -292,7 +289,7 @@ export class ColosseApp {
         </div>
         <p>${escapeHtml(phase.description)}</p>
         <div class="phase-metrics">
-          <span><b>${planned.minutes} min</b> prévues</span>
+          <span><b>${planned.targetLabel ?? planned.minutes + ' min'}</b> objectif séance</span>
           <span><b>${this.snapshot.profile.currentCalories}</b> kcal</span>
           <span><b>${this.snapshot.profile.bikeMinutesTarget} min vélo</b> activité</span>
         </div>
@@ -318,13 +315,13 @@ export class ColosseApp {
       <section class="session-card ${complete ? 'complete' : ''}">
         <div class="session-heading">
           <div><span class="eyebrow">${escapeHtml(context.day.focus)}</span><h2>${escapeHtml(context.day.name)}</h2></div>
-          <div class="session-progress"><strong>${progress}%</strong><span>${setCount.done}/${setCount.total} séries</span></div>
+          <div class="session-progress"><strong>${progress}%</strong><span>${setCount.done}/${setCount.total} séries réalisées</span>${skippedCount ? `<span class="session-status-incomplete">INCOMPL\u00c8TE \u00b7 ${skippedCount} exercice${skippedCount > 1 ? 's' : ''} pass\u00e9${skippedCount > 1 ? 's' : ''}</span>` : ''}</div>
         </div>
         <div class="progress-track"><i style="width:${progress}%"></i></div>
         <div class="time-grid" aria-label="Durée de la séance">
-          <div><span>Durée prévue</span><strong>${formatClock(planned.seconds)}</strong></div>
+          <div><span>Objectif</span><strong>${planned.targetLabel ?? formatClock(planned.seconds)}</strong></div>
           <div><span>Temps passé</span><strong id="session-elapsed">${formatClock(elapsed)}</strong></div>
-          <div class="${projected > limitSec ? 'danger' : ''}"><span>Durée estimée</span><strong id="session-projected">${formatClock(projected)}</strong></div>
+          <div class="${planned.targetMaxMinutes && projected > planned.targetMaxMinutes * 60 ? 'over-target' : ''}"><span>Durée estimée</span><strong id="session-projected">${formatClock(projected)}</strong></div>
         </div>
         <div class="session-actions">
           ${!context.session.startedAt ? '<button class="primary-button" data-action="start-session">▶ Démarrer la séance</button>' : !context.session.endedAt ? '<button class="secondary-button" data-action="finish-session">■ Terminer</button>' : '<button class="secondary-button" data-action="resume-session">↻ Reprendre</button>'}
@@ -334,7 +331,6 @@ export class ColosseApp {
       </section>
 
       ${this.renderReadiness(context.session)}
-      ${trim.skipExerciseIds.length ? this.renderTrimCard(trim.skipExerciseIds, trim.savedSeconds) : ''}
       <section class="exercise-list">
         ${orderedExercises.map((exercise, index) => this.renderExerciseCard(context, exercise, index, orderedExercises.length)).join('')}
       </section>
@@ -351,12 +347,6 @@ export class ColosseApp {
         <label>Fatigue<select data-readiness="fatigue">${[1, 2, 3, 4, 5].map((value) => `<option value="${value}" ${session.readiness.fatigue === value ? 'selected' : ''}>${value}/5</option>`).join('')}</select></label>
         <label>Sommeil<input type="number" min="0" max="14" step="0.25" data-readiness="sleepHours" value="${numberInputValue(session.readiness.sleepHours)}" placeholder="h"/></label>
       </div>
-    </section>`;
-    }
-    renderTrimCard(exerciseIds, savedSeconds) {
-        return `<section class="trim-card">
-      <div><span class="eyebrow">MODE &lt; 60 MIN</span><strong>Retard détecté</strong><p>Supprime uniquement les bonus : ${exerciseIds.map((id) => escapeHtml(findExercise(id)?.shortName ?? id)).join(', ')}.</p></div>
-      <button data-action="apply-trim" data-exercises="${exerciseIds.join(',')}">Gagner ${Math.ceil(savedSeconds / 60)} min</button>
     </section>`;
     }
     renderExerciseCard(context, exercise, index, exerciseCount) {
@@ -393,7 +383,7 @@ export class ColosseApp {
         <div class="exercise-index">${String(index + 1).padStart(2, '0')}</div>
         <div class="exercise-title">
           <div class="exercise-name-row"><h3>${escapeHtml(exercise.name)}</h3>${exercise.optional ? '<span class="badge">BONUS</span>' : ''}${exercise.superset ? `<span class="badge muted">SUPERSET ${escapeHtml(exercise.superset.split('-').at(-1) ?? '')}</span>` : ''}</div>
-          <div class="exercise-plan"><b>${plan.sets} × ${plan.repMin}–${plan.repMax} reps</b><span>garde ${plan.targetRir} reps</span><span>repos ${formatClock(plan.restSec)}</span>${plan.tempo ? `<span>tempo ${escapeHtml(plan.tempo)}</span>` : ''}</div>
+          <div class="exercise-plan"><b>${plan.sets} × ${plan.repMin}–${plan.repMax} reps</b><span>garde ${plan.targetRir} reps</span><span>repos ${formatClock(plan.restSec)}</span>${plan.tempo ? `<span class="tempo-hint" title="Tempo ${escapeHtml(plan.tempo)} : secondes de descente \u2013 pause basse \u2013 mont\u00e9e \u2013 pause haute">tempo ${escapeHtml(plan.tempo)}</span>` : ''}</div>
         </div>
         <a class="video-link" href="${YOUTUBE_SEARCH}${encodeURIComponent(exercise.name + ' technique musculation')}" target="_blank" rel="noopener" aria-label="Voir la technique">▶</a>
       </div>
@@ -647,7 +637,7 @@ export class ColosseApp {
           ${this.profileField('startWeightKg', 'Poids de départ', profile.startWeightKg, 'kg', '0.1', 40, 250)}
           <label>Date de départ<div class="input-unit"><input type="date" data-profile-field="startDate" value="${escapeHtml(profile.startDate)}"/></div></label>
           ${this.profileField('weeklyLossRatePct', 'Perte / semaine', profile.weeklyLossRatePct * 100, '%', '0.05', 0.1, 1)}
-          ${this.profileField('sessionLimitMinutes', 'Limite séance', profile.sessionLimitMinutes, 'min', '1', 40, 90)}
+          ${this.profileField('sessionLimitMinutes', 'Alerte durée (affichage seul)', profile.sessionLimitMinutes, 'min', '5', 60, 120)}
         </div>
       </section>
 
@@ -777,9 +767,6 @@ export class ColosseApp {
                 break;
             case 'toggle-skip-exercise':
                 await this.toggleSkipExercise(actionElement.dataset.exercise ?? '');
-                break;
-            case 'apply-trim':
-                await this.applyTrim((actionElement.dataset.exercises ?? '').split(',').filter(Boolean));
                 break;
             case 'timer-minus':
                 this.adjustTimer(-15);
@@ -976,10 +963,21 @@ export class ColosseApp {
             this.render();
             return;
         }
-        if (!(Number(set.weightKg) > 0) || !(Number(set.reps) > 0)) {
-            this.showToast('Renseigne seulement la charge et les répétitions pour valider la série.', 'error');
+        const planForCheck = getExercisePlan(exercise, context.weekIndex);
+        const variantForCheck = exercise.variants.find((item) => item.id === log.variantId) ?? exercise.variants[0];
+        const loadMode = variantForCheck?.loadMode ?? 'external';
+        const needsExternalLoad = loadMode === 'external';
+        const amountLabel = planForCheck.metric === 'seconds' ? 'la durée en secondes' : 'les répétitions';
+        if (!(Number(set.reps) > 0)) {
+            this.showToast(`Renseigne ${amountLabel} pour valider la série.`, 'error');
             return;
         }
+        if (needsExternalLoad && !(Number(set.weightKg) > 0)) {
+            this.showToast('Renseigne la charge pour valider la série.', 'error');
+            return;
+        }
+        if (!needsExternalLoad && set.weightKg === null)
+            set.weightKg = 0;
         if (this.timer)
             await this.closeRestTimer(false);
         if (!context.session.startedAt) {
@@ -1072,20 +1070,6 @@ export class ColosseApp {
         log.skipReason = log.skipped ? 'Décision manuelle / contrainte de temps' : undefined;
         context.session.updatedAt = Date.now();
         await saveSession(context.session);
-        this.render();
-    }
-    async applyTrim(exerciseIds) {
-        const context = this.currentContext();
-        exerciseIds.forEach((exerciseId) => {
-            const log = context.session.exercises[exerciseId];
-            if (log && !log.sets.some((set) => set.done)) {
-                log.skipped = true;
-                log.skipReason = 'Mode moins de 60 minutes';
-            }
-        });
-        context.session.updatedAt = Date.now();
-        await saveSession(context.session);
-        this.showToast('Exercices bonus supprimés. Les mouvements prioritaires sont conservés.', 'success');
         this.render();
     }
     dailyLog(date) {
@@ -1240,10 +1224,10 @@ export class ColosseApp {
                 context.day.exercises.forEach((exercise) => {
                     const plan = getExercisePlan(exercise, context.weekIndex);
                     const log = context.session.exercises[exercise.id];
-                    completedCounts[exercise.id] = log?.skipped ? plan.sets : (log?.sets.slice(0, plan.sets).filter((set) => set.done).length ?? 0);
+                    completedCounts[exercise.id] = log?.skipped ? 0 : (log?.sets.slice(0, plan.sets).filter((set) => set.done).length ?? 0);
                 });
                 const remaining = remainingSessionSeconds(context.day, (exercise) => getExercisePlan(exercise, context.weekIndex), completedCounts);
-                const planned = estimateSessionDuration(context.day, (exercise) => getExercisePlan(exercise, context.weekIndex), this.snapshot.profile.sessionLimitMinutes);
+                const planned = estimateSessionDuration(context.day, (exercise) => getExercisePlan(exercise, context.weekIndex));
                 sessionProjected.textContent = formatClock(context.session.startedAt ? elapsed + remaining : planned.seconds);
             }
         }

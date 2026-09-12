@@ -342,3 +342,9 @@ h3 { font-size: 17px; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
+
+/* Statut de séance incomplète (section 1) */
+.session-status-incomplete{display:block;margin-top:4px;font-size:.68rem;font-weight:700;letter-spacing:.04em;color:#f59e0b;}
+.tempo-hint{cursor:help;border-bottom:1px dotted currentColor;}
+/* Dépassement de la plage cible : information, jamais une contrainte (section 2) */
+.time-grid .over-target strong{color:#f59e0b;}

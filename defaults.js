@@ -1,24 +1,25 @@
 import { defaultDayForDate, findDay, getExercisePlan } from './program.js';
 import { isoDate, uid, weekIndexFromStart } from './engine/math.js';
-export const APP_VERSION = '3.3.0';
-export const SCHEMA_VERSION = 5;
+export const APP_VERSION = '3.4.0';
+export const SCHEMA_VERSION = 6;
 export function defaultProfile(today = new Date()) {
     return {
         name: '',
         age: 38,
         heightCm: 197,
-        startWeightKg: 97,
+        startWeightKg: 96.2,
         startDate: isoDate(today),
-        weeklyLossRatePct: 0.004,
-        currentCalories: 2900,
+        weeklyLossRatePct: 0.005,
+        currentCalories: 2700,
         proteinG: 200,
         fatG: 80,
         minimumCalories: 2400,
         maximumCalories: 3800,
-        dailyStepTarget: 5000,
-        stepsOnlyTarget: 10000,
+        dailyStepTarget: 8000,
+        stepsOnlyTarget: 12000,
         bikeMinutesTarget: 25,
-        sessionLimitMinutes: 60,
+        sessionLimitMinutes: 120,
+        programVersion: 'transformation-12s',
     };
 }
 export function defaultSettings(today = new Date()) {

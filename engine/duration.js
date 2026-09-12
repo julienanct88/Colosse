@@ -6,7 +6,7 @@ export function estimateExerciseDuration(exercise, plan) {
     const warmup = Math.max(0, plan.warmupSec);
     return warmup + sets * execution + Math.max(0, sets - 1) * rest + transition;
 }
-export function estimateSessionDuration(day, resolvePlan, limitMinutes = 60) {
+export function estimateSessionDuration(day, resolvePlan) {
     const grouped = new Map();
     const singles = [];
     day.exercises.forEach((exercise) => {
@@ -33,12 +33,19 @@ export function estimateSessionDuration(day, resolvePlan, limitMinutes = 60) {
         total += warmups + execution + Math.max(0, rounds - 1) * rest + transition;
     });
     total += day.occupiedBufferSec;
-    const limitSeconds = Math.max(30, limitMinutes) * 60;
+    // Plage cible propre à la séance (section 2). Purement informatif :
+    // aucun exercice n'est jamais retiré à cause du temps.
+    const targetMin = day.targetMinMinutes ?? null;
+    const targetMax = day.targetMaxMinutes ?? null;
+    const minutes = Math.ceil(total / 60);
     return {
         seconds: Math.round(total),
-        minutes: Math.ceil(total / 60),
-        underLimit: total <= limitSeconds,
-        limitSeconds,
+        minutes,
+        targetMinMinutes: targetMin,
+        targetMaxMinutes: targetMax,
+        targetLabel: targetMin && targetMax ? `${targetMin}\u2013${targetMax} min` : null,
+        withinTarget: targetMin && targetMax ? minutes >= targetMin && minutes <= targetMax : true,
+        overTarget: targetMax ? minutes > targetMax : false,
         bufferSeconds: day.occupiedBufferSec,
     };
 }
@@ -72,35 +79,3 @@ export function remainingSessionSeconds(day, resolvePlan, completedSetCounts) {
         warmupSec: exercise.warmupSec,
     }), 120).seconds;
 }
-export function trimSuggestions(day, resolvePlan, completedSetCounts, availableSeconds) {
-    const remaining = remainingSessionSeconds(day, resolvePlan, completedSetCounts);
-    if (remaining <= availableSeconds) {
-        return {
-            overBySec: 0,
-            savedSeconds: 0,
-            skipExerciseIds: [],
-            message: 'Tu restes dans le temps prévu.',
-        };
-    }
-    const candidates = day.exercises
-        .filter((exercise) => (completedSetCounts[exercise.id] ?? 0) === 0 && (exercise.optional || exercise.priority >= 3))
-        .sort((a, b) => b.priority - a.priority);
-    const skipExerciseIds = [];
-    let savedSeconds = 0;
-    for (const exercise of candidates) {
-        if (remaining - savedSeconds <= availableSeconds)
-            break;
-        savedSeconds += estimateExerciseDuration(exercise, resolvePlan(exercise));
-        skipExerciseIds.push(exercise.id);
-    }
-    const overBySec = Math.max(0, remaining - savedSeconds - availableSeconds);
-    return {
-        overBySec,
-        savedSeconds,
-        skipExerciseIds,
-        message: skipExerciseIds.length
-            ? 'Pour finir avant la limite, saute uniquement les exercices bonus indiqués.'
-            : 'Aucun bonus supprimable : raccourcis les transitions, pas les repos lourds.',
-    };
-}
-//# sourceMappingURL=duration.js.map

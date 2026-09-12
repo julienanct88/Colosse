@@ -111,7 +111,8 @@ function capLoadChange(current, candidate, category, direction) {
 export function suggestNextSet(set, plan, exercise, incrementKg) {
     const normalized = normalizeSet(set);
     const increment = Math.max(incrementKg, 0.25);
-    if (!normalized.done || !(normalized.weightKg > 0) || !(normalized.reps > 0)) {
+    const bodyweight = plan?.loadMode === 'bodyweight' || exercise?.bodyweight === true;
+    if (!normalized.done || !(normalized.reps > 0) || (!bodyweight && !(normalized.weightKg > 0))) {
         return { action: 'WAIT', loadKg: 0, label: 'Termine la série de calibration.' };
     }
     if (!normalized.techniqueGood || normalized.pain >= 4) {
@@ -195,6 +196,29 @@ export function prescriptionFromHistory(history, plan, exercise, incrementKg, re
     const last = model.last.summary;
     const current = last.lastWeightKg || last.averageWeightKg;
     const increment = Math.max(incrementKg, 0.25);
+    // Section 14 : en semaine de décharge, la charge est imposée à 87,5 % de la
+    // dernière référence et le moteur n'a pas le droit de la réaugmenter.
+    if (plan.deload) {
+        const deloadLoad = roundToIncrement(current * (plan.loadFactor ?? 0.875), increment, 'down');
+        return {
+            status: 'DELOAD',
+            decision: 'DELOAD',
+            loadKg: deloadLoad,
+            repMin: plan.repMin,
+            repMax: plan.repMax,
+            targetRir: plan.targetRir,
+            targetTotalReps: plan.sets * plan.repMin,
+            reason: 'DÉCHARGE — 87,5 % de ta charge habituelle. Aucune série difficile.',
+            confidence: 'high',
+            smoothedE1RM: model.smoothedE1RM ?? 0,
+            sessionE1RM: last.sessionE1RM ?? 0,
+            deltaKg: deloadLoad - current,
+            previousLoadKg: current,
+            lastTotalReps: last.totalReps ?? 0,
+            averageRir: last.averageRir ?? null,
+            repDropPct: 0,
+        };
+    }
     let decision = 'HOLD';
     let reason = '';
     let load = current;
