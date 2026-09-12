@@ -394,3 +394,47 @@ h3 { font-size: 17px; }
 .exec-resume-banner{width:100%;min-height:56px;margin-bottom:12px;border:none;border-radius:16px;background:#10b981;color:#04201a;font-weight:900;letter-spacing:.05em;cursor:pointer;}
 .exec-input{min-width:0;}
 .exec-input input{width:100%;box-sizing:border-box;}
+
+/* ---------- Réorganisation des exercices (glisser-déposer tactile) ---------- */
+.exercise-order-handle { display:flex; align-items:center; justify-content:center; min-width:44px; min-height:44px; margin-left:-6px; border-radius:11px; color:var(--muted); font-size:17px; cursor:grab; touch-action:none; -webkit-user-select:none; user-select:none; }
+.exercise-order-handle:active { cursor:grabbing; background:rgba(255,255,255,.07); color:var(--text); }
+.exercise-card.is-dragging { position:relative; z-index:40; background:#171722; border-color:rgba(59,130,246,.6); box-shadow:0 18px 44px rgba(0,0,0,.6); }
+/* Pendant le déplacement, les cartes se replient : la liste tient dans l'écran
+   et la poignée reste sous le doigt. */
+.exercise-list.is-reordering .exercise-card { overflow:hidden; margin-bottom:8px; }
+.exercise-list.is-reordering .exercise-card > *:not(.exercise-head):not(.exercise-order-bar) { display:none; }
+.exercise-list.is-reordering .exercise-plan,
+.exercise-list.is-reordering .video-link,
+.exercise-list.is-reordering .exercise-order-bar > span:not(.exercise-order-handle),
+.exercise-list.is-reordering .exercise-order-bar > div { display:none; }
+.exercise-list.is-reordering .exercise-head { padding-bottom:4px; }
+.exercise-list.is-reordering .exercise-card.cardio-card { opacity:.45; }
+.exercise-list.is-reordering .cardio-actions, .exercise-list.is-reordering .coaching-cue { display:none; }
+
+.sheet-backdrop { position:fixed; inset:0; z-index:110; background:rgba(4,4,10,.72); backdrop-filter:blur(3px); }
+.sheet { position:fixed; inset:auto 0 0; z-index:120; width:min(100%,620px); margin:auto; padding:16px 16px calc(20px + env(safe-area-inset-bottom)); border-top:1px solid rgba(255,255,255,.12); border-radius:20px 20px 0 0; background:rgba(12,12,20,.99); box-shadow:0 -22px 60px rgba(0,0,0,.55); animation:slideUp .2s ease-out; }
+.sheet-item { display:block; width:100%; min-height:52px; margin-bottom:8px; padding:14px 16px; border:1px solid var(--line); border-radius:13px; background:rgba(255,255,255,.05); color:var(--text); font-size:14px; font-weight:800; text-align:left; cursor:pointer; }
+.sheet-item--danger { color:#fca5a5; border-color:rgba(248,113,113,.3); }
+.sheet-item--muted { color:var(--muted); font-weight:700; background:transparent; }
+.sheet-close { min-width:40px; min-height:40px; border:1px solid var(--line); border-radius:11px; background:transparent; color:var(--muted); font-size:14px; cursor:pointer; }
+
+.reorder-panel { max-height:86vh; display:flex; flex-direction:column; }
+.reorder-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
+.reorder-head h2 { font-size:14px; font-weight:900; letter-spacing:1.4px; }
+.reorder-hint { margin-bottom:12px; color:var(--muted); font-size:11px; line-height:1.45; }
+.reorder-list { flex:1; overflow-y:auto; list-style:none; margin:0 0 14px; padding:0; }
+.reorder-row { display:flex; align-items:center; gap:8px; min-height:56px; margin-bottom:7px; padding:6px 12px 6px 4px; border:1px solid var(--line); border-radius:13px; background:rgba(255,255,255,.04); }
+.reorder-row.is-dragging { z-index:40; border-color:rgba(59,130,246,.6); background:rgba(59,130,246,.12); box-shadow:0 14px 32px rgba(0,0,0,.5); }
+.reorder-row.is-done .reorder-name { color:var(--muted); text-decoration:line-through; }
+.reorder-row.is-locked { opacity:.6; }
+.reorder-handle { display:flex; align-items:center; justify-content:center; min-width:44px; min-height:44px; border-radius:11px; color:var(--muted); font-size:17px; cursor:grab; touch-action:none; -webkit-user-select:none; user-select:none; }
+.reorder-handle:active { cursor:grabbing; background:rgba(255,255,255,.08); color:var(--text); }
+.reorder-handle.is-locked { cursor:default; }
+.reorder-name { flex:1; font-size:13px; font-weight:800; line-height:1.25; }
+.reorder-state { color:var(--muted); font-size:10px; font-weight:800; white-space:nowrap; }
+.reorder-arrows { display:flex; gap:4px; }
+.reorder-arrows button { min-width:36px; min-height:36px; border:1px solid var(--line); border-radius:10px; background:rgba(255,255,255,.05); color:var(--text); font-size:13px; font-weight:800; cursor:pointer; }
+.reorder-arrows button:disabled { opacity:.25; cursor:default; }
+.reorder-actions { display:flex; flex-direction:column; gap:8px; }
+.reorder-actions .primary-button { width:100%; }
+.reorder-actions .ghost-button { width:100%; min-height:46px; }

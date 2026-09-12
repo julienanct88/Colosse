@@ -9,11 +9,11 @@ import { analyzeWeightTrend, macrosForCalories, targetWeight, weeklyTargets, } f
 import { analyzeRecovery, analyzeStrengthTrend, } from './engine/recovery.js';
 import { activityGoalHelp, activityGoalLabel, activityModeLabel, activityProgress, activitySummary, } from './engine/activity.js';
 import { addDays, isoDate, startOfWeek, uid, weekIndexFromStart, } from './engine/math.js';
-import { computeExecutionStep, executionProgress, normalizeExecutionState, STAGES, } from './engine/execution.js';
+import { computeExecutionStep, executionProgress, normalizeExecutionState, STAGES, canReorder, programOrder, normalizeOrder, pickSessionOrder, moveInOrder, deferExercise, isExercisePending, } from './engine/execution.js';
 import { createTimer, remainingSeconds as timerRemaining, isExpired as timerExpired, pauseTimer, resumeTimer, adjustTimer as adjustTimerState, timerLabel, timerControls, canShortenTimer, timerEndMessage, } from './engine/timer.js';
 import { applyTimerOutcome, createTimerResolutionQueue, startTimerDecision, timerOwnerSession } from './engine/timer-effects.js';
 import { computeRampSets, normalizeWarmupState, resolveReferenceLoad, clearExerciseRamps, GENERAL_WARMUP, } from './engine/warmup.js';
-import { renderExecution } from './ui/execution.js';
+import { renderExecution, renderExecMenu, renderReorderPanel } from './ui/execution.js';
 import { decisionMeta, escapeHtml, formatClock, formatDateFr, formatKg, numberInputValue, pct, sparklineSvg, } from './ui/templates.js';
 const YOUTUBE_SEARCH = 'https://www.youtube.com/results?search_query=';
 function parseNumber(value) {
@@ -52,6 +52,9 @@ export class ColosseApp {
     saveDebounce = null;
     toastHandle = null;
     activeToast = null;
+    execMenuOpen = false;
+    reorderOpen = false;
+    drag = null;
     wakeLock = null;
     installPrompt = null;
     constructor(root) {
@@ -87,6 +90,9 @@ export class ColosseApp {
         this.root.addEventListener('click', (event) => void this.handleClick(event));
         this.root.addEventListener('change', (event) => void this.handleChange(event));
         this.root.addEventListener('input', (event) => void this.handleInput(event));
+        // Glisser-déposer : la poignée seule démarre le drag, donc un champ ou
+        // un select ne le déclenche jamais et le scroll vertical reste normal.
+        this.root.addEventListener('pointerdown', (event) => this.onDragStart(event));
         window.addEventListener('beforeinstallprompt', (event) => {
             event.preventDefault();
             this.installPrompt = event;
@@ -128,17 +134,12 @@ export class ColosseApp {
     }
     syncSession(session, day, weekIndex) {
         session.weekIndex = weekIndex;
-        const validExerciseIds = day.exercises.map((exercise) => exercise.id);
-        const sessionOrder = Array.isArray(session.exerciseOrder) ? session.exerciseOrder : [];
-        const preferredOrder = this.snapshot?.settings?.dayOrders?.[day.id];
-        const usePreferred = !session.orderCustomized
-            && Array.isArray(preferredOrder)
-            && preferredOrder.length > 0;
-        const savedOrder = usePreferred ? preferredOrder : sessionOrder;
-        session.exerciseOrder = [
-            ...savedOrder.filter((exerciseId, index) => validExerciseIds.includes(exerciseId) && savedOrder.indexOf(exerciseId) === index),
-            ...validExerciseIds.filter((exerciseId) => !savedOrder.includes(exerciseId)),
-        ];
+        session.exerciseOrder = pickSessionOrder({
+            sessionOrder: Array.isArray(session.exerciseOrder) ? session.exerciseOrder : [],
+            preferredOrder: this.snapshot?.settings?.dayOrders?.[day.id],
+            orderCustomized: session.orderCustomized,
+            day,
+        });
         day.exercises.forEach((exercise) => {
             const plan = getExercisePlan(exercise, weekIndex);
             let log = session.exercises[exercise.id];
@@ -234,6 +235,8 @@ export class ColosseApp {
         ${this.renderNavigation()}
         <div id="toast" class="toast hidden" role="status"></div>
         ${this.renderTimerOverlay()}
+        ${this.renderExecMenuSheet()}
+        ${this.renderReorder()}
         <div id="update-banner" class="update-banner hidden">
           <span>Nouvelle version disponible</span>
           <button data-action="reload-update">Installer</button>
@@ -416,7 +419,7 @@ export class ColosseApp {
       </section>
 
       ${this.renderReadiness(context.session)}
-      <section class="exercise-list">
+      <section class="exercise-list" data-drag-list="programme">
         ${orderedExercises.map((exercise, index) => this.renderExerciseCard(context, exercise, index, orderedExercises.length)).join('')}
       </section>
       <section class="notes-card card">
@@ -466,7 +469,7 @@ export class ColosseApp {
                 : prescription.confidence === 'low'
                     ? 'faible'
                     : 'à établir';
-        return `<article class="exercise-card ${log.skipped ? 'skipped' : ''}" style="--accent:${context.day.color}" data-exercise-card="${exercise.id}">
+        return `<article class="exercise-card ${log.skipped ? 'skipped' : ''}" style="--accent:${context.day.color}" data-exercise-card="${exercise.id}" data-drag-item="${exercise.id}" data-drag-locked="false">
       <div class="exercise-head">
         <div class="exercise-index">${String(index + 1).padStart(2, '0')}</div>
         <div class="exercise-title">
@@ -477,7 +480,8 @@ export class ColosseApp {
       </div>
 
       <div class="exercise-order-bar" aria-label="Changer la position de ${escapeHtml(exercise.name)}">
-        <span>Ordre (mémorisé)</span>
+        <span class="exercise-order-handle" data-drag-handle role="button" tabindex="0" aria-label="Déplacer ${escapeHtml(exercise.name)}">☰</span>
+        <span>Ordre (cette séance)</span>
         <div>
           <button data-action="move-exercise" data-exercise="${exercise.id}" data-direction="up" ${index === 0 ? 'disabled' : ''}>↑ Monter</button>
           <button data-action="move-exercise" data-exercise="${exercise.id}" data-direction="down" ${index === exerciseCount - 1 ? 'disabled' : ''}>↓ Descendre</button>
@@ -527,7 +531,7 @@ export class ColosseApp {
         const done = status.done || status.legacy;
         const running = context.session.activeTimer?.context?.exerciseId === exercise.id;
         const actions = timedExerciseActions(status, running);
-        return `<article class="exercise-card cardio-card ${done ? 'complete' : ''}" style="--accent:${context.day.color}" data-exercise-card="${exercise.id}">
+        return `<article class="exercise-card cardio-card ${done ? 'complete' : ''}" style="--accent:${context.day.color}" data-exercise-card="${exercise.id}" data-drag-item="${exercise.id}" data-drag-locked="true">
       <div class="exercise-head">
         <div class="exercise-index">${String(index + 1).padStart(2, '0')}</div>
         <div class="exercise-title">
@@ -927,7 +931,37 @@ export class ColosseApp {
                 this.render();
                 break;
             case 'exec-menu':
+                this.execMenuOpen = true;
+                this.render();
+                break;
+            case 'exec-menu-close':
+                this.execMenuOpen = false;
+                this.render();
+                break;
+            case 'exec-skip':
+                this.execMenuOpen = false;
                 await this.execSkipCurrentExercise();
+                break;
+            case 'exec-defer': {
+                this.execMenuOpen = false;
+                const { step } = this.executionContext();
+                await this.deferCurrentExercise(step.exerciseId ?? '');
+                break;
+            }
+            case 'exec-reorder':
+                this.execMenuOpen = false;
+                this.reorderOpen = true;
+                this.render();
+                break;
+            case 'reorder-close':
+                this.reorderOpen = false;
+                this.render();
+                break;
+            case 'reorder-save-default':
+                await this.saveDefaultOrder();
+                break;
+            case 'reorder-restore':
+                await this.restoreProgramOrder();
                 break;
             case 'exec-start-general-warmup':
                 await this.startGenericTimer('general-warmup', GENERAL_WARMUP.durationSec, {});
@@ -1491,24 +1525,228 @@ export class ColosseApp {
         await saveSession(context.session);
         this.render();
     }
-    async moveExercise(exerciseId, offset) {
-        const context = this.currentContext();
-        const order = [...context.session.exerciseOrder];
-        const currentIndex = order.indexOf(exerciseId);
-        const targetIndex = currentIndex + offset;
-        if (currentIndex < 0 || targetIndex < 0 || targetIndex >= order.length)
+    // ---------------------------------------------------------------------
+    // Glisser-déposer tactile. Aucune bibliothèque : pointer events + DOM.
+    // ---------------------------------------------------------------------
+    onDragStart(event) {
+        const handle = event.target instanceof Element ? event.target.closest('[data-drag-handle]') : null;
+        if (!handle || this.drag)
             return;
-        [order[currentIndex], order[targetIndex]] = [order[targetIndex], order[currentIndex]];
-        context.session.exerciseOrder = order;
+        const item = handle.closest('[data-drag-item]');
+        const list = handle.closest('[data-drag-list]');
+        if (!item || !list || item.dataset.dragLocked === 'true')
+            return;
+        if (!this.reorderAllowed()) {
+            this.refuseReorder();
+            return;
+        }
+        event.preventDefault();
+        // Replier la liste change la hauteur de la page : on recale le scroll
+        // pour que la carte saisie reste exactement sous le doigt.
+        const avant = item.getBoundingClientRect().top;
+        list.classList.add('is-reordering');
+        item.classList.add('is-dragging');
+        const apres = item.getBoundingClientRect().top;
+        if (apres !== avant)
+            window.scrollBy(0, apres - avant);
+        this.drag = {
+            list, item, handle,
+            // Distance entre le haut de la carte et le doigt : elle ne change
+            // jamais, c'est ce qui garde la carte exactement sous le doigt.
+            grabOffset: event.clientY - item.getBoundingClientRect().top,
+            onMove: (moveEvent) => this.onDragMove(moveEvent),
+            onEnd: () => void this.onDragEnd(),
+        };
+        try {
+            handle.setPointerCapture(event.pointerId);
+        }
+        catch { /* capture non supportée : le drag fonctionne quand même */ }
+        window.addEventListener('pointermove', this.drag.onMove, { passive: false });
+        window.addEventListener('pointerup', this.drag.onEnd);
+        window.addEventListener('pointercancel', this.drag.onEnd);
+    }
+    /** Position de la carte : toujours collée au doigt, quel que soit son emplacement. */
+    followFinger(clientY) {
+        const { item, grabOffset } = this.drag;
+        item.style.transform = 'translateY(0px)';
+        const slotTop = item.getBoundingClientRect().top; // emplacement réel dans la liste
+        const offset = clientY - grabOffset - slotTop;
+        item.style.transform = `translateY(${offset}px)`;
+        return { top: slotTop + offset, height: item.getBoundingClientRect().height };
+    }
+    onDragMove(event) {
+        const drag = this.drag;
+        if (!drag)
+            return;
+        event.preventDefault();
+        const visuel = this.followFinger(event.clientY);
+        const middle = visuel.top + visuel.height / 2;
+        const siblings = [...drag.list.querySelectorAll('[data-drag-item]')]
+            .filter((element) => element !== drag.item && element.dataset.dragLocked !== 'true');
+        for (const sibling of siblings) {
+            const box = sibling.getBoundingClientRect();
+            const center = box.top + box.height / 2;
+            const isAfter = !!(drag.item.compareDocumentPosition(sibling) & Node.DOCUMENT_POSITION_FOLLOWING);
+            if (isAfter && middle > center) {
+                drag.list.insertBefore(drag.item, sibling.nextSibling);
+                this.followFinger(event.clientY);
+                break;
+            }
+            if (!isAfter && middle < center) {
+                drag.list.insertBefore(drag.item, sibling);
+                this.followFinger(event.clientY);
+                break;
+            }
+        }
+        // Liste plus haute que l'écran : on suit le doigt près des bords.
+        const marge = 90;
+        if (event.clientY < marge)
+            window.scrollBy(0, -14);
+        else if (event.clientY > window.innerHeight - marge)
+            window.scrollBy(0, 14);
+    }
+    async onDragEnd() {
+        const drag = this.drag;
+        if (!drag)
+            return;
+        this.drag = null;
+        window.removeEventListener('pointermove', drag.onMove);
+        window.removeEventListener('pointerup', drag.onEnd);
+        window.removeEventListener('pointercancel', drag.onEnd);
+        drag.item.style.transform = '';
+        drag.item.classList.remove('is-dragging');
+        drag.list.classList.remove('is-reordering');
+        if (!drag.list.isConnected) {
+            this.render();
+            return;
+        }
+        const order = [...drag.list.querySelectorAll('[data-drag-item]')].map((element) => element.dataset.dragItem);
+        const context = this.currentContext();
+        if (order.join('|') === (context.session.exerciseOrder ?? []).join('|')) {
+            this.render();
+            return;
+        }
+        await this.applySessionOrder(order, 'Ordre modifié pour cette séance.');
+    }
+    // ---------------------------------------------------------------------
+    // Réorganisation des exercices (l'ordre dépend des machines libres).
+    // ---------------------------------------------------------------------
+    /** Réorganiser est interdit pendant un chrono de repos ou de changement de côté. */
+    reorderAllowed() {
+        return canReorder(this.timerOwner()?.activeTimer ?? this.timer ?? null);
+    }
+    refuseReorder() {
+        this.showToast('Termine ou passe le chrono avant de réorganiser.', 'info', 4000);
+    }
+    reorderRows(context) {
+        const ordered = this.orderedExercises(context.day, context.session);
+        return ordered.map((exercise) => {
+            const plan = getExercisePlan(exercise, context.weekIndex);
+            const log = context.session.exercises[exercise.id];
+            const pending = isExercisePending(exercise, log, plan);
+            const isCardio = exercise.kind === 'cardio';
+            const doneSets = (log?.sets ?? []).slice(0, plan.sets).filter((set) => set.done).length;
+            let stateLabel;
+            if (isCardio)
+                stateLabel = 'fin de séance';
+            else if (log?.skipped)
+                stateLabel = 'passé';
+            else if (!pending)
+                stateLabel = 'terminé';
+            else if (doneSets > 0)
+                stateLabel = `${doneSets}/${plan.sets} séries`;
+            else
+                stateLabel = 'à faire';
+            return { id: exercise.id, name: exercise.shortName ?? exercise.name, stateLabel,
+                     done: !pending && !log?.skipped, pending, locked: isCardio };
+        });
+    }
+    renderReorder() {
+        if (!this.reorderOpen)
+            return '';
+        const context = this.currentContext();
+        return renderReorderPanel({ dayName: context.day.name, rows: this.reorderRows(context), blocked: !this.reorderAllowed() });
+    }
+    renderExecMenuSheet() {
+        if (!this.execMenuOpen)
+            return '';
+        const { step } = this.executionContext();
+        const deferable = !!step.exerciseId && step.stage !== STAGES.CARDIO && step.stage !== STAGES.RECOVERY;
+        return renderExecMenu({ canDefer: deferable, exerciseName: step.exercise?.shortName ?? step.exercise?.name ?? null });
+    }
+    /** Écrit un nouvel ordre pour LA SÉANCE DU JOUR uniquement. */
+    async applySessionOrder(order, message) {
+        const context = this.currentContext();
+        context.session.exerciseOrder = normalizeOrder(order, context.day);
         context.session.orderCustomized = true;
         context.session.updatedAt = Date.now();
+        await saveSession(context.session);
+        this.render();
+        if (message)
+            this.showToast(message, 'success');
+    }
+    /** Ordre par défaut : uniquement sur demande explicite. */
+    async saveDefaultOrder() {
+        const context = this.currentContext();
+        if (!confirm(`Utiliser cet ordre pour les prochains ${context.day.name} ?`))
+            return;
         if (!this.snapshot.settings.dayOrders)
             this.snapshot.settings.dayOrders = {};
-        this.snapshot.settings.dayOrders[context.day.id] = [...order];
-        await saveSession(context.session);
+        this.snapshot.settings.dayOrders[context.day.id] = [...context.session.exerciseOrder];
         await saveSettings(this.snapshot.settings);
         this.render();
-        this.showToast('Ordre mémorisé pour tous tes prochains ' + context.day.name + '.', 'success');
+        this.showToast('Ordre par défaut enregistré.', 'success');
+    }
+    async restoreProgramOrder() {
+        const context = this.currentContext();
+        if (!this.reorderAllowed()) {
+            this.refuseReorder();
+            return;
+        }
+        const aussiDefaut = this.snapshot.settings.dayOrders?.[context.day.id]
+            ? confirm('Restaurer aussi l’ordre par défaut de ce jour ?')
+            : false;
+        if (aussiDefaut) {
+            delete this.snapshot.settings.dayOrders[context.day.id];
+            await saveSettings(this.snapshot.settings);
+        }
+        await this.applySessionOrder(programOrder(context.day),
+            aussiDefaut ? 'Ordre du programme restauré (séance et défaut).' : 'Ordre du programme restauré pour cette séance.');
+    }
+    /** « Machine occupée » : l'exercice passe après ceux qui restent à faire. */
+    async deferCurrentExercise(exerciseId) {
+        if (!this.reorderAllowed()) {
+            this.refuseReorder();
+            return;
+        }
+        const context = this.currentContext();
+        const pendingIds = new Set(context.day.exercises
+            .filter((exercise) => isExercisePending(exercise, context.session.exercises[exercise.id], getExercisePlan(exercise, context.weekIndex)))
+            .map((exercise) => exercise.id));
+        const result = deferExercise(context.session.exerciseOrder, exerciseId, { isPending: (id) => pendingIds.has(id), day: context.day });
+        if (!result.moved) {
+            this.showToast(result.reason === 'nothing-else-pending'
+                ? 'C’est le dernier exercice qu’il te reste : rien après quoi le placer.'
+                : 'Cet exercice ne peut pas être déplacé.', 'info', 4000);
+            return;
+        }
+        // Aucune série n'est touchée, l'exercice n'est PAS passé.
+        await this.applySessionOrder(result.order, 'Déplacé plus tard. Tes séries sont conservées.');
+    }
+    /**
+     * Déplacement d'un cran. Ne touche QUE la séance du jour : l'ordre par
+     * défaut ne change que si on le demande explicitement (saveDefaultOrder).
+     */
+    async moveExercise(exerciseId, offset) {
+        if (!this.reorderAllowed()) {
+            this.refuseReorder();
+            return;
+        }
+        const context = this.currentContext();
+        const next = moveInOrder(context.session.exerciseOrder, exerciseId, offset, context.day);
+        if (next.join() === context.session.exerciseOrder.join())
+            return;
+        await this.applySessionOrder(next, 'Ordre modifié pour cette séance.');
     }
     async toggleSkipExercise(exerciseId) {
         const context = this.currentContext();

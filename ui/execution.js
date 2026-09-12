@@ -176,3 +176,57 @@ function renderComplete(ctx) {
     <button class="exec-primary" data-action="exec-finish">${incomplete ? 'ENREGISTRER COMME INCOMPLÈTE' : 'VALIDER LA SÉANCE'}</button>
   </div>`;
 }
+
+// ---------------------------------------------------------------------------
+// Réorganisation : feuille du menu ⋯ et panneau de tri. Rendu PUR.
+// ---------------------------------------------------------------------------
+
+/** Menu ⋯ du Mode Exécution. */
+export function renderExecMenu({ canDefer, exerciseName }) {
+    return `<div class="sheet-backdrop" data-action="exec-menu-close"></div>
+  <section class="sheet exec-menu-sheet" role="dialog" aria-label="Options de la séance">
+    <button class="sheet-item" data-action="exec-reorder">↕&nbsp;&nbsp;Réorganiser les exercices</button>
+    ${canDefer ? `<button class="sheet-item" data-action="exec-defer">⏭&nbsp;&nbsp;Machine occupée — faire plus tard</button>` : ''}
+    ${exerciseName ? `<button class="sheet-item sheet-item--danger" data-action="exec-skip">✕&nbsp;&nbsp;Passer ${escapeHtml(exerciseName)}</button>` : ''}
+    <button class="sheet-item sheet-item--muted" data-action="exec-menu-close">Annuler</button>
+  </section>`;
+}
+
+/**
+ * Panneau « RÉORGANISER ».
+ * rows = [{ id, name, stateLabel, done, pending, locked }]
+ */
+export function renderReorderPanel({ dayName, rows, blocked }) {
+    if (blocked) {
+        return `<div class="sheet-backdrop" data-action="reorder-close"></div>
+    <section class="sheet reorder-panel" role="dialog" aria-label="Réorganiser les exercices">
+      <div class="reorder-head"><h2>RÉORGANISER</h2><button class="sheet-close" data-action="reorder-close" aria-label="Fermer">✕</button></div>
+      <p class="reorder-hint">Termine ou passe le chrono avant de réorganiser.</p>
+      <div class="reorder-actions"><button class="primary-button" data-action="reorder-close">FERMER</button></div>
+    </section>`;
+    }
+    return `<div class="sheet-backdrop" data-action="reorder-close"></div>
+  <section class="sheet reorder-panel" role="dialog" aria-label="Réorganiser les exercices">
+    <div class="reorder-head"><h2>RÉORGANISER</h2><button class="sheet-close" data-action="reorder-close" aria-label="Fermer">✕</button></div>
+    <p class="reorder-hint">Maintiens ☰ et fais glisser. Cet ordre ne vaut que pour la séance du jour.</p>
+    <ul class="reorder-list" data-drag-list="reorder">
+      ${rows.map((row, index) => `<li class="reorder-row ${row.done ? 'is-done' : ''} ${row.locked ? 'is-locked' : ''}"
+        data-drag-item="${escapeHtml(row.id)}" data-drag-locked="${row.locked ? 'true' : 'false'}">
+        ${row.locked
+            ? '<span class="reorder-handle is-locked" aria-hidden="true">·</span>'
+            : '<span class="reorder-handle" data-drag-handle role="button" tabindex="0" aria-label="Déplacer">☰</span>'}
+        <span class="reorder-name">${escapeHtml(row.name)}</span>
+        <span class="reorder-state">${escapeHtml(row.stateLabel)}</span>
+        <span class="reorder-arrows">
+          <button data-action="move-exercise" data-exercise="${escapeHtml(row.id)}" data-direction="up" aria-label="Monter" ${index === 0 || row.locked ? 'disabled' : ''}>↑</button>
+          <button data-action="move-exercise" data-exercise="${escapeHtml(row.id)}" data-direction="down" aria-label="Descendre" ${index === rows.length - 1 || row.locked ? 'disabled' : ''}>↓</button>
+        </span>
+      </li>`).join('')}
+    </ul>
+    <div class="reorder-actions">
+      <button class="primary-button" data-action="reorder-close">TERMINER</button>
+      <button class="ghost-button" data-action="reorder-save-default">Enregistrer comme ordre par défaut${dayName ? ` (${escapeHtml(dayName)})` : ''}</button>
+      <button class="ghost-button" data-action="reorder-restore">Restaurer l’ordre du programme</button>
+    </div>
+  </section>`;
+}

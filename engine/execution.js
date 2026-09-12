@@ -186,3 +186,101 @@ export function stageLabel(stage) {
         [STAGES.SESSION_COMPLETE]: 'Séance terminée',
     }[stage] ?? stage;
 }
+
+// ---------------------------------------------------------------------------
+// Réorganisation des exercices (l'ordre dépend des machines libres en salle).
+// Tout est PUR : app.js ne fait qu'appeler et persister.
+// ---------------------------------------------------------------------------
+
+/** Pendant ces chronos, réorganiser casserait le contexte de l'étape en cours. */
+export const REORDER_BLOCKING_TIMERS = ['side-switch', 'work-rest', 'ramp-rest'];
+
+export function canReorder(activeTimer) {
+    if (!activeTimer)
+        return true;
+    return !REORDER_BLOCKING_TIMERS.includes(activeTimer.kind);
+}
+
+/** Ordre d'origine du programme. */
+export function programOrder(day) {
+    return (day?.exercises ?? []).map((exercise) => exercise.id);
+}
+
+function cardioIds(day) {
+    return new Set((day?.exercises ?? []).filter((exercise) => exercise.kind === 'cardio').map((exercise) => exercise.id));
+}
+
+/** Le cardio de fin de séance reste en dernier, quoi qu'il arrive. */
+export function pinCardioLast(order, day) {
+    const cardio = cardioIds(day);
+    const list = Array.isArray(order) ? order : [];
+    return [...list.filter((id) => !cardio.has(id)), ...list.filter((id) => cardio.has(id))];
+}
+
+/** Ordre valide : ids connus, sans doublon, exercices manquants ajoutés, cardio en dernier. */
+export function normalizeOrder(order, day) {
+    const valid = programOrder(day);
+    const seen = new Set();
+    const kept = [];
+    for (const id of Array.isArray(order) ? order : []) {
+        if (!valid.includes(id) || seen.has(id))
+            continue;
+        seen.add(id);
+        kept.push(id);
+    }
+    for (const id of valid)
+        if (!seen.has(id))
+            kept.push(id);
+    return pinCardioLast(kept, day);
+}
+
+/**
+ * Quel ordre appliquer à une séance : le sien s'il a été personnalisé,
+ * sinon l'ordre par défaut du jour (settings.dayOrders), sinon le programme.
+ */
+export function pickSessionOrder({ sessionOrder, preferredOrder, orderCustomized, day }) {
+    const usePreferred = !orderCustomized && Array.isArray(preferredOrder) && preferredOrder.length > 0;
+    return normalizeOrder(usePreferred ? preferredOrder : sessionOrder, day);
+}
+
+/** Déplacement d'un cran (boutons ↑ ↓). */
+export function moveInOrder(order, exerciseId, offset, day) {
+    const list = normalizeOrder(order, day);
+    const from = list.indexOf(exerciseId);
+    const to = from + offset;
+    if (from < 0 || to < 0 || to >= list.length)
+        return list;
+    const next = [...list];
+    [next[from], next[to]] = [next[to], next[from]];
+    return normalizeOrder(next, day);
+}
+
+/**
+ * « Machine occupée — faire plus tard » : l'exercice passe APRÈS tous ceux qui
+ * restent à faire. Il n'est JAMAIS marqué skipped, il ne perd aucune série.
+ * `isPending(id)` = il reste du travail sur cet exercice.
+ */
+export function deferExercise(order, exerciseId, { isPending, day }) {
+    const list = normalizeOrder(order, day);
+    if (!list.includes(exerciseId))
+        return { order: list, moved: false, reason: 'unknown-exercise' };
+    const cardio = cardioIds(day);
+    if (cardio.has(exerciseId))
+        return { order: list, moved: false, reason: 'cardio-pinned' };
+    const rest = list.filter((id) => id !== exerciseId);
+    const lastPending = [...rest].reverse().find((id) => !cardio.has(id) && isPending(id));
+    if (lastPending === undefined)
+        return { order: list, moved: false, reason: 'nothing-else-pending' };
+    const at = rest.indexOf(lastPending);
+    rest.splice(at + 1, 0, exerciseId);
+    return { order: normalizeOrder(rest, day), moved: true, reason: null };
+}
+
+/** Il reste du travail sur cet exercice ? (ni terminé, ni passé) */
+export function isExercisePending(exercise, log, plan) {
+    if (!log || log.skipped)
+        return false;
+    if (exercise?.kind === 'cardio')
+        return !log.sets?.[0]?.done;
+    return workSetsDone(log, plan) < plan.sets;
+}
