@@ -34,7 +34,11 @@ const PRECACHE_URLS = [
 ];
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS)));
+  // cache: 'reload' contourne le cache HTTP du navigateur. Sans lui, GitHub
+  // Pages (max-age=600) peut remettre l'ANCIEN app.js dans le cache de la
+  // nouvelle version, qui ne revalide jamais : mélange de versions bloqué.
+  event.waitUntil(caches.open(CACHE_NAME).then((cache) =>
+    cache.addAll(PRECACHE_URLS.map((url) => new Request(url, { cache: 'reload' })))));
 });
 
 self.addEventListener('activate', (event) => {

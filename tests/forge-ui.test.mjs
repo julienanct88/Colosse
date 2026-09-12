@@ -15,8 +15,9 @@ const manifest = JSON.parse(readFileSync(new URL('asset-manifest.json', base), '
 
 function worker() {
   const handlers={}, entries=new Map(), state={precache:[], network:0, skipped:0};
-  const cache={addAll:async urls=>{state.precache=urls;}, match:async request=>entries.get(typeof request==='string'?request:request.url)};
-  const context={URL,console,self:{location:{origin:'https://colosse.example'},addEventListener:(name,fn)=>{handlers[name]=fn;},skipWaiting:()=>{state.skipped++;},clients:{claim:async()=>{}}},caches:{open:async()=>cache,keys:async()=>[],delete:async()=>true},fetch:async()=>{state.network++;throw new Error('offline');}};
+  const cache={addAll:async urls=>{state.precache=urls.map(u=>typeof u==='string'?u:u.url);state.precacheModes=urls.map(u=>typeof u==='string'?'default':u.cache);}, match:async request=>entries.get(typeof request==='string'?request:request.url)};
+  class Request{constructor(url,init={}){this.url=url;this.cache=init.cache??'default';}}
+  const context={URL,Request,console,self:{location:{origin:'https://colosse.example'},addEventListener:(name,fn)=>{handlers[name]=fn;},skipWaiting:()=>{state.skipped++;},clients:{claim:async()=>{}}},caches:{open:async()=>cache,keys:async()=>[],delete:async()=>true},fetch:async()=>{state.network++;throw new Error('offline');}};
   vm.runInNewContext(source,context);
   return {handlers,entries,state};
 }
@@ -85,4 +86,10 @@ test('Forge : navigation hors ligne utilise le shell mis en cache',async()=>{
 test('Forge : aucune interception des liens externes ni des requêtes d’écriture',()=>{
   const w=worker();let handled=false;const respondWith=()=>handled=true;
   w.handlers.fetch({request:{url:'https://example.net/',method:'GET'},respondWith});w.handlers.fetch({request:{url:'https://colosse.example/data',method:'POST'},respondWith});assert.equal(handled,false);
+});
+test('Forge : le précache contourne le cache HTTP (pas d’ancien app.js dans le nouveau cache)',async()=>{
+  const w=worker();let done;w.handlers.install({waitUntil:p=>done=p});await done;
+  assert.ok(w.state.precache.length>20,'tout le shell est précaché');
+  assert.ok(w.state.precache.includes('./app.js'));
+  assert.deepEqual([...new Set(w.state.precacheModes)],['reload'],'chaque fichier est relu sur le réseau à l’installation');
 });
