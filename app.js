@@ -393,7 +393,7 @@ export class ColosseApp {
         <div class="exercise-index">${String(index + 1).padStart(2, '0')}</div>
         <div class="exercise-title">
           <div class="exercise-name-row"><h3>${escapeHtml(exercise.name)}</h3>${exercise.optional ? '<span class="badge">BONUS</span>' : ''}${exercise.superset ? `<span class="badge muted">SUPERSET ${escapeHtml(exercise.superset.split('-').at(-1) ?? '')}</span>` : ''}</div>
-          <div class="exercise-plan"><b>${plan.sets} × ${plan.repMin}–${plan.repMax} reps</b><span>garde ${plan.targetRir} reps</span><span>repos ${formatClock(plan.restSec)}</span></div>
+          <div class="exercise-plan"><b>${plan.sets} × ${plan.repMin}–${plan.repMax} reps</b><span>garde ${plan.targetRir} reps</span><span>repos ${formatClock(plan.restSec)}</span>${plan.tempo ? `<span>tempo ${escapeHtml(plan.tempo)}</span>` : ''}</div>
         </div>
         <a class="video-link" href="${YOUTUBE_SEARCH}${encodeURIComponent(exercise.name + ' technique musculation')}" target="_blank" rel="noopener" aria-label="Voir la technique">▶</a>
       </div>
