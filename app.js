@@ -1,4 +1,5 @@
 import './pwa.js';
+import { renderForgeHeader, renderForgeNav, renderForgeHome, renderForgeTools, normalizeSearch, steppedValue, icon } from './ui/forge.js';
 import { APP_VERSION, defaultSnapshot, emptyDailyLog, makeExerciseLog, makeSession, makeSet, } from './defaults.js';
 import { clearAllData, deleteSession, loadSnapshot, saveAdjustment, saveDailyLog, saveProfile, saveSession, saveSettings, saveSnapshot, storageMode, } from './data/database.js';
 import { defaultDayForDate, findDay, findExercise, getExercisePlan, getTrainingPhase, TRAINING_DAYS, STRENGTH_DAYS } from './program.js';
@@ -57,6 +58,10 @@ export class ColosseApp {
     drag = null;
     wakeLock = null;
     installPrompt = null;
+    timerCollapsed = false;
+    updateAvailable = false;
+    forgeDraft = null;
+    forgeDetails = new Map();
     constructor(root) {
         this.root = root;
     }
@@ -80,6 +85,8 @@ export class ColosseApp {
             if (runningDate)
                 this.viewWeekStart = startOfWeek(new Date(`${runningDate}T12:00:00`));
         }
+        // Une séance active garde la priorité ; sinon un vrai accueil, sans changer le programme.
+        this.snapshot.settings.currentTab = running ? 'training' : 'home';
         await this.ensureCurrentSession();
         await this.restoreTimerFromSession();
         this.bindEvents();
@@ -90,6 +97,23 @@ export class ColosseApp {
         this.root.addEventListener('click', (event) => void this.handleClick(event));
         this.root.addEventListener('change', (event) => void this.handleChange(event));
         this.root.addEventListener('input', (event) => void this.handleInput(event));
+        this.root.addEventListener('keydown', (event) => {
+            const sheet = this.root.querySelector('.sheet');
+            if (!sheet) return;
+            if (event.key === 'Escape') {
+                this.execMenuOpen = false;
+                this.reorderOpen = false;
+                this.render();
+                this.root.querySelector('[data-action="exec-menu"]')?.focus();
+            }
+            if (event.key === 'Tab') {
+                const items = [...sheet.querySelectorAll('button:not(:disabled), input, select, textarea, [tabindex="0"]')];
+                if (!items.length) return;
+                const first = items[0], last = items.at(-1);
+                if (event.shiftKey && (document.activeElement === first || !sheet.contains(document.activeElement))) { event.preventDefault(); last.focus(); }
+                else if (!event.shiftKey && (document.activeElement === last || !sheet.contains(document.activeElement))) { event.preventDefault(); first.focus(); }
+            }
+        });
         // Glisser-déposer : la poignée seule démarre le drag, donc un champ ou
         // un select ne le déclenche jamais et le scroll vertical reste normal.
         this.root.addEventListener('pointerdown', (event) => this.onDragStart(event));
@@ -99,6 +123,7 @@ export class ColosseApp {
             this.render();
         });
         window.addEventListener('colosse-update', () => {
+            this.updateAvailable = true;
             this.showToast('Une mise à jour de Colosse est disponible.', 'info', 6000);
             const banner = document.getElementById('update-banner');
             banner?.classList.remove('hidden');
@@ -219,60 +244,77 @@ export class ColosseApp {
             return this.snapshot.sessions.find((item) => item.id === `${date}:${day.id}`);
         }, (exercise, session) => getExercisePlan(exercise, session.weekIndex));
     }
+    captureForgeForm() {
+        const form = this.root.querySelector('[data-forge-step]');
+        if (form) {
+            this.forgeDraft = {
+                key: form.dataset.forgeStep,
+                fields: Object.fromEntries([...form.querySelectorAll('input[data-exec-field]')].map(el => [el.dataset.execField, el.value])),
+                choices: Object.fromEntries([...form.querySelectorAll('.chip-choice.selected')].map(el => [el.dataset.execField, el.dataset.value])),
+            };
+        }
+        this.root.querySelectorAll('details[data-forge-detail]').forEach(el => this.forgeDetails.set(el.dataset.forgeDetail, el.open));
+    }
+    restoreForgeForm() {
+        const form = this.root.querySelector('[data-forge-step]');
+        const draft = this.forgeDraft;
+        if (form && draft?.key === form.dataset.forgeStep) {
+            form.querySelectorAll('input[data-exec-field]').forEach(el => {
+                if (Object.hasOwn(draft.fields, el.dataset.execField)) el.value = draft.fields[el.dataset.execField];
+            });
+            form.querySelectorAll('[data-exec-group]').forEach(group => {
+                const chosen = draft.choices[group.dataset.execGroup];
+                if (chosen === undefined) return;
+                group.querySelectorAll('.chip-choice').forEach(el => {
+                    const selected = el.dataset.value === chosen;
+                    el.classList.toggle('selected', selected);
+                    el.setAttribute('aria-pressed', String(selected));
+                });
+            });
+        }
+        this.root.querySelectorAll('details[data-forge-detail]').forEach(el => {
+            if (this.forgeDetails.has(el.dataset.forgeDetail)) el.open = this.forgeDetails.get(el.dataset.forgeDetail);
+        });
+    }
     render() {
+        this.captureForgeForm();
         const tab = this.snapshot.settings.currentTab;
-        const page = tab === 'weight'
-            ? this.renderWeightPage()
-            : tab === 'history'
-                ? this.renderHistoryPage()
-                : tab === 'settings'
-                    ? this.renderSettingsPage()
-                    : (this.shouldRenderExecution() ? this.renderExecutionPage() : this.renderTrainingPage());
+        const page = tab === 'home' ? renderForgeHome(this)
+            : tab === 'tools' ? renderForgeTools()
+            : tab === 'weight' ? this.renderWeightPage()
+            : tab === 'history' ? this.renderHistoryPage()
+            : tab === 'settings' ? this.renderSettingsPage()
+            : (this.shouldRenderExecution() ? this.renderExecutionPage() : this.renderTrainingPage());
+        const executing = this.shouldRenderExecution();
+        const sheetOpen = this.execMenuOpen || this.reorderOpen;
         this.root.innerHTML = `
-      <div class="app-shell">
+      <div class="app-shell ${executing ? 'is-executing' : ''} ${this.timer ? 'has-timer' : ''} ${this.timerCollapsed ? 'timer-is-mini' : ''} ${sheetOpen ? 'has-sheet' : ''}" data-current-tab="${escapeHtml(tab)}">
         ${this.renderHeader()}
-        <main class="page">${page}</main>
-        ${this.renderNavigation()}
-        <div id="toast" class="toast hidden" role="status"></div>
+        <main class="page" id="main-content" ${sheetOpen ? 'inert' : ''}>${page}</main>
+        ${sheetOpen ? '' : this.renderNavigation()}
+        <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
         ${this.renderTimerOverlay()}
         ${this.renderExecMenuSheet()}
         ${this.renderReorder()}
-        <div id="update-banner" class="update-banner hidden">
+        <div id="update-banner" class="update-banner ${this.updateAvailable ? '' : 'hidden'}">
           <span>Nouvelle version disponible</span>
-          <button data-action="reload-update">Installer</button>
+          <button data-action="reload-update">Mettre à jour</button>
         </div>
       </div>`;
+        this.restoreForgeForm();
+        const dayTabs = this.root.querySelector('.day-tabs');
+        const activeDay = dayTabs?.querySelector('.day-tab.active');
+        if (dayTabs && activeDay) dayTabs.scrollLeft = Math.max(0, activeDay.offsetLeft - dayTabs.offsetLeft - (dayTabs.clientWidth - activeDay.offsetWidth) / 2);
         this.restoreToast();
         this.tick();
+        if (sheetOpen) {
+            const sheet = this.root.querySelector('.sheet');
+            sheet?.setAttribute('aria-modal', 'true');
+            sheet?.querySelector('button:not(:disabled)')?.focus({ preventScroll: true });
+        }
     }
-    renderHeader() {
-        const context = this.currentContext();
-        const phase = getTrainingPhase(context.weekIndex);
-        const macros = macrosForCalories(this.snapshot.profile.currentCalories, this.snapshot.profile.proteinG, this.snapshot.profile.fatG);
-        return `
-      <header class="topbar">
-        <div>
-          <div class="brand-row"><span class="brand-mark">C</span><span class="brand">COLOSSE</span><span class="version">v${APP_VERSION}</span></div>
-          <div class="brand-sub">${escapeHtml(phase.name)} · ${macros.calories} kcal · ${macros.proteinG} g protéines</div>
-        </div>
-        <div class="topbar-score">
-          <strong>${this.completedWeekSessions()}<small>/6</small></strong>
-          <span>séances</span>
-        </div>
-      </header>`;
-    }
-    renderNavigation() {
-        const active = this.snapshot.settings.currentTab;
-        const items = [
-            ['training', '◫', 'Séance'],
-            ['weight', '⌁', 'Poids'],
-            ['history', '↗', 'Historique'],
-            ['settings', '⚙', 'Réglages'],
-        ];
-        return `<nav class="bottom-nav" aria-label="Navigation principale">
-      ${items.map(([id, icon, label]) => `<button class="nav-item ${active === id ? 'active' : ''}" data-action="tab" data-tab="${id}"><span>${icon}</span><small>${label}</small></button>`).join('')}
-    </nav>`;
-    }
+    renderHeader() { return renderForgeHeader(this); }
+    renderNavigation() { return renderForgeNav(this.snapshot.settings.currentTab); }
     execState(session) {
         return normalizeExecutionState(session?.execution);
     }
@@ -369,6 +411,8 @@ export class ColosseApp {
         const projected = context.session.startedAt ? elapsed + remaining : planned.seconds;
                 const complete = this.isSessionComplete(context.session, context.day);
         return `
+      <details class="f-program-phase" data-forge-detail="phase-plan">
+      <summary><span><small>Cycle & objectifs · Semaine ${context.weekIndex}</small><strong>${escapeHtml(phase.name)}</strong></span>${icon('chevron')}</summary>
       <section class="phase-card" style="--phase:${phase.color}">
         <div class="phase-top">
           <div><span class="eyebrow">SEMAINE ${context.weekIndex}</span><h1>${escapeHtml(phase.name)}</h1></div>
@@ -381,6 +425,7 @@ export class ColosseApp {
           <span><b>${this.snapshot.profile.dailyStepTarget.toLocaleString('fr-FR')}\u2013${this.snapshot.profile.stepsOnlyTarget.toLocaleString('fr-FR')}</b> pas/jour</span>
         </div>
       </section>
+      </details>
 
       <section class="week-picker">
         <button class="icon-button" data-action="week-prev" aria-label="Semaine précédente">‹</button>
@@ -419,16 +464,16 @@ export class ColosseApp {
       </section>
 
       ${this.renderReadiness(context.session)}
-      <section class="exercise-list" data-drag-list="programme">
+      <section class="exercise-list" id="forge-exercises" data-drag-list="programme">
         ${orderedExercises.map((exercise, index) => this.renderExerciseCard(context, exercise, index, orderedExercises.length)).join('')}
       </section>
-      <section class="notes-card card">
+      <section class="notes-card card" id="forge-notes">
         <label for="session-notes">Notes de séance</label>
         <textarea id="session-notes" data-session-notes placeholder="Ressenti, congestion, douleurs, observations…">${escapeHtml(context.session.notes)}</textarea>
       </section>`;
     }
     renderReadiness(session) {
-        return `<section class="readiness card">
+        return `<section class="readiness card" id="forge-readiness">
       <div class="card-title"><div><span class="eyebrow">ÉTAT DU JOUR</span><h3>Récupération</h3></div><span class="subtle">Ces réponses évitent d’augmenter tes charges quand tu récupères mal.</span></div>
       <div class="readiness-grid">
         <label>Énergie<select data-readiness="energy">${[1, 2, 3, 4, 5].map((value) => `<option value="${value}" ${session.readiness.energy === value ? 'selected' : ''}>${value}/5</option>`).join('')}</select></label>
@@ -479,6 +524,8 @@ export class ColosseApp {
         <a class="video-link" href="${YOUTUBE_SEARCH}${encodeURIComponent(exercise.name + ' technique musculation')}" target="_blank" rel="noopener" aria-label="Voir la technique">▶</a>
       </div>
 
+      <details class="f-exercise-detail" data-forge-detail="${escapeHtml(context.session.id)}:${exercise.id}">
+      <summary><span>Séries, variante & prescription</span><span>${doneSets.length}/${plan.sets} séries</span></summary>
       <div class="exercise-order-bar" aria-label="Changer la position de ${escapeHtml(exercise.name)}">
         <span class="exercise-order-handle" data-drag-handle role="button" tabindex="0" aria-label="Déplacer ${escapeHtml(exercise.name)}">☰</span>
         <span>Ordre (cette séance)</span>
@@ -515,6 +562,7 @@ export class ColosseApp {
         <span>${currentSummary.totalReps || 0} reps · ${Math.round(activeSets.reduce((sum, set) => sum + (set.done ? Number(set.weightKg || 0) * Number(set.reps || 0) : 0), 0)).toLocaleString('fr-FR')} kg volume</span>
         <button class="text-button danger-text" data-action="toggle-skip-exercise" data-exercise="${exercise.id}">${log.skipped ? 'Réactiver' : 'Passer cet exercice'}</button>
       </div>
+      </details>
     </article>`;
     }
     renderCardioCard(context, exercise, index) {
@@ -607,7 +655,7 @@ export class ColosseApp {
         <div><span>Lipides</span><strong>${macros.fatG}</strong><small>g/j</small></div>
       </section>
 
-      <section class="trend-card card status-${analysis.status.toLowerCase()}">
+      <section id="forge-trend" class="trend-card card status-${analysis.status.toLowerCase()}">
         <div class="card-title"><div><span class="eyebrow">BILAN COLOSSE</span><h2>${this.weightStatusLabel(analysis.status)}</h2></div><span class="status-pill">${analysis.samples} pesées</span></div>
         <p>${escapeHtml(analysis.reason)}</p>
         <div class="trend-metrics">
@@ -620,12 +668,12 @@ export class ColosseApp {
         ${(strength.alert || recovery.alert) ? `<div class="alert-strip"><strong>Récupération sous surveillance</strong><span>${escapeHtml([strength.alert ? strength.reason : '', ...recovery.reasons].filter(Boolean).join(' '))}</span></div>` : ''}
       </section>
 
-      <section class="card chart-card">
+      <section class="card chart-card" id="forge-chart">
         <div class="card-title"><div><span class="eyebrow">28 JOURS</span><h2>Poids réel vs trajectoire</h2></div><div class="chart-legend"><span class="actual">Réel</span><span class="target">Cible</span></div></div>
         ${sparklineSvg(this.snapshot.dailyLogs, targetPoints)}
       </section>
 
-      <section class="card activity-card ${activity.complete ? 'complete' : ''}">
+      <section id="forge-activity" class="card activity-card ${activity.complete ? 'complete' : ''}">
         <div class="card-title">
           <div><span class="eyebrow">ACTIVITÉ DU JOUR</span><h2>Pas, vélo ou les deux</h2></div>
           <span class="activity-status">${activity.complete ? '✓ Objectif atteint' : `${activity.percent}%`}</span>
@@ -647,7 +695,7 @@ export class ColosseApp {
         <p class="activity-help">Pas de vitesse imposée : modérée = tu peux parler, pas chanter ; soutenue = seulement quelques mots.</p>
       </section>
 
-      <section class="card daily-form">
+      <section class="card daily-form" id="forge-checkin">
         <div class="card-title"><div><span class="eyebrow">AUJOURD’HUI · ${formatDateFr(today)}</span><h2>Check-in quotidien</h2></div><span class="subtle">2 minutes</span></div>
         <div class="form-grid">
           ${this.dailyField('weightKg', 'Poids', 'kg', log.weightKg, '0.05')}
@@ -660,14 +708,14 @@ export class ColosseApp {
         <label class="full-label">Notes<textarea data-daily-notes="${today}" placeholder="Faim, digestion, alcool, événement inhabituel…">${escapeHtml(log.notes)}</textarea></label>
       </section>
 
-      <section class="card targets-card">
+      <section class="card targets-card" id="forge-targets">
         <div class="card-title"><div><span class="eyebrow">TRAJECTOIRE</span><h2>Objectifs hebdomadaires</h2></div><span class="subtle">−${(this.snapshot.profile.weeklyLossRatePct * 100).toFixed(2)} %/sem</span></div>
         <div class="target-table">
           ${targets.map((target, index) => `<div class="target-row ${index === 0 ? 'current' : ''}"><span>S${target.weekIndex}<small>${formatDateFr(target.endDate, { day: 'numeric', month: 'short' })}</small></span><strong>${formatKg(target.targetWeightKg, 2)} kg</strong><small>${formatKg(target.toleranceLowKg, 2)}–${formatKg(target.toleranceHighKg, 2)}</small></div>`).join('')}
         </div>
       </section>
 
-      <section class="card recent-checkins">
+      <section class="card recent-checkins" id="forge-checkins">
         <div class="card-title"><div><span class="eyebrow">DONNÉES</span><h2>Derniers check-ins</h2></div></div>
         ${recentLogs.length ? `<div class="log-list">${recentLogs.map((item) => `<div><span>${formatDateFr(item.date, { weekday: 'short', day: 'numeric', month: 'short' })}</span><strong>${formatKg(item.weightKg, 2)} kg</strong><small>${item.adherencePct !== null ? `${item.adherencePct}%` : '—'} · ${activitySummary(item)}</small></div>`).join('')}</div>` : '<p class="empty-state">Aucune donnée quotidienne.</p>'}
       </section>`;
@@ -706,7 +754,7 @@ export class ColosseApp {
         <div class="strength-chip ${strength.alert ? 'danger' : ''}"><span>Force récente</span><strong>${strength.changePct >= 0 ? '+' : ''}${strength.changePct.toFixed(1)} %</strong></div>
       </section>
 
-      <section class="card prescription-board">
+      <section id="forge-prescriptions" class="card prescription-board">
         <div class="card-title"><div><span class="eyebrow">PROCHAINE SÉANCE · ${escapeHtml(selectedDay.name)}</span><h2>Charges prescrites</h2></div></div>
         <div class="prescription-list">
           ${selectedDay.exercises.map((exercise) => {
@@ -719,12 +767,12 @@ export class ColosseApp {
         </div>
       </section>
 
-      <section class="card">
+      <section id="forge-history" class="card">
         <div class="card-title"><div><span class="eyebrow">JOURNAL</span><h2>Dernières séances</h2></div></div>
         ${sessions.length ? `<div class="session-history">${sessions.map((session) => this.renderHistorySession(session)).join('')}</div>` : '<p class="empty-state">Aucune séance terminée.</p>'}
       </section>
 
-      <section class="card">
+      <section id="forge-adjustments" class="card">
         <div class="card-title"><div><span class="eyebrow">NUTRITION</span><h2>Ajustements appliqués</h2></div></div>
         ${adjustments.length ? `<div class="adjustment-list">${adjustments.map((adjustment) => `<div><span>${formatDateFr(adjustment.date)}</span><strong>${adjustment.previousCalories} → ${adjustment.newCalories} kcal</strong><small>${escapeHtml(adjustment.reason)}</small></div>`).join('')}</div>` : '<p class="empty-state">Aucun ajustement calorique appliqué.</p>'}
       </section>
@@ -759,7 +807,7 @@ export class ColosseApp {
         return `
       <section class="settings-hero"><span class="eyebrow">CONFIGURATION</span><h1>Tes réglages Colosse</h1><p>Retrouve ici tes objectifs d’entraînement, de poids, d’activité et de nutrition.</p></section>
 
-      <section class="card settings-section">
+      <section id="forge-profile" class="card settings-section">
         <div class="card-title"><div><span class="eyebrow">PROFIL</span><h2>Données de départ</h2></div></div>
         <div class="form-grid">
           ${this.profileField('age', 'Âge', profile.age, 'ans', '1', 18, 90)}
@@ -771,7 +819,7 @@ export class ColosseApp {
         </div>
       </section>
 
-      <section class="card settings-section">
+      <section id="forge-nutrition" class="card settings-section">
         <div class="card-title"><div><span class="eyebrow">NUTRITION</span><h2>Garde-fous</h2></div></div>
         <div class="form-grid">
           ${this.profileField('currentCalories', 'Calories actuelles', profile.currentCalories, 'kcal', '50', 1500, 6000)}
@@ -786,7 +834,7 @@ export class ColosseApp {
         <p class="subtle-block settings-help">${escapeHtml(activityGoalHelp(profile))}</p>
       </section>
 
-      <section class="card settings-section">
+      <section id="forge-preferences" class="card settings-section">
         <div class="card-title"><div><span class="eyebrow">EXPÉRIENCE</span><h2>Comportement de l’application</h2></div></div>
         <div class="toggle-list">
           ${this.settingToggle('autoStartTimer', 'Démarrer automatiquement le repos', settings.autoStartTimer)}
@@ -796,7 +844,7 @@ export class ColosseApp {
         ${this.installPrompt ? '<button class="primary-button" data-action="install-app">Installer Colosse sur cet appareil</button>' : ''}
       </section>
 
-      <section class="card settings-section">
+      <section id="forge-data" class="card settings-section">
         <div class="card-title"><div><span class="eyebrow">DONNÉES</span><h2>Sauvegarde et migration</h2></div><span class="status-pill">${storageMode()}</span></div>
         <p class="subtle-block">Les données restent sur cet appareil. Exporte régulièrement un JSON de sauvegarde.</p>
         <div class="data-actions">
@@ -817,16 +865,15 @@ export class ColosseApp {
         return `<label class="toggle-row"><span>${escapeHtml(label)}</span><input type="checkbox" data-setting-field="${String(field)}" ${checked ? 'checked' : ''}/><i></i></label>`;
     }
     renderTimerOverlay() {
-        if (!this.timer)
-            return '';
+        if (!this.timer) return '';
         const remaining = this.timerRemainingSec();
-        return `<div class="timer-overlay" role="dialog" aria-label="Chronomètre ${escapeHtml(timerLabel(this.timer.kind))}">
-      <div class="timer-label">${escapeHtml(timerLabel(this.timer.kind))}</div>
-      <strong id="timer-remaining">${formatClock(remaining)}</strong>
-      <div class="timer-progress"><i id="timer-progress" style="width:${Math.max(0, Math.min(100, remaining / this.timer.totalSec * 100))}%"></i></div>
-      <div class="timer-actions">${this.renderTimerControls()}</div>
-      ${this.renderTimerSkip()}
-    </div>`;
+        return `<section class="timer-overlay f-timer ${this.timerCollapsed ? 'is-mini' : ''}" aria-label="Chronomètre ${escapeHtml(timerLabel(this.timer.kind))}">
+          <div class="f-timer-head">${icon('timer')}<span class="timer-label">${escapeHtml(timerLabel(this.timer.kind))}${this.timer.paused ? ' · Pause' : ''}</span><button class="f-timer-toggle" data-action="forge-timer-toggle" aria-expanded="${!this.timerCollapsed}" aria-label="${this.timerCollapsed ? 'Déployer le chronomètre' : 'Réduire le chronomètre'}">${icon(this.timerCollapsed ? 'plus' : 'minus')}</button></div>
+          <strong id="timer-remaining" role="timer" aria-live="off">${formatClock(remaining)}</strong>
+          <div class="timer-progress"><i id="timer-progress" style="width:${Math.max(0, Math.min(100, remaining / this.timer.totalSec * 100))}%"></i></div>
+          <div class="timer-actions">${this.renderTimerControls()}</div>
+          ${this.renderTimerSkip()}
+        </section>`;
     }
     /** Les contrôles dépendent du kind : une durée prescrite ne se raccourcit pas. */
     renderTimerControls() {
@@ -834,7 +881,7 @@ export class ColosseApp {
             .filter((control) => control.id !== 'skip')
             .map((control) => {
             if (control.id === 'pause')
-                return `<button class="timer-pause" data-action="timer-pause">${this.timer.paused ? '▶' : 'Ⅱ'}</button>`;
+                return `<button class="timer-pause" data-action="timer-pause" aria-label="${this.timer.paused ? 'Reprendre le chronomètre' : 'Mettre le chronomètre en pause'}">${this.timer.paused ? '▶' : 'Ⅱ'}</button>`;
             const action = control.id === 'minus' ? 'timer-minus' : 'timer-plus';
             return `<button data-action="${action}" data-delta="${control.deltaSec}">${escapeHtml(control.label)}</button>`;
         })
@@ -850,20 +897,66 @@ export class ColosseApp {
         // Sélection des puces RIR / technique / douleur du mode exécution
         const chip = event.target instanceof Element ? event.target.closest('.chip-choice') : null;
         if (chip) {
-            chip.closest('.chip-row')?.querySelectorAll('.chip-choice').forEach((el) => el.classList.remove('selected'));
+            chip.closest('.chip-row')?.querySelectorAll('.chip-choice').forEach((el) => { el.classList.remove('selected'); el.setAttribute('aria-pressed', 'false'); });
             chip.classList.add('selected');
+            chip.setAttribute('aria-pressed', 'true');
             return;
         }
-        const actionElement = event.target.closest('[data-action]');
+        const actionElement = event.target instanceof Element ? event.target.closest('[data-action]') : null;
         if (!actionElement)
             return;
         const action = actionElement.dataset.action;
         switch (action) {
+            case 'forge-step': {
+                const input = actionElement.closest('.f-value-cell')?.querySelector('input[data-exec-field]');
+                if (!input) break;
+                input.value = String(steppedValue(input.value || input.placeholder, Number(actionElement.dataset.delta), Number(input.min) || 0));
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+                break;
+            }
+            case 'forge-timer-toggle':
+                this.timerCollapsed = !this.timerCollapsed;
+                this.render();
+                break;
+            case 'forge-open': {
+                const tab = actionElement.dataset.tab;
+                if (!['home', 'training', 'weight', 'history', 'settings', 'tools'].includes(tab)) break;
+                this.snapshot.settings.currentTab = tab;
+                if (tab === 'training') this.programViewOverride = true;
+                await saveSettings(this.snapshot.settings);
+                this.render();
+                const target = document.getElementById(actionElement.dataset.section ?? '');
+                if (target) target.scrollIntoView({ block: 'start', behavior: 'instant' });
+                else window.scrollTo({ top: 0, behavior: 'instant' });
+                break;
+            }
+            case 'forge-resume': {
+                const running = this.snapshot.sessions.find(item => item.execution?.active && !item.endedAt);
+                if (running) {
+                    this.snapshot.settings.selectedDayId = running.dayId;
+                    this.viewWeekStart = startOfWeek(new Date(`${running.date}T12:00:00`));
+                }
+                this.snapshot.settings.currentTab = 'training';
+                this.programViewOverride = false;
+                await saveSettings(this.snapshot.settings);
+                await this.ensureCurrentSession();
+                await this.restoreTimerFromSession();
+                this.render();
+                window.scrollTo({ top: 0, behavior: 'instant' });
+                break;
+            }
+            case 'forge-notes':
+                this.programViewOverride = true;
+                this.render();
+                document.getElementById('forge-notes')?.scrollIntoView({ block: 'start', behavior: 'instant' });
+                break;
             case 'tab': {
                 const tab = actionElement.dataset.tab;
+                if (!['home', 'training', 'weight', 'history', 'settings', 'tools'].includes(tab)) break;
                 this.snapshot.settings.currentTab = tab;
                 await saveSettings(this.snapshot.settings);
                 this.render();
+                window.scrollTo({ top: 0, behavior: 'instant' });
                 break;
             }
             case 'week-prev':
@@ -897,6 +990,7 @@ export class ColosseApp {
                 this.programViewOverride = false;
                 await this.saveExecution({ active: true });
                 this.render();
+                window.scrollTo({ top: 0, behavior: 'instant' });
                 break;
             case 'finish-session':
                 await this.finishSession();
@@ -922,13 +1016,22 @@ export class ColosseApp {
             case 'finish-cardio':
                 await this.stopTimedExercise(actionElement.dataset.exercise ?? '');
                 break;
-            case 'exec-show-program':
+            case 'exec-show-program': {
                 this.programViewOverride = true;
                 this.render();
+                const id = actionElement.dataset.exercise;
+                const card = id ? this.root.querySelector(`[data-exercise-card="${CSS.escape(id)}"]`) : null;
+                if (card) {
+                    const details = card.querySelector('details');
+                    if (details) details.open = true;
+                    card.scrollIntoView({ block: 'start', behavior: 'instant' });
+                } else window.scrollTo({ top: 0, behavior: 'instant' });
                 break;
+            }
             case 'exec-resume':
                 this.programViewOverride = false;
                 this.render();
+                window.scrollTo({ top: 0, behavior: 'instant' });
                 break;
             case 'exec-menu':
                 this.execMenuOpen = true;
@@ -1149,6 +1252,18 @@ export class ColosseApp {
     }
     async handleInput(event) {
         const target = event.target;
+        if (target.id === 'forge-tool-search') {
+            const query = normalizeSearch(target.value);
+            let visible = 0;
+            this.root.querySelectorAll('[data-tool-search]').forEach(item => {
+                item.hidden = !query.split(/\s+/).every(term => item.dataset.toolSearch.includes(term));
+                if (!item.hidden) visible++;
+            });
+            this.root.querySelectorAll('.f-tool-group').forEach(group => { group.hidden = !group.querySelector('[data-tool-search]:not([hidden])'); });
+            const empty = document.getElementById('forge-no-results');
+            if (empty) empty.hidden = visible > 0;
+            return;
+        }
         if (target.dataset.sessionNotes !== undefined) {
             const context = this.currentContext();
             context.session.notes = target.value;
@@ -1926,6 +2041,9 @@ export class ColosseApp {
         this.render();
     }
     async applyServiceWorkerUpdate() {
+        if (this.snapshot.sessions.some(item => item.execution?.active && !item.endedAt) && !confirm('Une séance est en cours. Recharger maintenant ? Les séries déjà validées sont conservées, mais termine ta saisie en cours avant de continuer.')) return;
+        if (this.saveDebounce !== null) { window.clearTimeout(this.saveDebounce); this.saveDebounce = null; }
+        await saveSnapshot(this.snapshot);
         const registration = await navigator.serviceWorker?.getRegistration();
         if (registration?.waiting)
             registration.waiting.postMessage({ type: 'SKIP_WAITING' });

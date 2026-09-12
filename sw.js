@@ -1,5 +1,5 @@
 /* Colosse Adaptive — generated service worker */
-const CACHE_VERSION = 'colosse-adaptive-v3-reorder-360';
+const CACHE_VERSION = 'colosse-adaptive-v3-forge-360';
 const CACHE_NAME = CACHE_VERSION;
 const PRECACHE_URLS = [
   "./",
@@ -27,12 +27,13 @@ const PRECACHE_URLS = [
   "./program.js",
   "./pwa.js",
   "./styles.css",
+  "./forge.css",
+  "./ui/forge.js",
   "./types.js",
   "./ui/templates.js"
 ];
 
 self.addEventListener('install', (event) => {
-  self.skipWaiting();
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS)));
 });
 
@@ -44,34 +45,22 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+// Les fichiers du shell sont servis depuis LE cache de cette version.
+// Une nouvelle version attend le bouton de mise à jour : pas de reload en pleine série.
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
-
-  if (event.request.mode === 'navigate') {
-    event.respondWith(
-      fetch(event.request)
-        .then((response) => {
-          if (response.ok) caches.open(CACHE_NAME).then((cache) => cache.put(event.request, response.clone()));
-          return response;
-        })
-        .catch(async () => (await caches.match(event.request)) || (await caches.match('./colosse-app.html')) || (await caches.match('./index.html'))),
-    );
-    return;
-  }
-
-  event.respondWith(
-    caches.match(event.request).then((cached) => {
-      const network = fetch(event.request)
-        .then((response) => {
-          if (response.ok) caches.open(CACHE_NAME).then((cache) => cache.put(event.request, response.clone()));
-          return response;
-        })
-        .catch(() => cached);
-      return cached || network;
-    }),
-  );
+  event.respondWith((async () => {
+    const cache = await caches.open(CACHE_NAME);
+    const cached = await cache.match(event.request, { ignoreSearch: true });
+    if (cached) return cached;
+    try { return await fetch(event.request); }
+    catch (error) {
+      if (event.request.mode === 'navigate') return (await cache.match('./colosse-app.html')) || (await cache.match('./index.html'));
+      throw error;
+    }
+  })());
 });
 
 self.addEventListener('message', (event) => {
