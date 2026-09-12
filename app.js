@@ -4,14 +4,15 @@ import { clearAllData, deleteSession, loadSnapshot, saveAdjustment, saveDailyLog
 import { defaultDayForDate, findDay, findExercise, getExercisePlan, getTrainingPhase, TRAINING_DAYS, STRENGTH_DAYS } from './program.js';
 import { nextPrescription, prescriptionFromHistory, suggestNextSet, summarizeSession, } from './engine/progression.js';
 import { estimateSessionDuration, remainingSessionSeconds, } from './engine/duration.js';
-import { aggregateSides, currentSide, bothSidesDone, countSessionSets, isSessionComplete as isSessionCompletePure, countCompletedStrengthSessions, weekdayOffset, targetRirForSet, isSetValid, countsForHistory, finishStatus, formatSeconds, } from './engine/session.js';
+import { aggregateSides, currentSide, bothSidesDone, countSessionSets, isSessionComplete as isSessionCompletePure, countCompletedStrengthSessions, weekdayOffset, targetRirForSet, isSetValid, countsForHistory, finishStatus, formatSeconds, closeSession, resetExerciseLogForVariant, } from './engine/session.js';
 import { analyzeWeightTrend, macrosForCalories, targetWeight, weeklyTargets, } from './engine/weight.js';
 import { analyzeRecovery, analyzeStrengthTrend, } from './engine/recovery.js';
 import { activityGoalLabel, activityModeLabel, activityProgress, activitySummary, } from './engine/activity.js';
 import { addDays, isoDate, startOfWeek, uid, weekIndexFromStart, } from './engine/math.js';
 import { computeExecutionStep, executionProgress, normalizeExecutionState, STAGES, } from './engine/execution.js';
-import { createTimer, remainingSeconds as timerRemaining, isExpired as timerExpired, needsCompletion, markCompleted, pauseTimer, resumeTimer, adjustTimer as adjustTimerState, elapsedSeconds as timerElapsed, timerOutcome, timerLabel, } from './engine/timer.js';
-import { computeRampSets, normalizeWarmupState, resolveReferenceLoad, GENERAL_WARMUP, } from './engine/warmup.js';
+import { createTimer, remainingSeconds as timerRemaining, isExpired as timerExpired, pauseTimer, resumeTimer, adjustTimer as adjustTimerState, timerLabel, timerControls, canShortenTimer, } from './engine/timer.js';
+import { applyTimerOutcome, createTimerResolutionQueue } from './engine/timer-effects.js';
+import { computeRampSets, normalizeWarmupState, resolveReferenceLoad, clearExerciseRamps, GENERAL_WARMUP, } from './engine/warmup.js';
 import { renderExecution } from './ui/execution.js';
 import { decisionMeta, escapeHtml, formatClock, formatDateFr, formatKg, numberInputValue, pct, sparklineSvg, } from './ui/templates.js';
 const YOUTUBE_SEARCH = 'https://www.youtube.com/results?search_query=';
@@ -45,6 +46,8 @@ export class ColosseApp {
     snapshot = defaultSnapshot();
     viewWeekStart = startOfWeek(new Date());
     timer = null;
+    /** Verrou de résolution : une seule à la fois, garantie « exactly once ». */
+    timerQueue = createTimerResolutionQueue();
     tickHandle = null;
     saveDebounce = null;
     toastHandle = null;
@@ -808,13 +811,27 @@ export class ColosseApp {
       <div class="timer-label">${escapeHtml(timerLabel(this.timer.kind))}</div>
       <strong id="timer-remaining">${formatClock(remaining)}</strong>
       <div class="timer-progress"><i id="timer-progress" style="width:${Math.max(0, Math.min(100, remaining / this.timer.totalSec * 100))}%"></i></div>
-      <div class="timer-actions">
-        <button data-action="timer-minus">−15 s</button>
-        <button class="timer-pause" data-action="timer-pause">${this.timer.paused ? '▶' : 'Ⅱ'}</button>
-        <button data-action="timer-plus">+15 s</button>
-      </div>
-      <button class="timer-skip" data-action="timer-skip">${this.timer.kind === 'cardio' || this.timer.kind === 'recovery' ? 'Arrêter' : 'Passer'}</button>
+      <div class="timer-actions">${this.renderTimerControls()}</div>
+      ${this.renderTimerSkip()}
     </div>`;
+    }
+    /** Les contrôles dépendent du kind : une durée prescrite ne se raccourcit pas. */
+    renderTimerControls() {
+        return timerControls(this.timer.kind)
+            .filter((control) => control.id !== 'skip')
+            .map((control) => {
+            if (control.id === 'pause')
+                return `<button class="timer-pause" data-action="timer-pause">${this.timer.paused ? '▶' : 'Ⅱ'}</button>`;
+            const action = control.id === 'minus' ? 'timer-minus' : 'timer-plus';
+            return `<button data-action="${action}" data-delta="${control.deltaSec}">${escapeHtml(control.label)}</button>`;
+        })
+            .join('');
+    }
+    renderTimerSkip() {
+        const skip = timerControls(this.timer.kind).find((control) => control.id === 'skip');
+        if (!skip)
+            return '';
+        return `<button class="timer-skip" data-action="timer-skip">${escapeHtml(skip.label)}</button>`;
     }
     async handleClick(event) {
         // Sélection des puces RIR / technique / douleur du mode exécution
@@ -970,12 +987,19 @@ export class ColosseApp {
             case 'toggle-skip-exercise':
                 await this.toggleSkipExercise(actionElement.dataset.exercise ?? '');
                 break;
-            case 'timer-minus':
-                await this.mutateTimer((t) => adjustTimerState(t, -15));
+            case 'timer-minus': {
+                // Garde-fou : aucune durée prescrite ne se raccourcit au bouton.
+                if (!canShortenTimer(this.timer?.kind))
+                    break;
+                const delta = Number(actionElement.dataset.delta) || -15;
+                await this.mutateTimer((t) => adjustTimerState(t, -Math.abs(delta)));
                 break;
-            case 'timer-plus':
-                await this.mutateTimer((t) => adjustTimerState(t, 15));
+            }
+            case 'timer-plus': {
+                const delta = Number(actionElement.dataset.delta) || 15;
+                await this.mutateTimer((t) => adjustTimerState(t, Math.abs(delta)));
                 break;
+            }
             case 'timer-pause':
                 await this.mutateTimer((t) => (t.paused ? resumeTimer(t) : pauseTimer(t)));
                 break;
@@ -1122,7 +1146,12 @@ export class ColosseApp {
         await saveSession(ctx.session);
         this.render();
     }
-    /** Après un reload : restaure le timer depuis la session et traite une expiration passée UNE seule fois. */
+    /**
+     * Après un reload : restaure le timer depuis la session.
+     * Un timer expiré pendant que l'app était fermée est résolu ICI, avec son
+     * effet métier complet. On ne le marque jamais « traité » d'abord : c'est
+     * précisément ce qui faisait perdre l'échauffement, le cardio ou la récup.
+     */
     async restoreTimerFromSession() {
         const ctx = this.currentContext();
         const timer = ctx.session.activeTimer;
@@ -1131,12 +1160,8 @@ export class ColosseApp {
             return;
         }
         this.timer = timer;
-        if (needsCompletion(timer)) {
-            ctx.session.activeTimer = markCompleted(timer);
-            await saveSession(ctx.session);
-            this.timer = ctx.session.activeTimer;
+        if (timerExpired(timer))
             await this.resolveActiveTimer(true);
-        }
     }
     async beginTimedExercise(exerciseId, durationSec, kind = 'cardio') {
         await this.startGenericTimer(kind, Math.max(30, durationSec || 600), { exerciseId });
@@ -1177,54 +1202,39 @@ export class ColosseApp {
         await saveSession(ctx.session);
         this.render();
     }
-    /** Applique l'effet métier du timer selon son kind, puis le ferme. Idempotent. */
+    /**
+     * Résout le timer actif : effet métier PUIS fermeture, en une seule écriture.
+     * Verrou : les résolutions se mettent en file, jamais en parallèle. La
+     * deuxième ne trouve plus de timer actif — d'où le « exactly once ».
+     */
     async resolveActiveTimer(force = false) {
+        return this.timerQueue.run(() => this.applyActiveTimerResolution(force));
+    }
+    /**
+     * ⚠ Remplace l'objet session dans le snapshot : ne conserve aucune référence
+     * prise avant l'appel (session, log, set) — reprends-les après.
+     */
+    async applyActiveTimerResolution(force) {
         const ctx = this.currentContext();
         const timer = ctx.session.activeTimer;
         if (!timer)
-            return;
+            return; // déjà résolu par la résolution précédente
         if (!force && !timerExpired(timer))
             return;
-        if (timer.completedHandled) {
-            ctx.session.activeTimer = null;
-            this.timer = null;
-            await saveSession(ctx.session);
-            return;
-        }
-        const outcome = timerOutcome(timer);
-        if (outcome.action === 'record-rest' && outcome.context?.exerciseId != null) {
-            const log = ctx.session.exercises[outcome.context.exerciseId];
-            const set = log?.sets?.[outcome.context.setIndex];
-            if (set && outcome.kind === 'work-rest')
-                set.restActualSec = outcome.restActualSec;
-        }
-        else if (outcome.action === 'record-cardio') {
-            const log = ctx.session.exercises[outcome.context?.exerciseId];
-            const set = log?.sets?.[0];
-            if (set) {
-                set.reps = outcome.durationSec;
-                set.weightKg = 0;
-                set.done = outcome.complete;
-                set.completedAt = outcome.complete ? Date.now() : null;
-                if (!outcome.complete)
-                    this.showToast(`Cardio arrêté à ${formatSeconds(outcome.durationSec)} — étape incomplète.`, 'info', 5000);
-            }
-        }
-        else if (outcome.action === 'complete-general-warmup') {
-            const warmup = normalizeWarmupState(ctx.session.warmup);
-            // Arrivé au bout : accompli. Interrompu avant : passé, jamais "done".
-            warmup.general = outcome.complete
-                ? { done: true, skipped: false, durationSec: outcome.durationSec }
-                : { done: false, skipped: true, durationSec: outcome.durationSec };
-            ctx.session.warmup = warmup;
-            if (!outcome.complete)
-                this.showToast(`Échauffement interrompu à ${formatSeconds(outcome.durationSec)} — enregistré comme passé.`, 'info', 5000);
-        }
-        ctx.session.activeTimer = null; // jamais de timer fantôme après un reload
+        const result = applyTimerOutcome(ctx.session, timer, Date.now());
+        this.replaceSession(result.session);
         this.timer = null;
-        ctx.session.updatedAt = Date.now();
-        await saveSession(ctx.session);
+        await saveSession(result.session);
+        if (result.message)
+            this.showToast(result.message, 'info', 5000);
         this.render();
+    }
+    replaceSession(session) {
+        const index = this.snapshot.sessions.findIndex((item) => item.id === session.id);
+        if (index >= 0)
+            this.snapshot.sessions[index] = session;
+        else
+            this.snapshot.sessions.push(session);
     }
     async execValidateSet(exerciseId, setIndex) {
         const ctx = this.currentContext();
@@ -1272,16 +1282,14 @@ export class ColosseApp {
         const context = this.currentContext();
         if (!context.session.startedAt)
             context.session.startedAt = Date.now();
-        context.session.endedAt = Date.now();
-        context.session.updatedAt = Date.now();
         const finishCount = this.activeSetCount(context.session, context.day);
         const outcome = finishStatus(finishCount);
-        context.session.status = outcome.status;
-        context.session.activeTimer = null;
-        context.session.execution = { ...this.execState(context.session), active: false, stage: null, updatedAt: Date.now() };
+        // closeSession garantit : plus aucun timer, mode exécution désactivé.
+        const closed = closeSession({ ...context.session, execution: this.execState(context.session) }, { now: Date.now(), status: outcome.status });
+        this.replaceSession(closed);
         this.timer = null;
         this.programViewOverride = false;
-        await saveSession(context.session);
+        await saveSession(closed);
         await this.releaseWakeLock();
         this.showToast(outcome.message, outcome.status === 'COMPLETE' ? 'success' : 'info', 6000);
         this.render();
@@ -1312,11 +1320,11 @@ export class ColosseApp {
         context.session.updatedAt = Date.now();
     }
     async toggleSet(exerciseId, setIndex) {
-        const context = this.currentContext();
+        let context = this.currentContext();
         this.readSetRow(exerciseId, setIndex);
         const exercise = context.day.exercises.find((item) => item.id === exerciseId);
-        const log = context.session.exercises[exerciseId];
-        const set = log?.sets[setIndex];
+        let log = context.session.exercises[exerciseId];
+        let set = log?.sets[setIndex];
         if (!exercise || !log || !set)
             return;
         if (set.done) {
@@ -1345,8 +1353,15 @@ export class ColosseApp {
         }
         if (!needsExternalLoad && set.weightKg === null)
             set.weightKg = 0;
-        if (this.timer)
+        if (this.timer) {
             await this.resolveActiveTimer(true);
+            // La résolution a réécrit la session : reprendre des références vivantes.
+            context = this.currentContext();
+            log = context.session.exercises[exerciseId];
+            set = log?.sets[setIndex];
+            if (!log || !set)
+                return;
+        }
         if (!context.session.startedAt) {
             context.session.startedAt = Date.now();
             context.session.endedAt = null;
@@ -1433,14 +1448,10 @@ export class ColosseApp {
             return;
         }
         const plan = getExercisePlan(exercise, context.weekIndex);
-        log.variantId = variantId;
-        log.sets = Array.from({ length: plan.sets }, () => makeSet());
-        log.skipped = false;
+        context.session.exercises[exerciseId] = resetExerciseLogForVariant(log, variantId, plan.sets, makeSet);
         // Une montée en charge calculée pour une autre machine ne doit JAMAIS
         // être réutilisée : incréments et charges diffèrent.
-        const warmup = normalizeWarmupState(context.session.warmup);
-        delete warmup.ramps[exerciseId];
-        context.session.warmup = warmup;
+        context.session.warmup = clearExerciseRamps(context.session.warmup, exerciseId);
         this.seedSessionPrescriptions(context.session, context.day, context.date, context.weekIndex);
         context.session.updatedAt = Date.now();
         await saveSession(context.session);
@@ -1588,7 +1599,7 @@ export class ColosseApp {
                 timerText.textContent = formatClock(remaining);
             if (progress)
                 progress.style.width = `${Math.max(0, Math.min(100, remaining / this.timer.totalSec * 100))}%`;
-            if (!this.timer.paused && remaining <= 0) {
+            if (!this.timer.paused && remaining <= 0 && !this.timerQueue.busy) {
                 this.notifyTimerEnd();
                 void this.resolveActiveTimer(true);
             }

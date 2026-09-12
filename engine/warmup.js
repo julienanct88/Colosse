@@ -159,3 +159,13 @@ export function nextRampIndex(state, exerciseId, rampSets) {
     }
     return -1;
 }
+
+/**
+ * Efface la montée en charge d'un exercice (changement de variante).
+ * Les autres exercices ne sont jamais touchés.
+ */
+export function clearExerciseRamps(state, exerciseId) {
+    const warmup = normalizeWarmupState(state);
+    delete warmup.ramps[exerciseId];
+    return warmup;
+}

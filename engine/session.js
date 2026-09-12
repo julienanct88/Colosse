@@ -141,3 +141,33 @@ export function currentSide(set) {
 export function bothSidesDone(set) {
     return !!(set?.sides?.left?.done && set?.sides?.right?.done);
 }
+
+/**
+ * Clôture d'une séance. Déterministe : aucun timer ne survit, le mode exécution
+ * est désactivé. Renvoie une nouvelle session, ne modifie pas l'originale.
+ */
+export function closeSession(session, { now = Date.now(), status = 'INCOMPLETE' } = {}) {
+    if (!session)
+        return session;
+    return {
+        ...session,
+        endedAt: now,
+        status,
+        activeTimer: null,
+        execution: { ...(session.execution ?? {}), active: false, stage: null, updatedAt: now },
+        updatedAt: now,
+    };
+}
+
+/**
+ * Changement de variante : l'exercice repart de zéro. Les séries faites sur
+ * l'ancienne machine ne sont jamais conservées (charges et incréments diffèrent).
+ */
+export function resetExerciseLogForVariant(log, variantId, setCount, createSet) {
+    return {
+        ...(log ?? {}),
+        variantId,
+        skipped: false,
+        sets: Array.from({ length: Math.max(0, Number(setCount) || 0) }, () => createSet()),
+    };
+}

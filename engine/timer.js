@@ -31,7 +31,6 @@ export function createTimer(kind, totalSec, context = {}, now = Date.now()) {
         endsAt: now + total * 1000,
         paused: false,
         pausedRemainingSec: null,
-        completedHandled: false,
         context,
     };
 }
@@ -49,14 +48,11 @@ export function isExpired(timer, now = Date.now()) {
     return !!timer && !timer.paused && now >= timer.endsAt;
 }
 
-/** Le timer a expiré pendant que l'app était fermée et n'a pas encore été traité. */
-export function needsCompletion(timer, now = Date.now()) {
-    return isExpired(timer, now) && !timer.completedHandled;
-}
-
-export function markCompleted(timer) {
-    return timer ? { ...timer, completedHandled: true } : timer;
-}
+// Il n'existe volontairement AUCUN drapeau "déjà traité" persisté : marquer un
+// timer avant d'appliquer son effet métier faisait disparaître l'effet
+// (échauffement, cardio, récupération) quand il expirait app fermée.
+// L'unicité du traitement est garantie par le fait que la résolution met
+// activeTimer à null dans la même écriture — voir applyTimerOutcome.
 
 export function pauseTimer(timer, now = Date.now()) {
     if (!timer || timer.paused)
@@ -121,4 +117,45 @@ export function timerOutcome(timer, now = Date.now()) {
         default:
             return { kind: timer.kind, action: 'none', context: timer.context };
     }
+}
+
+/**
+ * Contrôles autorisés pour un timer, selon son kind.
+ * On ne doit JAMAIS pouvoir raccourcir une durée prescrite (échauffement,
+ * cardio, récupération) puis la faire passer pour accomplie.
+ */
+export function timerControls(kind) {
+    switch (kind) {
+        case 'general-warmup':
+            return [
+                { id: 'pause' },
+                { id: 'plus', deltaSec: 30, label: '+30 s' },
+                { id: 'skip', label: 'Passer' },
+            ];
+        case 'cardio':
+            return [
+                { id: 'pause' },
+                { id: 'plus', deltaSec: 30, label: '+30 s' },
+                { id: 'skip', label: 'Arrêter' },
+            ];
+        case 'recovery':
+            return [
+                { id: 'pause' },
+                { id: 'plus', deltaSec: 300, label: '+5 min' },
+                { id: 'skip', label: 'Arrêter' },
+            ];
+        default:
+            // Repos entre séries et changement de côté : ajustables dans les deux sens.
+            return [
+                { id: 'minus', deltaSec: -15, label: '\u221215 s' },
+                { id: 'pause' },
+                { id: 'plus', deltaSec: 15, label: '+15 s' },
+                { id: 'skip', label: 'Passer' },
+            ];
+    }
+}
+
+/** Une durée prescrite ne se raccourcit pas au bouton. */
+export function canShortenTimer(kind) {
+    return timerControls(kind).some((control) => control.id === 'minus');
 }

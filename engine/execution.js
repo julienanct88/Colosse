@@ -3,7 +3,7 @@
 // un verrouillage ou un kill de la PWA, on retombe au même endroit.
 
 import {
-    activationSteps, computeRampSets, isActivationComplete, isGeneralWarmupDone,
+    activationSteps, computeRampSets, getRampProtocol, isActivationComplete, isGeneralWarmupDone,
     nextActivationStep, nextRampIndex, normalizeWarmupState, resolveReferenceLoad,
 } from './warmup.js';
 import { targetRirForSet, currentSide } from './session.js';
@@ -132,7 +132,13 @@ export function isExecutionComplete(ctx) {
     return computeExecutionStep(ctx).stage === STAGES.SESSION_COMPLETE;
 }
 
-/** Avancement global : étapes obligatoires réalisées / total. */
+/**
+ * Avancement global : étapes obligatoires réalisées / total.
+ * Les séries de montée en charge SONT des étapes du mode exécution (option A)
+ * — mais elles n'entrent jamais dans le nombre de séries de travail, le
+ * tonnage, l'e1RM ni le volume d'hypertrophie : ce compteur est le seul
+ * endroit où elles sont comptées.
+ */
 export function executionProgress({ day, session, resolvePlan }) {
     const warmup = normalizeWarmupState(session?.warmup);
     let done = 0;
@@ -154,9 +160,12 @@ export function executionProgress({ day, session, resolvePlan }) {
             continue;
         }
         const plan = resolvePlan(exercise);
-        total += plan.sets;
+        const ramps = getRampProtocol(exercise) ?? [];
+        total += ramps.length + plan.sets;
         if (log?.skipped)
             continue;
+        const rampsDone = warmup.ramps[exercise.id]?.done ?? [];
+        done += ramps.filter((_, index) => !!rampsDone[index]).length;
         done += workSetsDone(log, plan);
     }
     return { done, total, percent: total > 0 ? Math.round((done / total) * 100) : 0 };

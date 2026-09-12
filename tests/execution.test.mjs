@@ -7,9 +7,11 @@ import {
 } from '../engine/warmup.js';
 import { computeExecutionStep, executionProgress, STAGES, orderedExercises } from '../engine/execution.js';
 import {
-  createTimer, remainingSeconds, isExpired, needsCompletion, markCompleted,
+  createTimer, remainingSeconds, isExpired,
   pauseTimer, resumeTimer, timerOutcome, timerLabel, elapsedSeconds,
 } from '../engine/timer.js';
+import { applyTimerOutcome } from '../engine/timer-effects.js';
+import { countSessionSets } from '../engine/session.js';
 
 const planFor = (week) => (ex) => getExercisePlan(ex, week);
 
@@ -95,17 +97,23 @@ test('12. sans charge de référence, on demande la charge de travail', () => {
   assert.equal(stepOf(day, s).stage, STAGES.NEEDS_REFERENCE_LOAD);
 });
 
-// 13-14 — les séries de chauffe ne contaminent rien
-test('13-14. les séries de chauffe ne comptent ni comme travail ni dans l’avancement', () => {
+// 13-14 — les séries de chauffe : étapes du mode exécution, jamais du travail
+test('13-14. les séries de chauffe sont des étapes mais jamais des séries de travail', () => {
   const day = findDay('push-a');
   const s = blankSession(day);
   s.warmup.general.done = true;
   for (const st of activationSteps(day)) s.warmup.activation[st.key] = { done: true };
   s.warmup.ramps['push-a-incline-smith'] = { referenceLoadKg: 100, done: [] };
   const before = executionProgress({ day, session: s, resolvePlan: planFor(1) });
+  const setsBefore = countSessionSets(s, day, planFor(1));
   s.warmup.ramps['push-a-incline-smith'].done = [true, true, true];
   const after = executionProgress({ day, session: s, resolvePlan: planFor(1) });
-  assert.equal(before.done, after.done, 'les ramps ne changent pas le nombre de séries réalisées');
+  const setsAfter = countSessionSets(s, day, planFor(1));
+  // Option A : les 3 ramps comptent comme 3 étapes du mode exécution…
+  assert.equal(after.done - before.done, 3, 'les 3 ramps sont des étapes');
+  assert.equal(after.total, before.total, 'le total ne bouge pas : les ramps y étaient déjà');
+  // …mais jamais comme des séries de travail.
+  assert.deepEqual(setsAfter, setsBefore, 'les ramps ne changent pas le décompte des séries');
   assert.equal(stepOf(day, s).stage, STAGES.WORK_SET, 'après les ramps on arrive à la série de travail');
 });
 
@@ -167,12 +175,16 @@ test('21. le timer se recharge correctement après un reload', () => {
   assert.equal(remainingSeconds(t, 61000), 120, 'calculé depuis les timestamps absolus');
 });
 test('22. un timer expiré pendant que l’app était fermée est traité une seule fois', () => {
-  const t = createTimer('work-rest', 60, {}, 1000);
+  const t = createTimer('work-rest', 60, { exerciseId: 'x', setIndex: 0 }, 1000);
   const later = 1000 + 120000;
   assert.equal(isExpired(t, later), true);
-  assert.equal(needsCompletion(t, later), true);
-  const handled = markCompleted(t);
-  assert.equal(needsCompletion(handled, later), false, 'pas de double traitement');
+  const session = { id: 's', exercises: { x: { sets: [{ done: true, restActualSec: null }] } }, activeTimer: t };
+  const first = applyTimerOutcome(session, t, later).session;
+  assert.equal(first.exercises.x.sets[0].restActualSec, 60, 'effet appliqué une fois');
+  assert.equal(first.activeTimer, null);
+  // Deuxième tentative : plus de timer actif, donc plus rien à appliquer.
+  const second = applyTimerOutcome(first, first.activeTimer, later + 60000).session;
+  assert.equal(second.exercises.x.sets[0].restActualSec, 60, 'pas de double traitement');
 });
 test('23. la pause survit au reload', () => {
   const t = createTimer('work-rest', 180, {}, 1000);

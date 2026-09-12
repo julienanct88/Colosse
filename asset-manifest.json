@@ -1,6 +1,6 @@
 {
-  "version": "3.5.1",
-  "cacheVersion": "colosse-adaptive-v3-stabilisation-351",
+  "version": "3.5.2",
+  "cacheVersion": "colosse-adaptive-v3-reload-352",
   "assets": [
     "./",
     "./app.js",
@@ -27,6 +27,7 @@
     "./engine/execution.js",
     "./engine/warmup.js",
     "./engine/timer.js",
+    "./engine/timer-effects.js",
     "./ui/execution.js"
   ]
 }
