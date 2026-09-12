@@ -6,7 +6,7 @@ import { GENERAL_WARMUP } from '../engine/warmup.js';
 import { formatSeconds } from '../engine/session.js';
 
 const rirScale = (target) => [0, 1, 2, 3, 4].map((v) => `<button type="button" class="chip-choice ${v === target ? 'is-target' : ''}" data-exec-field="rir" data-value="${v}">${v === 4 ? '4+' : v}</button>`).join('');
-const painScale = () => [0, 1, 2, 3, 4].map((v) => `<button type="button" class="chip-choice" data-exec-field="pain" data-value="${v}">${v === 4 ? '4+' : v}</button>`).join('');
+const painScale = () => [0, 1, 2, 3, 4].map((v) => `<button type="button" class="chip-choice ${v === 0 ? 'selected' : ''}" data-exec-field="pain" data-value="${v}">${v === 4 ? '4+' : v}</button>`).join('');
 
 function header(day, progress, elapsedSec) {
     return `<div class="exec-header">
@@ -114,9 +114,9 @@ function renderWorkSet(step, ctx) {
       ${needsLoad ? `<label class="exec-input"><span>Charge (kg)</span><input type="number" inputmode="decimal" min="0" step="0.25" data-exec-field="weightKg" value="${load}"/></label>` : ''}
       <label class="exec-input"><span>${amountLabel}</span><input type="number" inputmode="numeric" min="0" step="1" data-exec-field="reps" value="${set.reps ?? ''}" placeholder="${plan.repMin}"/></label>
     </div>
-    <div class="exec-choice"><span>RIR réel</span><div class="chip-row" data-exec-group="rir">${rirScale(targetRir)}</div></div>
+    <div class="exec-choice"><span>RIR réel <small class="rir-target">(cible ${targetRir})</small></span><div class="chip-row" data-exec-group="rir">${rirScale(targetRir)}</div></div>
     <div class="exec-choice"><span>Technique</span><div class="chip-row" data-exec-group="technique">
-      <button type="button" class="chip-choice" data-exec-field="technique" data-value="good">PROPRE</button>
+      <button type="button" class="chip-choice selected" data-exec-field="technique" data-value="good">PROPRE</button>
       <button type="button" class="chip-choice" data-exec-field="technique" data-value="degraded">DÉGRADÉE</button>
     </div></div>
     <div class="exec-choice"><span>Douleur</span><div class="chip-row" data-exec-group="pain">${painScale()}</div></div>
@@ -145,7 +145,7 @@ function renderRecovery(step) {
     <h2 class="exec-title">${escapeHtml(ex.name)}</h2>
     <div class="exec-huge">${formatSeconds(step.durationSec)}</div>
     <p class="exec-cue">${escapeHtml(ex.coachingCue ?? '')}</p>
-    <button class="exec-primary" data-action="exec-start-cardio" data-exercise="${ex.id}" data-duration="${step.durationSec}">DÉMARRER</button>
+    <button class="exec-primary" data-action="exec-start-recovery" data-exercise="${ex.id}" data-duration="${step.durationSec}">DÉMARRER</button>
   </div>`;
 }
 
@@ -158,6 +158,7 @@ function renderComplete(ctx) {
     <ul class="exec-summary">
       <li><span>Durée</span><strong>${formatClock(summary.durationSec)}</strong></li>
       <li><span>Séries</span><strong>${summary.setsDone}/${summary.setsTotal}</strong></li>
+      <li><span>Exercices</span><strong>${summary.exercisesDone}/${summary.exercisesTotal}</strong></li>
       ${summary.cardioSec ? `<li><span>Cardio</span><strong>${formatSeconds(summary.cardioSec)}</strong></li>` : ''}
       ${summary.skipped ? `<li><span>Exercices passés</span><strong>${summary.skipped}</strong></li>` : ''}
     </ul>

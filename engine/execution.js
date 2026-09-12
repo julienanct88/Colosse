@@ -6,7 +6,7 @@ import {
     activationSteps, computeRampSets, isActivationComplete, isGeneralWarmupDone,
     nextActivationStep, nextRampIndex, normalizeWarmupState, resolveReferenceLoad,
 } from './warmup.js';
-import { targetRirForSet } from './session.js';
+import { targetRirForSet, currentSide } from './session.js';
 
 export const STAGES = {
     GENERAL_WARMUP: 'GENERAL_WARMUP',
@@ -116,7 +116,7 @@ export function computeExecutionStep({ day, session, resolvePlan }) {
 
         const setIndex = done;
         const set = log.sets[setIndex];
-        const side = plan.perSide ? (set?.side ?? 'left') : null;
+        const side = plan.perSide ? currentSide(set) : null;
         return {
             stage: STAGES.WORK_SET, exercise, exerciseId: exercise.id, setIndex, side,
             stepKey: `work:${exercise.id}:${setIndex}:${side ?? 'both'}`,

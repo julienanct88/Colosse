@@ -109,7 +109,11 @@ export function timerOutcome(timer, now = Date.now()) {
                 complete: elapsed >= timer.totalSec, context: timer.context,
             };
         case 'general-warmup':
-            return { kind: timer.kind, action: 'complete-general-warmup', durationSec: elapsed, context: timer.context };
+            // Un échauffement interrompu n'est JAMAIS considéré comme accompli.
+            return {
+                kind: timer.kind, action: 'complete-general-warmup', durationSec: elapsed,
+                complete: elapsed >= timer.totalSec, context: timer.context,
+            };
         case 'side-switch':
             return { kind: timer.kind, action: 'advance-side', context: timer.context };
         case 'activation-rest':

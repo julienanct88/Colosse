@@ -4,7 +4,7 @@ import { clearAllData, deleteSession, loadSnapshot, saveAdjustment, saveDailyLog
 import { defaultDayForDate, findDay, findExercise, getExercisePlan, getTrainingPhase, TRAINING_DAYS, STRENGTH_DAYS } from './program.js';
 import { nextPrescription, prescriptionFromHistory, suggestNextSet, summarizeSession, } from './engine/progression.js';
 import { estimateSessionDuration, remainingSessionSeconds, } from './engine/duration.js';
-import { countSessionSets, isSessionComplete as isSessionCompletePure, countCompletedStrengthSessions, weekdayOffset, targetRirForSet, isSetValid, countsForHistory, finishStatus, formatSeconds, } from './engine/session.js';
+import { aggregateSides, currentSide, bothSidesDone, countSessionSets, isSessionComplete as isSessionCompletePure, countCompletedStrengthSessions, weekdayOffset, targetRirForSet, isSetValid, countsForHistory, finishStatus, formatSeconds, } from './engine/session.js';
 import { analyzeWeightTrend, macrosForCalories, targetWeight, weeklyTargets, } from './engine/weight.js';
 import { analyzeRecovery, analyzeStrengthTrend, } from './engine/recovery.js';
 import { activityGoalLabel, activityModeLabel, activityProgress, activitySummary, } from './engine/activity.js';
@@ -310,6 +310,16 @@ export class ColosseApp {
             prescriptionLoadKg,
             lastExposure,
             summary: {
+                exercisesTotal: context.day.exercises.length,
+                exercisesDone: context.day.exercises.filter((ex) => {
+                    const l = context.session.exercises[ex.id];
+                    if (!l || l.skipped)
+                        return false;
+                    if (ex.kind === 'cardio')
+                        return !!l.sets?.[0]?.done;
+                    const p = resolvePlan(ex);
+                    return l.sets.slice(0, p.sets).every((x) => x.done);
+                }).length,
                 dayName: context.day.name,
                 durationSec: sessionDurationSeconds(context.session),
                 setsDone: setCount.done, setsTotal: setCount.total,
@@ -381,6 +391,7 @@ export class ColosseApp {
         }).join('')}
       </section>
 
+      ${this.execState(context.session).active && !context.session.endedAt ? '<button class="exec-resume-banner" data-action="exec-resume">\u25b6 REPRENDRE LA S\u00c9ANCE</button>' : ''}
       <section class="session-card ${complete ? 'complete' : ''}">
         <div class="session-heading">
           <div><span class="eyebrow">${escapeHtml(context.day.focus)}</span><h2>${escapeHtml(context.day.name)}</h2></div>
@@ -876,10 +887,10 @@ export class ColosseApp {
                 await this.moveExercise(actionElement.dataset.exercise ?? '', actionElement.dataset.direction === 'up' ? -1 : 1);
                 break;
             case 'start-cardio':
-                await this.startCardio(actionElement.dataset.exercise ?? '', Number(actionElement.dataset.duration));
+                await this.beginTimedExercise(actionElement.dataset.exercise ?? '', Number(actionElement.dataset.duration), 'cardio');
                 break;
             case 'finish-cardio':
-                await this.finishCardio(actionElement.dataset.exercise ?? '', Number(actionElement.dataset.duration));
+                await this.stopTimedExercise(actionElement.dataset.exercise ?? '');
                 break;
             case 'exec-show-program':
                 this.programViewOverride = true;
@@ -945,7 +956,10 @@ export class ColosseApp {
                 await this.execValidateSet(actionElement.dataset.exercise ?? '', Number(actionElement.dataset.set));
                 break;
             case 'exec-start-cardio':
-                await this.startGenericTimer('cardio', Number(actionElement.dataset.duration) || 600, { exerciseId: actionElement.dataset.exercise ?? '' });
+                await this.beginTimedExercise(actionElement.dataset.exercise ?? '', Number(actionElement.dataset.duration) || 600, 'cardio');
+                break;
+            case 'exec-start-recovery':
+                await this.beginTimedExercise(actionElement.dataset.exercise ?? '', Number(actionElement.dataset.duration) || 2700, 'recovery');
                 break;
             case 'exec-finish':
                 await this.finishSession();
@@ -967,7 +981,11 @@ export class ColosseApp {
                 break;
             case 'timer-skip': {
                 const kind = this.timer?.kind;
-                if ((kind === 'cardio' || kind === 'recovery') && !confirm('Arrêter le cardio avant la fin ? La durée réelle sera enregistrée et l’étape restera incomplète.'))
+                if (kind === 'cardio' && !confirm('Arrêter le cardio avant la fin ? La durée réelle sera enregistrée et l’étape restera incomplète.'))
+                    break;
+                if (kind === 'recovery' && !confirm('Arrêter cette étape de récupération ?'))
+                    break;
+                if (kind === 'general-warmup' && !confirm('Passer le reste de l’échauffement ?'))
                     break;
                 await this.resolveActiveTimer(true);
                 break;
@@ -1093,38 +1111,6 @@ export class ColosseApp {
         await this.acquireWakeLock();
         this.render();
     }
-    async startCardio(exerciseId, durationSec) {
-        const context = this.currentContext();
-        if (!context.session.startedAt) {
-            context.session.startedAt = Date.now();
-            context.session.endedAt = null;
-            await this.acquireWakeLock();
-        }
-        this.startRestTimer(exerciseId, 0, Math.max(30, durationSec || 600), 'cardio');
-        this.render();
-    }
-    async finishCardio(exerciseId, durationSec) {
-        const context = this.currentContext();
-        const log = context.session.exercises[exerciseId];
-        if (!log || !log.sets[0])
-            return;
-        const set = log.sets[0];
-        const alreadyDone = set.done;
-        set.done = !alreadyDone;
-        set.weightKg = 0;
-        set.reps = alreadyDone ? null : (Number(set.reps) || durationSec || 0);
-        set.rir = null;
-        set.technique = 'good';
-        set.pain = 0;
-        set.completedAt = alreadyDone ? null : Date.now();
-        context.session.updatedAt = Date.now();
-        await saveSession(context.session);
-        if (this.timer)
-            await this.closeRestTimer(false);
-        this.render();
-        if (!alreadyDone)
-            this.showToast('Cardio validé.', 'success');
-    }
     async mutateTimer(mutator) {
         const ctx = this.currentContext();
         if (!ctx.session.activeTimer)
@@ -1151,6 +1137,31 @@ export class ColosseApp {
             this.timer = ctx.session.activeTimer;
             await this.resolveActiveTimer(true);
         }
+    }
+    async beginTimedExercise(exerciseId, durationSec, kind = 'cardio') {
+        await this.startGenericTimer(kind, Math.max(30, durationSec || 600), { exerciseId });
+    }
+    async stopTimedExercise(exerciseId) {
+        const ctx = this.currentContext();
+        const timer = ctx.session.activeTimer;
+        if (timer && timer.context?.exerciseId === exerciseId) {
+            const isRecovery = timer.kind === 'recovery';
+            if (!confirm(isRecovery ? 'Arrêter cette étape de récupération ?' : 'Arrêter le cardio avant la fin ? La durée réelle sera enregistrée et l’étape restera incomplète.'))
+                return;
+            await this.resolveActiveTimer(true);
+            return;
+        }
+        // Pas de timer en cours : bascule manuelle de l'étape.
+        const log = ctx.session.exercises[exerciseId];
+        const set = log?.sets?.[0];
+        if (!set)
+            return;
+        set.done = !set.done;
+        set.weightKg = 0;
+        set.completedAt = set.done ? Date.now() : null;
+        ctx.session.updatedAt = Date.now();
+        await saveSession(ctx.session);
+        this.render();
     }
     async startGenericTimer(kind, seconds, context = {}) {
         const ctx = this.currentContext();
@@ -1201,10 +1212,15 @@ export class ColosseApp {
         }
         else if (outcome.action === 'complete-general-warmup') {
             const warmup = normalizeWarmupState(ctx.session.warmup);
-            warmup.general = { done: true, skipped: false, durationSec: outcome.durationSec };
+            // Arrivé au bout : accompli. Interrompu avant : passé, jamais "done".
+            warmup.general = outcome.complete
+                ? { done: true, skipped: false, durationSec: outcome.durationSec }
+                : { done: false, skipped: true, durationSec: outcome.durationSec };
             ctx.session.warmup = warmup;
+            if (!outcome.complete)
+                this.showToast(`Échauffement interrompu à ${formatSeconds(outcome.durationSec)} — enregistré comme passé.`, 'info', 5000);
         }
-        ctx.session.activeTimer = null;
+        ctx.session.activeTimer = null; // jamais de timer fantôme après un reload
         this.timer = null;
         ctx.session.updatedAt = Date.now();
         await saveSession(ctx.session);
@@ -1227,8 +1243,11 @@ export class ColosseApp {
         if (repsInput && repsInput.value !== '')
             set.reps = Number(repsInput.value);
         const rir = chosen('rir');
-        if (rir !== undefined)
-            set.rir = Number(rir);
+        if (rir === undefined) {
+            this.showToast('Indique ton RIR réel : toute la progression en dépend.', 'error');
+            return;
+        }
+        set.rir = Number(rir);
         const technique = chosen('technique');
         if (technique !== undefined)
             set.technique = technique;
@@ -1247,7 +1266,9 @@ export class ColosseApp {
         await this.toggleSkipExercise(step.exerciseId);
     }
     async finishSession() {
-        await this.closeRestTimer(false);
+        // Un timer encore actif est résolu selon son kind (un cardio trop court
+        // reste incomplet, un échauffement interrompu n'est pas validé).
+        await this.resolveActiveTimer(true);
         const context = this.currentContext();
         if (!context.session.startedAt)
             context.session.startedAt = Date.now();
@@ -1256,6 +1277,10 @@ export class ColosseApp {
         const finishCount = this.activeSetCount(context.session, context.day);
         const outcome = finishStatus(finishCount);
         context.session.status = outcome.status;
+        context.session.activeTimer = null;
+        context.session.execution = { ...this.execState(context.session), active: false, stage: null, updatedAt: Date.now() };
+        this.timer = null;
+        this.programViewOverride = false;
         await saveSession(context.session);
         await this.releaseWakeLock();
         this.showToast(outcome.message, outcome.status === 'COMPLETE' ? 'success' : 'info', 6000);
@@ -1299,6 +1324,7 @@ export class ColosseApp {
             set.completedAt = null;
             set.restActualSec = null;
             set.side = 'left';
+            set.sides = undefined;
             context.session.updatedAt = Date.now();
             await saveSession(context.session);
             this.render();
@@ -1320,24 +1346,43 @@ export class ColosseApp {
         if (!needsExternalLoad && set.weightKg === null)
             set.weightKg = 0;
         if (this.timer)
-            await this.closeRestTimer(false);
+            await this.resolveActiveTimer(true);
         if (!context.session.startedAt) {
             context.session.startedAt = Date.now();
             context.session.endedAt = null;
             await this.acquireWakeLock();
         }
         const planSide = getExercisePlan(exercise, context.weekIndex);
-        // --- Unilatéral : gauche -> changement -> droite -> repos (audit, point 7).
-        // Une série gauche + droite reste UNE seule série.
-        if (planSide.perSide && (set.side ?? 'left') === 'left') {
-            set.side = 'right';
-            set.completedAt = Date.now();
-            context.session.updatedAt = Date.now();
-            await saveSession(context.session);
-            this.startRestTimer(exercise.id, setIndex, Math.max(5, planSide.sideSwitchSec || 15), 'side-switch');
-            this.render();
-            this.showToast('Côté gauche validé — passe au côté droit.', 'info');
-            return;
+        // --- Unilatéral : gauche -> changement -> droite -> repos.
+        // Chaque côté conserve SES valeurs ; la série globale reste UNE série.
+        if (planSide.perSide) {
+            const side = currentSide(set);
+            set.sides = set.sides ?? {};
+            set.sides[side] = {
+                done: true,
+                reps: Number(set.reps) || null,
+                rir: set.rir ?? null,
+                technique: set.technique ?? 'good',
+                pain: Number(set.pain) || 0,
+                weightKg: Number(set.weightKg) || 0,
+                completedAt: Date.now(),
+            };
+            if (side === 'left') {
+                set.side = 'right';
+                context.session.updatedAt = Date.now();
+                await saveSession(context.session);
+                await this.startGenericTimer('side-switch', Math.max(5, planSide.sideSwitchSec || 15), { exerciseId: exercise.id, setIndex });
+                this.showToast('Côté gauche validé — passe au côté droit.', 'info');
+                return;
+            }
+            // Côté droit : la série devient réellement faite, valeurs agrégées.
+            const merged = aggregateSides(set);
+            if (merged) {
+                set.reps = merged.reps;
+                set.rir = merged.rir;
+                set.technique = merged.technique;
+                set.pain = merged.pain;
+            }
         }
         set.done = true;
         set.completedAt = Date.now();
@@ -1354,7 +1399,7 @@ export class ColosseApp {
         else if (set.technique === 'degraded')
             this.showToast('Technique dégradée : aucune hausse de charge ne sera autorisée.', 'info', 5000);
         if (this.snapshot.settings.autoStartTimer && this.shouldStartRest(exercise, setIndex, context)) {
-            this.startRestTimer(exercise.id, setIndex, plan.perSide ? (plan.roundRestSec ?? plan.restSec) : plan.restSec);
+            await this.startGenericTimer('work-rest', plan.perSide ? (plan.roundRestSec ?? plan.restSec) : plan.restSec, { exerciseId: exercise.id, setIndex });
         }
         this.render();
     }
@@ -1391,6 +1436,11 @@ export class ColosseApp {
         log.variantId = variantId;
         log.sets = Array.from({ length: plan.sets }, () => makeSet());
         log.skipped = false;
+        // Une montée en charge calculée pour une autre machine ne doit JAMAIS
+        // être réutilisée : incréments et charges diffèrent.
+        const warmup = normalizeWarmupState(context.session.warmup);
+        delete warmup.ramps[exerciseId];
+        context.session.warmup = warmup;
         this.seedSessionPrescriptions(context.session, context.day, context.date, context.weekIndex);
         context.session.updatedAt = Date.now();
         await saveSession(context.session);
@@ -1477,57 +1527,8 @@ export class ColosseApp {
         this.showToast(`Calories mises à jour : ${analysis.proposedCalories} kcal/jour.`, 'success');
         this.render();
     }
-    startRestTimer(exerciseId, setIndex, seconds, kind = 'work-rest') {
-        // Alias historique -> moteur de timer générique, persisté dans la session.
-        void this.startGenericTimer(kind, seconds, { exerciseId, setIndex });
-    }
-    timerElapsedMs() {
-        if (!this.timer)
-            return 0;
-        const now = Date.now();
-        const activePause = this.timer.paused && this.timer.pauseStartedAt ? now - this.timer.pauseStartedAt : 0;
-        return Math.max(0, now - this.timer.startedAt - this.timer.pausedMs - activePause);
-    }
     timerRemainingSec() {
         return timerRemaining(this.timer);
-    }
-    adjustTimer(deltaSeconds) {
-        if (!this.timer)
-            return;
-        this.timer.totalSec = Math.max(15, this.timer.totalSec + deltaSeconds);
-        if (this.timerRemainingSec() <= 0)
-            void this.closeRestTimer(true);
-        else
-            this.tick();
-    }
-    toggleTimerPause() {
-        if (!this.timer)
-            return;
-        if (this.timer.paused) {
-            if (this.timer.pauseStartedAt)
-                this.timer.pausedMs += Date.now() - this.timer.pauseStartedAt;
-            this.timer.paused = false;
-            this.timer.pauseStartedAt = null;
-        }
-        else {
-            this.timer.paused = true;
-            this.timer.pauseStartedAt = Date.now();
-        }
-    }
-    async closeRestTimer(notify) {
-        if (!this.timer)
-            return;
-        const timer = this.timer;
-        const elapsedSec = Math.max(0, Math.round(this.timerElapsedMs() / 1000));
-        const context = this.currentContext();
-        const set = context.session.exercises[timer.exerciseId]?.sets[timer.setIndex];
-        if (set)
-            set.restActualSec = elapsedSec;
-        context.session.updatedAt = Date.now();
-        this.timer = null;
-        await saveSession(context.session);
-        if (notify)
-            this.notifyTimerEnd();
     }
     notifyTimerEnd() {
         if (this.snapshot.settings.vibrationEnabled) {

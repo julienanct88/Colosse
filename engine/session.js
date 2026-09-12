@@ -104,3 +104,40 @@ export function finishStatus(count) {
         ? { status: 'COMPLETE', message: 'Séance validée.' }
         : { status: 'INCOMPLETE', message: `Séance enregistrée comme INCOMPLÈTE — ${count.done}/${count.total} séries réalisées.` };
 }
+
+/**
+ * Agrégation d'une série unilatérale (audit v3.5.1).
+ * Le côté fort ne doit jamais masquer le côté faible.
+ *   reps      = minimum des deux côtés
+ *   rir       = marge la plus faible (le plus dur)
+ *   technique = dégradée si UN SEUL côté l'est
+ *   douleur   = maximum des deux côtés
+ * Rétrocompatible : une série sans `sides` est renvoyée telle quelle.
+ */
+export function aggregateSides(set) {
+    const sides = set?.sides;
+    if (!sides || !sides.left?.done || !sides.right?.done)
+        return null;
+    const num = (v, fallback = null) => (Number.isFinite(Number(v)) ? Number(v) : fallback);
+    const lr = num(sides.left.reps), rr = num(sides.right.reps);
+    const lRir = num(sides.left.rir), rRir = num(sides.right.rir);
+    const lPain = num(sides.left.pain, 0), rPain = num(sides.right.pain, 0);
+    return {
+        reps: lr !== null && rr !== null ? Math.min(lr, rr) : (lr ?? rr),
+        rir: lRir !== null && rRir !== null ? Math.min(lRir, rRir) : (lRir ?? rRir),
+        technique: sides.left.technique === 'degraded' || sides.right.technique === 'degraded' ? 'degraded' : 'good',
+        pain: Math.max(lPain ?? 0, rPain ?? 0),
+    };
+}
+
+/** Côté à exécuter maintenant pour une série unilatérale. */
+export function currentSide(set) {
+    if (set?.sides?.left?.done && !set.sides.right?.done)
+        return 'right';
+    return 'left';
+}
+
+/** Les deux côtés ont-ils été réalisés ? */
+export function bothSidesDone(set) {
+    return !!(set?.sides?.left?.done && set?.sides?.right?.done);
+}
