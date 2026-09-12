@@ -96,7 +96,7 @@ export function analyzeWeightTrend(logs, profile, adjustments, options = {}) {
         if (profile.currentCalories + calorieDelta < profile.minimumCalories) {
             calorieDelta = 0;
             status = 'ACTIVITY';
-            action = 'ACTIVITY';
+            action = 'HOLD'; // plus d'escalade automatique du cardio (audit, point 9)
             reason = 'Plancher calorique atteint : ajoute 5 minutes de vélo modéré ou 1 000 à 1 500 pas par jour plutôt que de couper davantage.';
         }
         else if (profile.currentCalories + calorieDelta > profile.maximumCalories) {

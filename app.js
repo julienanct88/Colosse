@@ -1,9 +1,10 @@
 import './pwa.js';
 import { APP_VERSION, defaultSnapshot, emptyDailyLog, makeExerciseLog, makeSession, makeSet, } from './defaults.js';
 import { clearAllData, deleteSession, loadSnapshot, saveAdjustment, saveDailyLog, saveProfile, saveSession, saveSettings, saveSnapshot, storageMode, } from './data/database.js';
-import { defaultDayForDate, findDay, findExercise, getExercisePlan, getTrainingPhase, TRAINING_DAYS, } from './program.js';
+import { defaultDayForDate, findDay, findExercise, getExercisePlan, getTrainingPhase, TRAINING_DAYS, STRENGTH_DAYS } from './program.js';
 import { nextPrescription, prescriptionFromHistory, suggestNextSet, summarizeSession, } from './engine/progression.js';
 import { estimateSessionDuration, remainingSessionSeconds, } from './engine/duration.js';
+import { countSessionSets, isSessionComplete as isSessionCompletePure, countCompletedStrengthSessions, weekdayOffset, targetRirForSet, isSetValid, countsForHistory, finishStatus, formatSeconds, } from './engine/session.js';
 import { analyzeWeightTrend, macrosForCalories, targetWeight, weeklyTargets, } from './engine/weight.js';
 import { analyzeRecovery, analyzeStrengthTrend, } from './engine/recovery.js';
 import { activityGoalLabel, activityModeLabel, activityProgress, activitySummary, } from './engine/activity.js';
@@ -83,7 +84,7 @@ export class ColosseApp {
         });
     }
     dayDate(day) {
-        return isoDate(addDays(this.viewWeekStart, day.weekday - 1));
+        return isoDate(addDays(this.viewWeekStart, weekdayOffset(day.weekday)));
     }
     currentDay() {
         return findDay(this.snapshot.settings.selectedDayId);
@@ -167,7 +168,8 @@ export class ColosseApp {
             const exercise = findExercise(exerciseId);
             if (!log || !exercise || log.variantId !== variantId)
                 return [];
-            if (!log.sets.some((set) => set.done && Number(set.weightKg) > 0 && Number(set.reps) > 0))
+            const variantDef = exercise.variants.find((item) => item.id === variantId) ?? exercise.variants[0];
+            if (!log.sets.some((set) => countsForHistory(set, variantDef)))
                 return [];
             return [{
                     date: session.date,
@@ -185,31 +187,16 @@ export class ColosseApp {
         return prescriptionFromHistory(history, plan, exercise, variant.incrementKg, analyzeRecovery(this.snapshot.dailyLogs).alert);
     }
     activeSetCount(session, day) {
-        let done = 0;
-        let total = 0;
-        day.exercises.forEach((exercise) => {
-            const plan = getExercisePlan(exercise, session.weekIndex);
-            const log = session.exercises[exercise.id];
-            if (!log)
-                return;
-            total += plan.sets;
-            if (log.skipped)
-                done += plan.sets;
-            else
-                done += log.sets.slice(0, plan.sets).filter((set) => set.done).length;
-        });
-        return { done, total };
+        return countSessionSets(session, day, (exercise) => getExercisePlan(exercise, session.weekIndex));
     }
     isSessionComplete(session, day) {
-        const count = this.activeSetCount(session, day);
-        return count.total > 0 && count.done >= count.total;
+        return isSessionCompletePure(session, day, (exercise) => getExercisePlan(exercise, session.weekIndex));
     }
     completedWeekSessions() {
-        return TRAINING_DAYS.filter((day) => {
+        return countCompletedStrengthSessions(STRENGTH_DAYS, (day) => {
             const date = this.dayDate(day);
-            const session = this.snapshot.sessions.find((item) => item.id === `${date}:${day.id}`);
-            return session ? this.isSessionComplete(session, day) : false;
-        }).length;
+            return this.snapshot.sessions.find((item) => item.id === `${date}:${day.id}`);
+        }, (exercise) => getExercisePlan(exercise, this.snapshot.settings.weekIndex ?? 1));
     }
     render() {
         const tab = this.snapshot.settings.currentTab;
@@ -350,6 +337,9 @@ export class ColosseApp {
     </section>`;
     }
     renderExerciseCard(context, exercise, index, exerciseCount) {
+        if (exercise.kind === 'cardio')
+            return this.renderCardioCard(context, exercise, index);
+
         const plan = getExercisePlan(exercise, context.weekIndex);
         const log = context.session.exercises[exercise.id];
         const variant = exercise.variants.find((item) => item.id === log.variantId) ?? exercise.variants[0];
@@ -369,7 +359,7 @@ export class ColosseApp {
             ? 'Trouve ta charge de départ'
             : `${formatKg(prescription.loadKg)} kg × ${plan.repMin}–${plan.repMax}`;
         const displayedReason = prescription.status === 'CALIBRATION'
-            ? `Commence prudemment : à la fin de la série, tu dois pouvoir faire encore ${plan.targetRir} répétitions.`
+            ? `Commence prudemment : à la fin de la série, tu dois pouvoir faire encore ${targetRirForSet(plan, 0)} répétitions.`
             : prescription.reason;
         const confidenceLabel = prescription.confidence === 'high'
             ? 'élevée'
@@ -383,7 +373,7 @@ export class ColosseApp {
         <div class="exercise-index">${String(index + 1).padStart(2, '0')}</div>
         <div class="exercise-title">
           <div class="exercise-name-row"><h3>${escapeHtml(exercise.name)}</h3>${exercise.optional ? '<span class="badge">BONUS</span>' : ''}${exercise.superset ? `<span class="badge muted">SUPERSET ${escapeHtml(exercise.superset.split('-').at(-1) ?? '')}</span>` : ''}</div>
-          <div class="exercise-plan"><b>${plan.sets} × ${plan.repMin}–${plan.repMax} reps</b><span>garde ${plan.targetRir} reps</span><span>repos ${formatClock(plan.restSec)}</span>${plan.tempo ? `<span class="tempo-hint" title="Tempo ${escapeHtml(plan.tempo)} : secondes de descente \u2013 pause basse \u2013 mont\u00e9e \u2013 pause haute">tempo ${escapeHtml(plan.tempo)}</span>` : ''}</div>
+          <div class="exercise-plan"><b>${plan.sets} × ${plan.metric === 'seconds' ? `${formatSeconds(plan.repMin)}\u2013${formatSeconds(plan.repMax)}` : `${plan.repMin}\u2013${plan.repMax} reps`}</b><span>garde ${plan.targetRir} reps</span><span>repos ${formatClock(plan.restSec)}</span>${plan.tempo ? `<span class="tempo-hint" title="Tempo ${escapeHtml(plan.tempo)} : secondes de descente \u2013 pause basse \u2013 mont\u00e9e \u2013 pause haute">tempo ${escapeHtml(plan.tempo)}</span>` : ''}</div>
         </div>
         <a class="video-link" href="${YOUTUBE_SEARCH}${encodeURIComponent(exercise.name + ' technique musculation')}" target="_blank" rel="noopener" aria-label="Voir la technique">▶</a>
       </div>
@@ -416,7 +406,7 @@ export class ColosseApp {
         ${activeSets.map((set, setIndex) => this.renderSetRow(exercise, set, setIndex, prescription, plan)).join('')}
       </div>
 
-      ${nextSet && nextSet.action !== 'WAIT' ? `<div class="next-set ${nextSet.action === 'STOP_OR_SWAP' ? 'danger' : ''}"><div><span>SÉRIE ${lastDoneIndex + 2}</span><strong>${nextSet.loadKg ? `${formatKg(nextSet.loadKg)} kg` : 'Arrêt'} · ${plan.repMin}–${plan.repMax} reps · garde ${plan.targetRir} reps</strong><p>${escapeHtml(nextSet.label)}</p></div>${nextSet.loadKg ? `<button data-action="apply-next-load" data-exercise="${exercise.id}" data-set="${lastDoneIndex + 1}" data-load="${nextSet.loadKg}">Appliquer</button>` : ''}</div>` : ''}
+      ${nextSet && nextSet.action !== 'WAIT' ? `<div class="next-set ${nextSet.action === 'STOP_OR_SWAP' ? 'danger' : ''}"><div><span>SÉRIE ${lastDoneIndex + 2}</span><strong>${nextSet.loadKg ? `${formatKg(nextSet.loadKg)} kg` : 'Arrêt'} · ${plan.repMin}–${plan.repMax} reps · garde ${targetRirForSet(plan, lastDoneIndex + 1)} reps</strong><p>${escapeHtml(nextSet.label)}</p></div>${nextSet.loadKg ? `<button data-action="apply-next-load" data-exercise="${exercise.id}" data-set="${lastDoneIndex + 1}" data-load="${nextSet.loadKg}">Appliquer</button>` : ''}</div>` : ''}
       ${nextSession ? `<div class="next-session"><span>PROCHAINE EXPOSITION</span><strong>${formatKg(nextSession.loadKg)} kg · objectif ${nextSession.targetTotalReps} reps totales</strong><p>${escapeHtml(nextSession.reason)}</p></div>` : ''}
       <div class="cue"><span>COACHING</span><p>${escapeHtml(exercise.coachingCue)}</p></div>
       <div class="exercise-footer">
@@ -425,8 +415,36 @@ export class ColosseApp {
       </div>
     </article>`;
     }
+    renderCardioCard(context, exercise, index) {
+        const plan = getExercisePlan(exercise, context.weekIndex);
+        const log = context.session.exercises[exercise.id];
+        const set = log?.sets?.[0];
+        const doneSec = Number(set?.reps) || 0;
+        const done = !!set?.done;
+        const targetSec = exercise.durationSec ?? plan.repMin;
+        return `<article class="exercise-card cardio-card ${done ? 'complete' : ''}" style="--accent:${context.day.color}" data-exercise-card="${exercise.id}">
+      <div class="exercise-head">
+        <div class="exercise-index">${String(index + 1).padStart(2, '0')}</div>
+        <div class="exercise-title">
+          <div class="exercise-name-row"><h3>${escapeHtml(exercise.name)}</h3><span class="badge cardio-badge">CARDIO</span></div>
+          <div class="exercise-plan"><b>${formatSeconds(targetSec)}</b>${exercise.inclinePct ? `<span>inclinaison ${escapeHtml(String(exercise.inclinePct))} %</span>` : ''}${exercise.speedKmh ? `<span>vitesse ${escapeHtml(String(exercise.speedKmh))}${/[0-9]/.test(String(exercise.speedKmh)) ? ' km/h' : ''}</span>` : ''}</div>
+        </div>
+      </div>
+      <p class="coaching-cue">${escapeHtml(exercise.coachingCue ?? '')}</p>
+      <div class="cardio-actions">
+        <button class="primary-button" data-action="start-cardio" data-exercise="${exercise.id}" data-duration="${targetSec}">${done ? '↻ Refaire' : '▶ Démarrer'}</button>
+        <button class="secondary-button" data-action="finish-cardio" data-exercise="${exercise.id}" data-duration="${targetSec}">${done ? `✓ ${formatSeconds(doneSec)} réalisé` : 'Terminer'}</button>
+      </div>
+    </article>`;
+    }
     renderSetRow(exercise, set, setIndex, prescription, plan) {
         const suggestedWeight = set.weightKg ?? (prescription.loadKg || null);
+        const isSeconds = plan.metric === 'seconds';
+        const variantDef = exercise.variants.find((item) => item.id === (this.currentContext?.().session.exercises[exercise.id]?.variantId)) ?? exercise.variants[0];
+        const needsLoadInput = (variantDef?.loadMode ?? 'external') === 'external';
+        const rowTargetRir = targetRirForSet(plan, setIndex);
+        const sideState = plan.perSide ? (set.side ?? 'left') : null;
+        const sideLabel = sideState === 'right' ? 'CÔTÉ DROIT' : 'CÔTÉ GAUCHE';
         const hit = set.done
             && Number(set.reps) >= plan.repMin
             && Number(set.reps) <= plan.repMax
@@ -434,13 +452,16 @@ export class ColosseApp {
             && Number(set.pain ?? 0) <= 3;
         return `<div class="set-row ${set.done ? 'done' : ''} ${hit ? 'hit' : ''}" data-set-row data-exercise="${exercise.id}" data-set="${setIndex}">
       <div class="set-primary">
-        <span class="set-number"><small>Série</small>${setIndex + 1}</span>
-        <label><span>Charge (kg)</span><input type="number" inputmode="decimal" min="0" step="0.25" data-set-field="weightKg" value="${numberInputValue(suggestedWeight)}" placeholder="0" aria-label="Charge série ${setIndex + 1}"/></label>
-        <label><span>Répétitions</span><input type="number" inputmode="numeric" min="0" max="50" step="1" data-set-field="reps" value="${numberInputValue(set.reps)}" placeholder="0" aria-label="Répétitions série ${setIndex + 1}"/></label>
-        <button class="set-check" data-action="toggle-set" data-exercise="${exercise.id}" data-set="${setIndex}" aria-label="Valider série ${setIndex + 1}">${set.done ? '✓ Fait' : 'Valider'}</button>
+        <span class="set-number"><small>${isSeconds ? 'Bloc' : 'Série'}</small>${setIndex + 1}</span>
+        ${plan.perSide ? `<span class="side-badge ${sideState}">${sideLabel}</span>` : ''}
+        ${needsLoadInput ? `<label><span>Charge (kg)</span><input type="number" inputmode="decimal" min="0" step="0.25" data-set-field="weightKg" value="${numberInputValue(suggestedWeight)}" placeholder="0" aria-label="Charge série ${setIndex + 1}"/></label>` : ''}
+        ${isSeconds
+            ? `<label><span>Durée (s)</span><input type="number" inputmode="numeric" min="0" step="5" data-set-field="reps" value="${numberInputValue(set.reps)}" placeholder="${plan.repMin}" aria-label="Durée en secondes du bloc ${setIndex + 1}"/><small class="set-hint">objectif ${formatSeconds(plan.repMin)}${plan.repMax !== plan.repMin ? `\u2013${formatSeconds(plan.repMax)}` : ''}</small></label>`
+            : `<label><span>Répétitions</span><input type="number" inputmode="numeric" min="0" max="50" step="1" data-set-field="reps" value="${numberInputValue(set.reps)}" placeholder="0" aria-label="Répétitions série ${setIndex + 1}"/></label>`}
+        <button class="set-check" data-action="toggle-set" data-exercise="${exercise.id}" data-set="${setIndex}" aria-label="Valider ${isSeconds ? 'le bloc' : 'la série'} ${setIndex + 1}">${set.done ? '✓ Fait' : (plan.perSide ? `Valider ${sideLabel.toLowerCase()}` : 'Valider')}</button>
       </div>
       <div class="set-feedback">
-        <label><span>Encore possible</span><select data-set-field="rir" aria-label="Répétitions encore possibles après la série ${setIndex + 1}"><option value="" ${set.rir === null ? 'selected' : ''}>Je ne sais pas</option><option value="0" ${set.rir === 0 ? 'selected' : ''}>Aucune</option>${[1, 2, 3, 4, 5].map((value) => `<option value="${value}" ${set.rir === value ? 'selected' : ''}>${value} rep${value > 1 ? 's' : ''}</option>`).join('')}<option value="6" ${set.rir === 6 ? 'selected' : ''}>6 reps ou +</option></select></label>
+        <label><span>Encore possible <small class="rir-target">(cible ${rowTargetRir})</small></span><select data-set-field="rir" aria-label="Répétitions encore possibles après la série ${setIndex + 1}"><option value="" ${set.rir === null ? 'selected' : ''}>Je ne sais pas</option><option value="0" ${set.rir === 0 ? 'selected' : ''}>Aucune</option>${[1, 2, 3, 4, 5].map((value) => `<option value="${value}" ${set.rir === value ? 'selected' : ''}>${value} rep${value > 1 ? 's' : ''}</option>`).join('')}<option value="6" ${set.rir === 6 ? 'selected' : ''}>6 reps ou +</option></select></label>
         <label><span>Mouvement</span><select data-set-field="technique" aria-label="Qualité du mouvement série ${setIndex + 1}"><option value="" ${set.technique === null ? 'selected' : ''}>Je ne sais pas</option><option value="good" ${set.technique === 'good' ? 'selected' : ''}>Propre</option><option value="degraded" ${set.technique === 'degraded' ? 'selected' : ''}>Dégradé</option></select></label>
         <label><span>Douleur</span><select data-set-field="pain" aria-label="Douleur série ${setIndex + 1}"><option value="" ${set.pain === null ? 'selected' : ''}>Non notée</option><option value="0" ${set.pain === 0 ? 'selected' : ''}>Aucune</option>${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((value) => `<option value="${value}" ${set.pain === value ? 'selected' : ''}>${value}/10</option>`).join('')}</select></label>
       </div>
@@ -486,7 +507,7 @@ export class ColosseApp {
           <div><span>Adhérence</span><strong>${pct(analysis.adherencePct, 0)}</strong></div>
         </div>
         ${analysis.action === 'CALORIES' && analysis.calorieDelta !== 0 ? `<button class="primary-button" data-action="apply-calorie-adjustment">Appliquer ${analysis.calorieDelta > 0 ? '+' : ''}${analysis.calorieDelta} kcal → ${analysis.proposedCalories} kcal</button>` : ''}
-        ${analysis.action === 'ACTIVITY' ? '<button class="primary-button" data-action="apply-activity-adjustment">Ajouter 5 min de vélo/jour</button>' : ''}
+        
         ${(strength.alert || recovery.alert) ? `<div class="alert-strip"><strong>Récupération sous surveillance</strong><span>${escapeHtml([strength.alert ? strength.reason : '', ...recovery.reasons].filter(Boolean).join(' '))}</span></div>` : ''}
       </section>
 
@@ -762,6 +783,12 @@ export class ColosseApp {
             case 'move-exercise':
                 await this.moveExercise(actionElement.dataset.exercise ?? '', actionElement.dataset.direction === 'up' ? -1 : 1);
                 break;
+            case 'start-cardio':
+                await this.startCardio(actionElement.dataset.exercise ?? '', Number(actionElement.dataset.duration));
+                break;
+            case 'finish-cardio':
+                await this.finishCardio(actionElement.dataset.exercise ?? '', Number(actionElement.dataset.duration));
+                break;
             case 'apply-next-load':
                 await this.applyNextLoad(actionElement.dataset.exercise ?? '', Number(actionElement.dataset.set), Number(actionElement.dataset.load));
                 break;
@@ -784,12 +811,6 @@ export class ColosseApp {
                 break;
             case 'apply-calorie-adjustment':
                 await this.applyCalorieAdjustment();
-                break;
-            case 'apply-activity-adjustment':
-                this.snapshot.profile.bikeMinutesTarget = Math.min(60, this.snapshot.profile.bikeMinutesTarget + 5);
-                await saveProfile(this.snapshot.profile);
-                this.showToast(`Nouvel objectif : ${this.snapshot.profile.bikeMinutesTarget} min de vélo modéré.`, 'success');
-                this.render();
                 break;
             case 'delete-session':
                 if (confirm('Supprimer définitivement cette séance ?')) {
@@ -909,6 +930,38 @@ export class ColosseApp {
         await this.acquireWakeLock();
         this.render();
     }
+    async startCardio(exerciseId, durationSec) {
+        const context = this.currentContext();
+        if (!context.session.startedAt) {
+            context.session.startedAt = Date.now();
+            context.session.endedAt = null;
+            await this.acquireWakeLock();
+        }
+        this.startRestTimer(exerciseId, 0, Math.max(30, durationSec || 600));
+        this.render();
+    }
+    async finishCardio(exerciseId, durationSec) {
+        const context = this.currentContext();
+        const log = context.session.exercises[exerciseId];
+        if (!log || !log.sets[0])
+            return;
+        const set = log.sets[0];
+        const alreadyDone = set.done;
+        set.done = !alreadyDone;
+        set.weightKg = 0;
+        set.reps = alreadyDone ? null : (Number(set.reps) || durationSec || 0);
+        set.rir = null;
+        set.technique = 'good';
+        set.pain = 0;
+        set.completedAt = alreadyDone ? null : Date.now();
+        context.session.updatedAt = Date.now();
+        await saveSession(context.session);
+        if (this.timer)
+            await this.closeRestTimer(false);
+        this.render();
+        if (!alreadyDone)
+            this.showToast('Cardio validé.', 'success');
+    }
     async finishSession() {
         await this.closeRestTimer(false);
         const context = this.currentContext();
@@ -916,9 +969,12 @@ export class ColosseApp {
             context.session.startedAt = Date.now();
         context.session.endedAt = Date.now();
         context.session.updatedAt = Date.now();
+        const finishCount = this.activeSetCount(context.session, context.day);
+        const outcome = finishStatus(finishCount);
+        context.session.status = outcome.status;
         await saveSession(context.session);
         await this.releaseWakeLock();
-        this.showToast('Séance enregistrée. Les prochaines charges sont recalculées.', 'success');
+        this.showToast(outcome.message, outcome.status === 'COMPLETE' ? 'success' : 'info', 6000);
         this.render();
     }
     readSetRow(exerciseId, setIndex) {
@@ -958,6 +1014,7 @@ export class ColosseApp {
             set.done = false;
             set.completedAt = null;
             set.restActualSec = null;
+            set.side = 'left';
             context.session.updatedAt = Date.now();
             await saveSession(context.session);
             this.render();
@@ -985,6 +1042,19 @@ export class ColosseApp {
             context.session.endedAt = null;
             await this.acquireWakeLock();
         }
+        const planSide = getExercisePlan(exercise, context.weekIndex);
+        // --- Unilatéral : gauche -> changement -> droite -> repos (audit, point 7).
+        // Une série gauche + droite reste UNE seule série.
+        if (planSide.perSide && (set.side ?? 'left') === 'left') {
+            set.side = 'right';
+            set.completedAt = Date.now();
+            context.session.updatedAt = Date.now();
+            await saveSession(context.session);
+            this.startRestTimer(exercise.id, setIndex, Math.max(5, planSide.sideSwitchSec || 15));
+            this.render();
+            this.showToast('Côté gauche validé — passe au côté droit.', 'info');
+            return;
+        }
         set.done = true;
         set.completedAt = Date.now();
         context.session.updatedAt = Date.now();
@@ -1000,7 +1070,7 @@ export class ColosseApp {
         else if (set.technique === 'degraded')
             this.showToast('Technique dégradée : aucune hausse de charge ne sera autorisée.', 'info', 5000);
         if (this.snapshot.settings.autoStartTimer && this.shouldStartRest(exercise, setIndex, context)) {
-            this.startRestTimer(exercise.id, setIndex, plan.restSec);
+            this.startRestTimer(exercise.id, setIndex, plan.perSide ? (plan.roundRestSec ?? plan.restSec) : plan.restSec);
         }
         this.render();
     }

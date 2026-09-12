@@ -1,6 +1,6 @@
 import { defaultDayForDate, findDay, getExercisePlan } from './program.js';
 import { isoDate, uid, weekIndexFromStart } from './engine/math.js';
-export const APP_VERSION = '3.4.0';
+export const APP_VERSION = '3.4.1';
 export const SCHEMA_VERSION = 6;
 export function defaultProfile(today = new Date()) {
     return {

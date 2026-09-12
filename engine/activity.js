@@ -12,28 +12,27 @@ export function bikeModerateEquivalentMinutes(minutes, intensity = 'moderate') {
 export function activityProgress(log = {}, profile = {}) {
     const steps = positiveNumber(log.steps);
     const bikeMinutes = positiveNumber(log.bikeMinutes);
-    const stepFloor = positiveNumber(profile.dailyStepTarget, 5000);
-    const stepsOnlyTarget = Math.max(stepFloor, positiveNumber(profile.stepsOnlyTarget, 10000));
-    const bikeTarget = positiveNumber(profile.bikeMinutesTarget, 25);
     const bikeEquivalent = bikeModerateEquivalentMinutes(bikeMinutes, log.bikeIntensity);
-
-    const walkingRoute = Math.min(1, steps / stepsOnlyTarget);
-    const mixedRoute = Math.min(1, steps / stepFloor) * 0.4
-        + Math.min(1, bikeEquivalent / bikeTarget) * 0.6;
-    const progress = Math.min(1, Math.max(walkingRoute, mixedRoute));
-
+    // Zone recommandée 8 000-12 000 pas. Le vélo est une information,
+    // il ne remplace jamais automatiquement les pas (audit, point 9).
+    const zoneMin = positiveNumber(profile.dailyStepTarget, 8000);
+    const zoneMax = Math.max(zoneMin, positiveNumber(profile.stepsOnlyTarget, 12000));
+    const progress = Math.min(1, steps / zoneMin);
     return {
         percent: Math.round(progress * 100),
-        complete: progress >= 1,
+        complete: steps >= zoneMin,
+        inZone: steps >= zoneMin && steps <= zoneMax,
         steps,
         bikeMinutes,
         bikeEquivalentMinutes: Math.round(bikeEquivalent),
-        stepFloor,
-        stepsOnlyTarget,
-        bikeTarget,
+        stepZoneMin: zoneMin,
+        stepZoneMax: zoneMax,
+        // conservés pour compatibilité d'affichage
+        stepFloor: zoneMin,
+        stepsOnlyTarget: zoneMax,
+        bikeTarget: positiveNumber(profile.bikeMinutesTarget, 0),
     };
 }
-
 export function activityModeLabel(log = {}) {
     const hasSteps = positiveNumber(log.steps) > 0;
     const hasBike = positiveNumber(log.bikeMinutes) > 0;
@@ -58,8 +57,7 @@ export function activitySummary(log = {}) {
 }
 
 export function activityGoalLabel(profile = {}) {
-    const stepFloor = positiveNumber(profile.dailyStepTarget, 5000);
-    const stepsOnlyTarget = Math.max(stepFloor, positiveNumber(profile.stepsOnlyTarget, 10000));
-    const bikeTarget = positiveNumber(profile.bikeMinutesTarget, 25);
-    return `${Math.round(stepsOnlyTarget).toLocaleString('fr-FR')} pas, ou ${Math.round(stepFloor).toLocaleString('fr-FR')} pas + ${Math.round(bikeTarget)} min de vélo modéré`;
+    const zoneMin = positiveNumber(profile.dailyStepTarget, 8000);
+    const zoneMax = Math.max(zoneMin, positiveNumber(profile.stepsOnlyTarget, 12000));
+    return `${Math.round(zoneMin).toLocaleString('fr-FR')} \u00e0 ${Math.round(zoneMax).toLocaleString('fr-FR')} pas par jour`;
 }

@@ -348,3 +348,11 @@ h3 { font-size: 17px; }
 .tempo-hint{cursor:help;border-bottom:1px dotted currentColor;}
 /* Dépassement de la plage cible : information, jamais une contrainte (section 2) */
 .time-grid .over-target strong{color:#f59e0b;}
+/* Unilatéral et cardio (audit v3.4.1) */
+.side-badge{font-size:.62rem;font-weight:800;letter-spacing:.06em;padding:2px 7px;border-radius:999px;background:rgba(59,130,246,.18);color:#93c5fd;}
+.side-badge.right{background:rgba(249,115,22,.18);color:#fdba74;}
+.cardio-card .cardio-actions{display:flex;gap:8px;margin-top:10px;}
+.cardio-card .cardio-actions button{flex:1;}
+.cardio-badge{background:rgba(16,185,129,.18);color:#6ee7b7;}
+.rir-target{opacity:.65;font-weight:600;}
+.set-hint{display:block;opacity:.6;font-size:.62rem;margin-top:2px;}

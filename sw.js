@@ -1,5 +1,5 @@
 /* Colosse Adaptive — generated service worker */
-const CACHE_VERSION = 'colosse-adaptive-v3-execution-340';
+const CACHE_VERSION = 'colosse-adaptive-v3-audit-341';
 const CACHE_NAME = CACHE_VERSION;
 const PRECACHE_URLS = [
   "./",
@@ -11,6 +11,7 @@ const PRECACHE_URLS = [
   "./engine/duration.js",
   "./engine/activity.js",
   "./engine/math.js",
+  "./engine/session.js",
   "./engine/progression.js",
   "./engine/recovery.js",
   "./engine/weight.js",
