@@ -183,8 +183,10 @@ async function initializeIndexedDb() {
         await saveSnapshot(initial);
     }
     else if (Number(meta?.value ?? 0) < SCHEMA_VERSION) {
-        // Migration v5 -> v6 : aucune séance, aucun historique, aucun poids,
-        // aucune note n'est supprimé. On complète seulement le profil.
+        // Migrations v5 -> v7 : purement additives. Aucune séance, aucun
+        // historique, aucun poids ni note n'est supprimé. Les anciennes
+        // sessions sans warmup/execution restent lisibles (les moteurs
+        // normalisent l'absence de ces champs).
         const existingProfile = (await getOne(STORES.profile, 'profile'))?.value;
         if (existingProfile)
             await putOne(STORES.profile, { id: 'profile', value: migrateProfileToV6(existingProfile) });

@@ -1,6 +1,6 @@
 {
-  "version": "3.4.1",
-  "cacheVersion": "colosse-adaptive-v3-audit-341",
+  "version": "3.5.0",
+  "cacheVersion": "colosse-adaptive-v3-execution-350",
   "assets": [
     "./",
     "./app.js",
@@ -23,6 +23,10 @@
     "./styles.css",
     "./types.js",
     "./ui/templates.js",
-    "./engine/session.js"
+    "./engine/session.js",
+    "./engine/execution.js",
+    "./engine/warmup.js",
+    "./engine/timer.js",
+    "./ui/execution.js"
   ]
 }

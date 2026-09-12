@@ -39,7 +39,11 @@ export function countCompletedStrengthSessions(days, findSession, resolvePlan) {
         .filter((day) => day.kind !== 'recovery')
         .filter((day) => {
             const session = findSession(day);
-            return session ? isSessionComplete(session, day, resolvePlan) : false;
+            if (!session)
+                return false;
+            // Le resolver reçoit la SESSION : une séance de décharge (S7) est
+            // évaluée avec son propre weekIndex, pas celui de la semaine affichée.
+            return isSessionComplete(session, day, (exercise) => resolvePlan(exercise, session));
         }).length;
 }
 

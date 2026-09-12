@@ -1,7 +1,7 @@
 import { defaultDayForDate, findDay, getExercisePlan } from './program.js';
 import { isoDate, uid, weekIndexFromStart } from './engine/math.js';
-export const APP_VERSION = '3.4.1';
-export const SCHEMA_VERSION = 6;
+export const APP_VERSION = '3.5.0';
+export const SCHEMA_VERSION = 7;
 export function defaultProfile(today = new Date()) {
     return {
         name: '',
@@ -73,6 +73,9 @@ export function makeSession(dayId, date, profile) {
         notes: '',
         readiness: { energy: 3, fatigue: 2, sleepHours: null },
         exerciseOrder: day.exercises.map((exercise) => exercise.id),
+        warmup: { general: { done: false, skipped: false, durationSec: 0 }, activation: {}, ramps: {} },
+        execution: { active: false, stage: null, exerciseId: null, setIndex: null, side: null, stepKey: null, updatedAt: 0 },
+        activeTimer: null,
         exercises,
         createdAt: now,
         updatedAt: now,

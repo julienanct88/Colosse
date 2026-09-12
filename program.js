@@ -28,6 +28,7 @@ export const TRAINING_DAYS = [
         name: 'Pull A',
         weekday: 1,
         kind: 'strength', targetMinMinutes: 80, targetMaxMinutes: 90,
+        warmupRoutine: 'upper',
         focus: 'Dos épaisseur · arrière d’épaule · biceps',
         color: '#3b82f6',
         generalWarmupSec: 360,
@@ -35,6 +36,7 @@ export const TRAINING_DAYS = [
         exercises: [
             exercise({
                 id: 'pull-a-lat-pronation', name: 'Tirage vertical pronation', shortName: 'Tirage pronation',
+                warmupProtocol: 'primary',
                 category: 'upper_compound', sets: 3, repMin: 6, repMax: 8, targetRir: 1, restSec: 180,
                 tempo: '3-1-1-1',
                 executionSec: 45, transitionSec: 60, warmupSec: 240, priority: 1,
@@ -47,6 +49,7 @@ export const TRAINING_DAYS = [
             }),
             exercise({
                 id: 'pull-a-chest-row', name: 'Rowing poitrine appuyée', shortName: 'Rowing appuyé',
+                warmupProtocol: 'secondary',
                 category: 'upper_compound', sets: 3, repMin: 6, repMax: 8, targetRir: 1, restSec: 180,
                 tempo: '2-1-1-1',
                 executionSec: 45, transitionSec: 60, warmupSec: 120, priority: 1,
@@ -117,6 +120,7 @@ export const TRAINING_DAYS = [
         name: 'Push A',
         weekday: 2,
         kind: 'strength', targetMinMinutes: 85, targetMaxMinutes: 95,
+        warmupRoutine: 'upper',
         focus: 'Haut des pectoraux · épaules · triceps',
         color: '#ef4444',
         generalWarmupSec: 360,
@@ -124,6 +128,7 @@ export const TRAINING_DAYS = [
         exercises: [
             exercise({
                 id: 'push-a-incline-smith', name: 'Développé incliné Smith', shortName: 'Incliné Smith',
+                warmupProtocol: 'primary',
                 category: 'upper_compound', sets: 4, repMin: 6, repMax: 8, targetRir: 1, restSec: 180,
                 tempo: '3-1-1-0',
                 executionSec: 45, transitionSec: 60, warmupSec: 240, priority: 1,
@@ -136,6 +141,7 @@ export const TRAINING_DAYS = [
             }),
             exercise({
                 id: 'push-a-chest-press', name: 'Chest press convergente', shortName: 'Chest press',
+                warmupProtocol: 'secondary',
                 category: 'upper_compound', sets: 3, repMin: 8, repMax: 12, targetRir: 1, restSec: 120,
                 tempo: '3-1-1-1',
                 executionSec: 40, transitionSec: 55, warmupSec: 120, priority: 2,
@@ -210,6 +216,7 @@ export const TRAINING_DAYS = [
         name: 'Legs A',
         weekday: 3,
         kind: 'strength', targetMinMinutes: 85, targetMaxMinutes: 95,
+        warmupRoutine: 'lower',
         focus: 'Quadriceps · fessiers · mollets · abdos',
         color: '#10b981',
         generalWarmupSec: 360,
@@ -217,6 +224,7 @@ export const TRAINING_DAYS = [
         exercises: [
             exercise({
                 id: 'legs-a-hack', name: 'Hack squat', shortName: 'Hack squat',
+                warmupProtocol: 'primary',
                 category: 'lower_compound', sets: 4, repMin: 6, repMax: 10, targetRir: 1, restSec: 180,
                 tempo: '3-1-1-0',
                 executionSec: 50, transitionSec: 70, warmupSec: 300, priority: 1,
@@ -229,6 +237,7 @@ export const TRAINING_DAYS = [
             }),
             exercise({
                 id: 'legs-a-press', name: 'Presse à cuisses', shortName: 'Presse',
+                warmupProtocol: 'secondary',
                 category: 'lower_compound', sets: 3, repMin: 10, repMax: 15, targetRir: 1, restSec: 150,
                 tempo: '3-1-1-0',
                 executionSec: 45, transitionSec: 60, warmupSec: 120, priority: 2,
@@ -312,6 +321,7 @@ export const TRAINING_DAYS = [
         name: 'Pull B',
         weekday: 4,
         kind: 'strength', targetMinMinutes: 80, targetMaxMinutes: 90,
+        warmupRoutine: 'upper',
         focus: 'Largeur du dos · silhouette en V · biceps',
         color: '#0ea5e9',
         generalWarmupSec: 360,
@@ -319,6 +329,7 @@ export const TRAINING_DAYS = [
         exercises: [
             exercise({
                 id: 'pull-b-lat-neutral', name: 'Tirage vertical prise neutre', shortName: 'Tirage neutre',
+                warmupProtocol: 'primary',
                 category: 'upper_compound', sets: 3, repMin: 8, repMax: 12, targetRir: 1, restSec: 150,
                 tempo: '3-1-1-1',
                 executionSec: 45, transitionSec: 60, warmupSec: 240, priority: 1,
@@ -330,6 +341,7 @@ export const TRAINING_DAYS = [
             }),
             exercise({
                 id: 'pull-b-row-neutral', name: 'Rowing machine prise neutre', shortName: 'Rowing neutre',
+                warmupProtocol: 'secondary',
                 category: 'upper_compound', sets: 3, repMin: 8, repMax: 12, targetRir: 1, restSec: 150,
                 tempo: '3-1-1-1',
                 executionSec: 45, transitionSec: 60, warmupSec: 120, priority: 1,
@@ -408,6 +420,7 @@ export const TRAINING_DAYS = [
         name: 'Push B',
         weekday: 5,
         kind: 'strength', targetMinMinutes: 80, targetMaxMinutes: 90,
+        warmupRoutine: 'upper',
         focus: 'Épaules larges · pectoraux · triceps',
         color: '#f97316',
         generalWarmupSec: 360,
@@ -415,6 +428,7 @@ export const TRAINING_DAYS = [
         exercises: [
             exercise({
                 id: 'push-b-incline-db', name: 'Développé incliné haltères', shortName: 'Incliné haltères',
+                warmupProtocol: 'primary',
                 category: 'upper_compound', sets: 3, repMin: 8, repMax: 12, targetRir: 1, restSec: 150,
                 tempo: '3-1-1-0',
                 executionSec: 45, transitionSec: 60, warmupSec: 240, priority: 1,
@@ -426,6 +440,7 @@ export const TRAINING_DAYS = [
             }),
             exercise({
                 id: 'push-b-chest-press', name: 'Chest press', shortName: 'Chest press',
+                warmupProtocol: 'secondary',
                 category: 'upper_compound', sets: 3, repMin: 10, repMax: 15, targetRir: 1, restSec: 120,
                 tempo: '3-1-1-1',
                 executionSec: 40, transitionSec: 55, warmupSec: 120, priority: 2,
@@ -497,6 +512,7 @@ export const TRAINING_DAYS = [
         name: 'Legs B',
         weekday: 6,
         kind: 'strength', targetMinMinutes: 85, targetMaxMinutes: 95,
+        warmupRoutine: 'lower',
         focus: 'Ischios · fessiers · chaîne postérieure · abdos',
         color: '#06b6d4',
         generalWarmupSec: 360,
@@ -504,6 +520,7 @@ export const TRAINING_DAYS = [
         exercises: [
             exercise({
                 id: 'legs-b-rdl', name: 'Soulevé de terre roumain', shortName: 'RDL',
+                warmupProtocol: 'primary',
                 category: 'lower_compound', sets: 4, repMin: 6, repMax: 10, targetRir: 1, restSec: 180,
                 tempo: '3-1-1-0',
                 executionSec: 50, transitionSec: 70, warmupSec: 300, priority: 1,
@@ -517,6 +534,7 @@ export const TRAINING_DAYS = [
             }),
             exercise({
                 id: 'legs-b-leg-curl', name: 'Leg curl', shortName: 'Leg curl',
+                warmupProtocol: 'secondary',
                 category: 'isolation', sets: 4, repMin: 8, repMax: 12, targetRir: 1, restSec: 90,
                 tempo: '3-1-1-1',
                 executionSec: 30, transitionSec: 45, warmupSec: 120, priority: 2,
@@ -598,6 +616,7 @@ export const TRAINING_DAYS = [
         name: 'R\u00e9cup\u00e9ration',
         weekday: 0,
         kind: 'recovery',
+        warmupRoutine: null,
         focus: 'Marche \u00b7 mobilit\u00e9 \u00b7 aucune musculation',
         color: '#64748b',
         generalWarmupSec: 0,
@@ -700,6 +719,7 @@ export function getExercisePlan(exerciseDef, weekIndex) {
         perSide: !!exerciseDef.perSide,
         sideSwitchSec: exerciseDef.sideSwitchSec ?? 0,
         roundRestSec: exerciseDef.roundRestSec ?? null,
+        warmupProtocol: exerciseDef.warmupProtocol ?? null,
         deload,
         loadFactor: deload ? DELOAD_LOAD_FACTOR : 1,
     };

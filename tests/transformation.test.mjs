@@ -162,7 +162,7 @@ test('migration v6 : applique les références sans écraser les valeurs personn
 });
 
 test('la migration ne supprime aucune donnée existante', () => {
-  assert.equal(SCHEMA_VERSION, 6);
+  assert.equal(SCHEMA_VERSION, 7);
   // comportement : la migration complète le profil sans rien supprimer
   const before = { currentCalories: 3100, sessions: 'intact' };
   const after = migrateProfileToV6({ ...before });
@@ -193,12 +193,12 @@ test('pas de hausse si technique dégradée ou douleur', () => {
 
 // 12 — service worker / version
 test('la version applicative et le cache du service worker sont à jour', () => {
-  assert.equal(APP_VERSION, '3.4.1');
+  assert.equal(APP_VERSION, '3.5.0');
   const sw = readFileSync(new URL('../sw.js', import.meta.url), 'utf8');
   const manifest = JSON.parse(readFileSync(new URL('../asset-manifest.json', import.meta.url), 'utf8'));
-  assert.equal(manifest.version, '3.4.1');
+  assert.equal(manifest.version, '3.5.0');
   assert.ok(sw.includes(manifest.cacheVersion), 'sw.js et asset-manifest doivent partager la même version de cache');
-  assert.ok(/colosse-adaptive-v3-[a-z-]+-341/.test(manifest.cacheVersion), `cacheVersion inattendu : ${manifest.cacheVersion}`);
+  assert.ok(/colosse-adaptive-v3-[a-z-]+-350/.test(manifest.cacheVersion), `cacheVersion inattendu : ${manifest.cacheVersion}`);
 });
 
 // 4bis — cardio du programme
