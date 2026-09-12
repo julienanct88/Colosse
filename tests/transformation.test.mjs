@@ -193,12 +193,12 @@ test('pas de hausse si technique dégradée ou douleur', () => {
 
 // 12 — service worker / version
 test('la version applicative et le cache du service worker sont à jour', () => {
-  assert.equal(APP_VERSION, '3.5.3');
+  assert.equal(APP_VERSION, '3.5.4');
   const sw = readFileSync(new URL('../sw.js', import.meta.url), 'utf8');
   const manifest = JSON.parse(readFileSync(new URL('../asset-manifest.json', import.meta.url), 'utf8'));
-  assert.equal(manifest.version, '3.5.3');
+  assert.equal(manifest.version, '3.5.4');
   assert.ok(sw.includes(manifest.cacheVersion), 'sw.js et asset-manifest doivent partager la même version de cache');
-  assert.ok(/colosse-adaptive-v3-[a-z-]+-353/.test(manifest.cacheVersion), `cacheVersion inattendu : ${manifest.cacheVersion}`);
+  assert.ok(/colosse-adaptive-v3-[a-z-]+-354/.test(manifest.cacheVersion), `cacheVersion inattendu : ${manifest.cacheVersion}`);
   // Tout module livré doit être précaché, sinon la PWA casse hors ligne.
   for (const asset of ['./engine/timer-effects.js', './engine/timer.js', './engine/execution.js'])
     assert.ok(sw.includes(asset) && manifest.assets.includes(asset), `${asset} doit être précaché`);

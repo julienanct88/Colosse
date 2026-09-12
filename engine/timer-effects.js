@@ -5,7 +5,7 @@
 // fermée doit produire exactement le même état qu'un timer arrivé à zéro à
 // l'écran — sinon l'échauffement, le cardio ou la récupération sont perdus.
 
-import { timerOutcome } from './timer.js';
+import { timerOutcome, isExpired } from './timer.js';
 import { normalizeWarmupState } from './warmup.js';
 import { formatSeconds } from './session.js';
 
@@ -92,4 +92,33 @@ export function createTimerResolutionQueue() {
             return current.then((value) => { settle(); return value; }, (error) => { settle(); throw error; });
         },
     };
+}
+
+/**
+ * La séance PROPRIÉTAIRE d'un chrono : celle où il a été créé, jamais celle
+ * affichée à l'écran. Un changement de jour ne déplace pas la propriété.
+ * `fallbackSession` sert aux timers créés avant v3.5.4 (sans sessionId).
+ */
+export function timerOwnerSession(sessions, timer, fallbackSession = null) {
+    const sessionId = timer?.context?.sessionId ?? null;
+    if (!sessionId)
+        return fallbackSession;
+    const list = Array.isArray(sessions) ? sessions : [];
+    return list.find((session) => session?.id === sessionId) ?? fallbackSession;
+}
+
+/**
+ * Un seul chrono à la fois, dernière ligne de défense.
+ * `session` = la séance où l'on veut démarrer, `runningTimer` = le chrono tenu
+ * en mémoire (il peut appartenir à une autre séance).
+ * - 'resolve-first' : un chrono déjà terminé n'a pas à bloquer le suivant.
+ * - 'refuse' : un chrono tourne, on ne l'écrase JAMAIS en silence.
+ */
+export function startTimerDecision(session, runningTimer = null, now = Date.now()) {
+    const existing = session?.activeTimer ?? null;
+    if (existing && isExpired(existing, now))
+        return { action: 'resolve-first', reason: 'expired-timer-pending' };
+    if (existing || runningTimer)
+        return { action: 'refuse', reason: 'timer-already-running' };
+    return { action: 'start', reason: null };
 }

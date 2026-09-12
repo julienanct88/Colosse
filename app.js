@@ -11,7 +11,7 @@ import { activityGoalHelp, activityGoalLabel, activityModeLabel, activityProgres
 import { addDays, isoDate, startOfWeek, uid, weekIndexFromStart, } from './engine/math.js';
 import { computeExecutionStep, executionProgress, normalizeExecutionState, STAGES, } from './engine/execution.js';
 import { createTimer, remainingSeconds as timerRemaining, isExpired as timerExpired, pauseTimer, resumeTimer, adjustTimer as adjustTimerState, timerLabel, timerControls, canShortenTimer, timerEndMessage, } from './engine/timer.js';
-import { applyTimerOutcome, createTimerResolutionQueue } from './engine/timer-effects.js';
+import { applyTimerOutcome, createTimerResolutionQueue, startTimerDecision, timerOwnerSession } from './engine/timer-effects.js';
 import { computeRampSets, normalizeWarmupState, resolveReferenceLoad, clearExerciseRamps, GENERAL_WARMUP, } from './engine/warmup.js';
 import { renderExecution } from './ui/execution.js';
 import { decisionMeta, escapeHtml, formatClock, formatDateFr, formatKg, numberInputValue, pct, sparklineSvg, } from './ui/templates.js';
@@ -1145,14 +1145,16 @@ export class ColosseApp {
         this.render();
     }
     async mutateTimer(mutator) {
-        const ctx = this.currentContext();
-        if (!ctx.session.activeTimer)
+        // Les boutons de l'overlay agissent sur la séance propriétaire du
+        // chrono, pas sur le jour affiché.
+        const owner = this.timerOwner();
+        if (!owner?.activeTimer)
             return;
-        const next = mutator(ctx.session.activeTimer);
-        ctx.session.activeTimer = next;
+        const next = mutator(owner.activeTimer);
+        owner.activeTimer = next;
         this.timer = next;
-        ctx.session.updatedAt = Date.now();
-        await saveSession(ctx.session);
+        owner.updatedAt = Date.now();
+        await saveSession(owner);
         this.render();
     }
     /**
@@ -1173,7 +1175,7 @@ export class ColosseApp {
             await this.resolveActiveTimer(true);
     }
     async beginTimedExercise(exerciseId, durationSec, kind = 'cardio') {
-        await this.startGenericTimer(kind, Math.max(30, durationSec || 600), { exerciseId });
+        return this.startGenericTimer(kind, Math.max(30, durationSec || 600), { exerciseId });
     }
     /**
      * Arrête un exercice chronométré. Sans chrono en cours il n'y a RIEN à
@@ -1181,8 +1183,7 @@ export class ColosseApp {
      * seule la durée réellement écoulée peut le rendre accompli.
      */
     async stopTimedExercise(exerciseId) {
-        const ctx = this.currentContext();
-        const timer = ctx.session.activeTimer;
+        const timer = this.timerOwner()?.activeTimer ?? null;
         const request = timedStopRequest(timer, exerciseId);
         if (request.action === 'refuse') {
             this.showToast('Démarre le chrono : un exercice chronométré ne se valide pas à la main.', 'info', 5000);
@@ -1193,19 +1194,34 @@ export class ColosseApp {
             return;
         await this.resolveActiveTimer(true);
     }
+    /**
+     * Crée le chrono. DERNIÈRE LIGNE DE DÉFENSE : jamais deux chronos, quoi
+     * qu'il arrive en amont (double tap, bouton mal rendu, deux handlers).
+     * @returns {Promise<boolean>} true seulement si un chrono a été créé.
+     */
     async startGenericTimer(kind, seconds, context = {}) {
+        const decision = startTimerDecision(this.currentContext().session, this.timer, Date.now());
+        if (decision.action === 'resolve-first')
+            await this.resolveActiveTimer(true);
+        else if (decision.action === 'refuse') {
+            this.showToast('Un chrono est déjà en cours.', 'info');
+            return false;
+        }
         const ctx = this.currentContext();
         if (!ctx.session.startedAt) {
             ctx.session.startedAt = Date.now();
             ctx.session.endedAt = null;
             await this.acquireWakeLock();
         }
-        const timer = createTimer(kind, seconds, context);
+        // Le chrono porte l'identité de SA séance : un changement de jour ne
+        // déplace pas la propriété.
+        const timer = createTimer(kind, seconds, { ...context, sessionId: ctx.session.id });
         ctx.session.activeTimer = timer;
         this.timer = timer;
         ctx.session.updatedAt = Date.now();
         await saveSession(ctx.session);
         this.render();
+        return true;
     }
     /**
      * Résout le timer actif : effet métier PUIS fermeture, en une seule écriture.
@@ -1219,13 +1235,18 @@ export class ColosseApp {
      * ⚠ Remplace l'objet session dans le snapshot : ne conserve aucune référence
      * prise avant l'appel (session, log, set) — reprends-les après.
      */
+    /** La séance à qui appartient le chrono, jamais celle affichée. */
+    timerOwner() {
+        return timerOwnerSession(this.snapshot.sessions, this.timer, this.currentContext().session);
+    }
     async applyActiveTimerResolution(force) {
-        const ctx = this.currentContext();
-        const timer = ctx.session.activeTimer;
+        // Le chrono appartient à SA séance : on l'applique là où il a été créé,
+        // même si l'écran affiche un autre jour.
+        const owner = this.timerOwner();
+        const timer = owner?.activeTimer ?? null;
         if (!timer) {
-            // Déjà résolu, ou le timer appartient à une autre séance (changement
-            // de jour) : on lâche la référence en mémoire, sinon tick() rejoue
-            // la fin du minuteur toutes les 250 ms.
+            // Déjà résolu : on lâche la référence en mémoire, sinon tick()
+            // rejoue la fin du minuteur toutes les 250 ms.
             if (this.timer) {
                 this.timer = null;
                 this.render(); // retire l'overlay devenu orphelin
@@ -1234,7 +1255,7 @@ export class ColosseApp {
         }
         if (!force && !timerExpired(timer))
             return;
-        const result = applyTimerOutcome(ctx.session, timer, Date.now());
+        const result = applyTimerOutcome(owner, timer, Date.now());
         this.replaceSession(result.session);
         this.timer = null;
         await saveSession(result.session);

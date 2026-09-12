@@ -7,6 +7,8 @@ import { formatSeconds } from '../engine/session.js';
 
 /** Un chrono tourne-t-il déjà pour cette étape ? */
 const timerRunsFor = (ctx, exerciseId) => ctx?.session?.activeTimer?.context?.exerciseId === exerciseId;
+/** Un chrono de ce type tourne-t-il ? (l'échauffement général n'a pas d'exerciseId) */
+const timerRunsKind = (ctx, kind) => ctx?.session?.activeTimer?.kind === kind;
 
 const rirScale = (target) => [0, 1, 2, 3, 4].map((v) => `<button type="button" class="chip-choice ${v === target ? 'is-target' : ''}" data-exec-field="rir" data-value="${v}">${v === 4 ? '4+' : v}</button>`).join('');
 const painScale = () => [0, 1, 2, 3, 4].map((v) => `<button type="button" class="chip-choice ${v === 0 ? 'selected' : ''}" data-exec-field="pain" data-value="${v}">${v === 4 ? '4+' : v}</button>`).join('');
@@ -34,7 +36,7 @@ export function renderExecution(step, ctx) {
     const { day, progress, elapsedSec } = ctx;
     let body = '';
     switch (step.stage) {
-        case STAGES.GENERAL_WARMUP: body = renderGeneralWarmup(); break;
+        case STAGES.GENERAL_WARMUP: body = renderGeneralWarmup(ctx); break;
         case STAGES.ACTIVATION: body = renderActivation(step); break;
         case STAGES.NEEDS_REFERENCE_LOAD: body = renderReferenceLoad(step); break;
         case STAGES.RAMP_SET: body = renderRampSet(step); break;
@@ -47,14 +49,16 @@ export function renderExecution(step, ctx) {
     return shell(day, progress, elapsedSec, body);
 }
 
-function renderGeneralWarmup() {
+function renderGeneralWarmup(ctx) {
     return `<div class="exec-card exec-warmup">
     <span class="exec-eyebrow">ÉCHAUFFEMENT</span>
     <h2 class="exec-title">${escapeHtml(GENERAL_WARMUP.name)}</h2>
     <div class="exec-huge">${formatSeconds(GENERAL_WARMUP.durationSec)}</div>
     <div class="exec-meta"><span>${escapeHtml(GENERAL_WARMUP.speedKmh)} km/h</span><span>inclinaison ${escapeHtml(GENERAL_WARMUP.inclinePct)} %</span></div>
     <p class="exec-cue">${escapeHtml(GENERAL_WARMUP.cue)}</p>
-    <button class="exec-primary" data-action="exec-start-general-warmup">DÉMARRER</button>
+    ${timerRunsKind(ctx, 'general-warmup')
+        ? '<button class="exec-primary" disabled>CHRONO EN COURS</button>'
+        : '<button class="exec-primary" data-action="exec-start-general-warmup">DÉMARRER</button>'}
     <button class="ghost-button" data-action="exec-skip-general-warmup">Passer l’échauffement</button>
   </div>`;
 }

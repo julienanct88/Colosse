@@ -316,3 +316,35 @@ test('v3.5.3 · aucune écriture de set.done hors de toggleSet dans app.js', () 
   // Et le garde-fou lui-même doit rester utile : toggleSet écrit bien done.
   assert.match(APP, /set\.done = true;/, 'toggleSet valide toujours les séries de force');
 });
+
+// v3.5.4 — garde STRUCTURELLE : app.js ne peut écrire un chrono que dans
+// mutateTimer (ajustement) et startGenericTimer (création, protégée par
+// startTimerDecision). Toute autre écriture rouvrirait la porte au deuxième
+// chrono silencieux. Inventaire des sites d'écriture, pas preuve par chaîne.
+test('v3.5.4 · aucune écriture de activeTimer hors mutateTimer / startGenericTimer', () => {
+  const AUTORISEES = ['mutateTimer', 'startGenericTimer'];
+  const lignes = APP.split('\n');
+  const enteteMethode = /^ {4}(?:async )?([A-Za-z_$][\w$]*)\s*\(/;
+  let methode = '(hors méthode)';
+  const interdits = [];
+  lignes.forEach((ligne, index) => {
+    const entete = enteteMethode.exec(ligne);
+    if (entete)
+      methode = entete[1];
+    if (/\.activeTimer\s*=[^=]/.test(ligne) || /\[["']activeTimer["']\]\s*=[^=]/.test(ligne)) {
+      if (!AUTORISEES.includes(methode))
+        interdits.push(`${methode} (app.js:${index + 1}) : ${ligne.trim()}`);
+    }
+  });
+  assert.deepEqual(interdits, [], 'un chrono ne s’écrit que par startGenericTimer (gardé) ou mutateTimer');
+  // Et la création passe bien par la décision moteur.
+  assert.match(APP, /startTimerDecision\(/, 'startGenericTimer consulte startTimerDecision');
+  assert.match(APP, /sessionId: ctx\.session\.id/, 'le chrono porte l’identité de sa séance');
+});
+
+// v3.5.4 — la résolution ne doit jamais cibler le jour affiché.
+test('v3.5.4 · la résolution du chrono passe par la séance propriétaire', () => {
+  const corps = APP.slice(APP.indexOf('async applyActiveTimerResolution'), APP.indexOf('replaceSession(session)'));
+  assert.match(corps, /this\.timerOwner\(\)/, 'la résolution part du propriétaire');
+  assert.doesNotMatch(corps, /currentContext\(\)\.session\.activeTimer/, 'jamais le jour affiché');
+});
