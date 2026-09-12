@@ -37,10 +37,15 @@ export function applyTimerOutcome(session, timer, now = Date.now()) {
     else if (outcome.action === 'record-cardio') {
         const set = next.exercises?.[outcome.context?.exerciseId]?.sets?.[0];
         if (set) {
-            set.reps = outcome.durationSec;
+            // Une reprise ne fait JAMAIS regresser ce qui est deja acquis :
+            // refaire un cardio deja accompli puis l'arreter au bout de 2 s ne
+            // doit pas effacer les 10 minutes reellement faites.
+            const acquiredSec = Number.isFinite(Number(set.reps)) ? Math.max(0, Number(set.reps)) : 0;
+            const acquiredDone = set.done === true;
+            set.reps = Math.max(acquiredSec, outcome.durationSec);
             set.weightKg = 0;
-            set.done = outcome.complete;
-            set.completedAt = outcome.complete ? now : null;
+            set.done = outcome.complete || acquiredDone;
+            set.completedAt = set.done ? (set.completedAt ?? now) : null;
         }
         if (!outcome.complete)
             message = outcome.kind === 'recovery'

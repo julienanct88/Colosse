@@ -159,3 +159,18 @@ export function timerControls(kind) {
 export function canShortenTimer(kind) {
     return timerControls(kind).some((control) => control.id === 'minus');
 }
+
+/** Message de fin de minuteur, selon le kind. Le son et la vibration sont identiques. */
+export const TIMER_END_MESSAGES = {
+    'work-rest': 'Repos terminé. Série suivante.',
+    'ramp-rest': 'Repos terminé. Prochaine série de montée en charge.',
+    'side-switch': 'Changement terminé. Côté droit.',
+    'general-warmup': 'Échauffement terminé.',
+    'activation-rest': 'Transition terminée.',
+    cardio: 'Cardio terminé.',
+    recovery: 'Étape de récupération terminée.',
+};
+
+export function timerEndMessage(kind) {
+    return TIMER_END_MESSAGES[kind] ?? 'Minuteur terminé.';
+}

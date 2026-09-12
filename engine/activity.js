@@ -61,3 +61,15 @@ export function activityGoalLabel(profile = {}) {
     const zoneMax = Math.max(zoneMin, positiveNumber(profile.stepsOnlyTarget, 12000));
     return `${Math.round(zoneMin).toLocaleString('fr-FR')} \u00e0 ${Math.round(zoneMax).toLocaleString('fr-FR')} pas par jour`;
 }
+
+/**
+ * Phrase affichée dans les réglages. Le vélo est une information : il ne
+ * remplace jamais les pas (c'est déjà le comportement d'activityProgress).
+ */
+export function activityGoalHelp(profileInput) {
+    const profile = profileInput ?? {};
+    const zoneMin = positiveNumber(profile.dailyStepTarget, 8000);
+    const zoneMax = Math.max(zoneMin, positiveNumber(profile.stepsOnlyTarget, 12000));
+    const fr = (value) => Math.round(value).toLocaleString('fr-FR');
+    return `Objectif quotidien : ${fr(zoneMin)} à ${fr(zoneMax)} pas. Le vélo est suivi séparément et ne remplace pas automatiquement les pas.`;
+}

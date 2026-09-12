@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { findDay, findExercise, getExercisePlan } from '../program.js';
-import { createTimer, timerOutcome, timerLabel, remainingSeconds, isExpired, adjustTimer, timerControls, canShortenTimer } from '../engine/timer.js';
+import { createTimer, timerOutcome, timerLabel, remainingSeconds, isExpired, adjustTimer, timerControls, canShortenTimer, TIMER_END_MESSAGES } from '../engine/timer.js';
 import { applyTimerOutcome } from '../engine/timer-effects.js';
 import { aggregateSides, currentSide, bothSidesDone, countSessionSets, closeSession, resetExerciseLogForVariant } from '../engine/session.js';
 import { computeExecutionStep, executionProgress, STAGES } from '../engine/execution.js';
@@ -21,6 +21,18 @@ test('2. plus aucune trace de l’ancien moteur de timer', () => {
   // v3.5.2 : le drapeau piégeux « déjà traité » est supprimé partout.
   for (const trap of ['completedHandled', 'markCompleted', 'needsCompletion'])
     assert.equal(APP.includes(trap) || TIMER.includes(`function ${trap}`), false, `${trap} ne doit plus exister`);
+  // v3.5.3 : plus de bascule manuelle d'un exercice chronométré, plus de texte
+  // d'activité obsolète, et aucun libellé métier codé en dur dans app.js —
+  // ils viennent tous du moteur (sinon le câblage peut régresser sans échec).
+  const enDur = [
+    'set.done = !set.done',
+    'Colosse valide l’activité', 'Objectif 100 % pas', 'socle de pas accompagné',
+    'Objectif quotidien :',
+    ...Object.values(TIMER_END_MESSAGES),
+    '— incomplet', 'validé sans chrono',
+  ];
+  for (const trap of enDur)
+    assert.equal(APP.includes(trap), false, `« ${trap} » ne doit plus être codé en dur dans app.js`);
   assert.equal('completedHandled' in createTimer('work-rest', 60, {}, 0), false, 'un timer neuf ne porte plus ce drapeau');
 });
 
@@ -274,4 +286,33 @@ test('v3.5.2 · une journée récupération ne compte ni warmup ni ramps', () =>
     session.exercises[ex.id] = { skipped: false, sets: [{ done: false }] };
   const progress = executionProgress({ day, session, resolvePlan: plan });
   assert.equal(progress.total, day.exercises.length, 'une étape par bloc de récupération');
+});
+
+// v3.5.3 — garde STRUCTURELLE, robuste à l'orthographe : app.js ne doit écrire
+// « done » que dans toggleSet (séries de force). Un exercice chronométré n'est
+// jamais validé par du code d'interface — seule la résolution du chrono
+// (engine/timer-effects.js) peut l'accomplir.
+// Ce n'est pas une preuve de comportement par recherche de chaîne : c'est
+// l'inventaire des sites d'écriture d'un champ, et l'assertion qu'il n'en
+// existe aucun en dehors de la fonction autorisée.
+test('v3.5.3 · aucune écriture de set.done hors de toggleSet dans app.js', () => {
+  const lignes = APP.split('\n');
+  // Début de chaque méthode de la classe : «     nomDeMethode(...) {» ou «     async nomDeMethode(...) {»
+  const enteteMethode = /^ {4}(?:async )?([A-Za-z_$][\w$]*)\s*\(/;
+  let methodeCourante = '(hors méthode)';
+  const sitesInterdits = [];
+  lignes.forEach((ligne, index) => {
+    const entete = enteteMethode.exec(ligne);
+    if (entete)
+      methodeCourante = entete[1];
+    // Toute affectation à une propriété « done » (set.done, set0.done, x['done'], …)
+    if (/\.done\s*=[^=]/.test(ligne) || /\[["']done["']\]\s*=[^=]/.test(ligne)) {
+      if (methodeCourante !== 'toggleSet')
+        sitesInterdits.push(`${methodeCourante} (app.js:${index + 1}) : ${ligne.trim()}`);
+    }
+  });
+  assert.deepEqual(sitesInterdits, [],
+    'seule toggleSet peut écrire set.done ; un exercice chronométré se valide uniquement par la durée du chrono');
+  // Et le garde-fou lui-même doit rester utile : toggleSet écrit bien done.
+  assert.match(APP, /set\.done = true;/, 'toggleSet valide toujours les séries de force');
 });

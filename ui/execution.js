@@ -5,6 +5,9 @@ import { STAGES } from '../engine/execution.js';
 import { GENERAL_WARMUP } from '../engine/warmup.js';
 import { formatSeconds } from '../engine/session.js';
 
+/** Un chrono tourne-t-il déjà pour cette étape ? */
+const timerRunsFor = (ctx, exerciseId) => ctx?.session?.activeTimer?.context?.exerciseId === exerciseId;
+
 const rirScale = (target) => [0, 1, 2, 3, 4].map((v) => `<button type="button" class="chip-choice ${v === target ? 'is-target' : ''}" data-exec-field="rir" data-value="${v}">${v === 4 ? '4+' : v}</button>`).join('');
 const painScale = () => [0, 1, 2, 3, 4].map((v) => `<button type="button" class="chip-choice ${v === 0 ? 'selected' : ''}" data-exec-field="pain" data-value="${v}">${v === 4 ? '4+' : v}</button>`).join('');
 
@@ -36,8 +39,8 @@ export function renderExecution(step, ctx) {
         case STAGES.NEEDS_REFERENCE_LOAD: body = renderReferenceLoad(step); break;
         case STAGES.RAMP_SET: body = renderRampSet(step); break;
         case STAGES.WORK_SET: body = renderWorkSet(step, ctx); break;
-        case STAGES.CARDIO: body = renderCardio(step); break;
-        case STAGES.RECOVERY: body = renderRecovery(step); break;
+        case STAGES.CARDIO: body = renderCardio(step, ctx); break;
+        case STAGES.RECOVERY: body = renderRecovery(step, ctx); break;
         case STAGES.SESSION_COMPLETE: body = renderComplete(ctx); break;
         default: body = '<p class="empty-state">Étape inconnue.</p>';
     }
@@ -126,7 +129,7 @@ function renderWorkSet(step, ctx) {
   </div>`;
 }
 
-function renderCardio(step) {
+function renderCardio(step, ctx) {
     const ex = step.exercise;
     return `<div class="exec-card exec-cardio">
     <span class="exec-eyebrow">CARDIO</span>
@@ -134,18 +137,22 @@ function renderCardio(step) {
     <div class="exec-huge">${formatSeconds(step.durationSec)}</div>
     <div class="exec-meta">${ex.inclinePct ? `<span>inclinaison ${escapeHtml(String(ex.inclinePct))} %</span>` : ''}${ex.speedKmh ? `<span>vitesse ${escapeHtml(String(ex.speedKmh))}${/[0-9]/.test(String(ex.speedKmh)) ? ' km/h' : ''}</span>` : ''}</div>
     <p class="exec-cue">${escapeHtml(ex.coachingCue ?? '')}</p>
-    <button class="exec-primary" data-action="exec-start-cardio" data-exercise="${ex.id}" data-duration="${step.durationSec}">DÉMARRER</button>
+    ${timerRunsFor(ctx, ex.id)
+        ? '<button class="exec-primary" disabled>CHRONO EN COURS</button>'
+        : `<button class="exec-primary" data-action="exec-start-cardio" data-exercise="${ex.id}" data-duration="${step.durationSec}">DÉMARRER</button>`}
   </div>`;
 }
 
-function renderRecovery(step) {
+function renderRecovery(step, ctx) {
     const ex = step.exercise;
     return `<div class="exec-card exec-cardio">
     <span class="exec-eyebrow">RÉCUPÉRATION ACTIVE</span>
     <h2 class="exec-title">${escapeHtml(ex.name)}</h2>
     <div class="exec-huge">${formatSeconds(step.durationSec)}</div>
     <p class="exec-cue">${escapeHtml(ex.coachingCue ?? '')}</p>
-    <button class="exec-primary" data-action="exec-start-recovery" data-exercise="${ex.id}" data-duration="${step.durationSec}">DÉMARRER</button>
+    ${timerRunsFor(ctx, ex.id)
+        ? '<button class="exec-primary" disabled>CHRONO EN COURS</button>'
+        : `<button class="exec-primary" data-action="exec-start-recovery" data-exercise="${ex.id}" data-duration="${step.durationSec}">DÉMARRER</button>`}
   </div>`;
 }
 

@@ -353,6 +353,9 @@ h3 { font-size: 17px; }
 .side-badge.right{background:rgba(249,115,22,.18);color:#fdba74;}
 .cardio-card .cardio-actions{display:flex;gap:8px;margin-top:10px;}
 .cardio-card .cardio-actions button{flex:1;}
+.cardio-status{flex:1;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--muted,rgba(255,255,255,.5));text-align:center;}
+.cardio-status.is-partial{color:#f59e0b;}
+.cardio-status.is-done{color:#34d399;}
 .cardio-badge{background:rgba(16,185,129,.18);color:#6ee7b7;}
 .rir-target{opacity:.65;font-weight:600;}
 .set-hint{display:block;opacity:.6;font-size:.62rem;margin-top:2px;}

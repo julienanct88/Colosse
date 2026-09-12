@@ -4,13 +4,13 @@ import { clearAllData, deleteSession, loadSnapshot, saveAdjustment, saveDailyLog
 import { defaultDayForDate, findDay, findExercise, getExercisePlan, getTrainingPhase, TRAINING_DAYS, STRENGTH_DAYS } from './program.js';
 import { nextPrescription, prescriptionFromHistory, suggestNextSet, summarizeSession, } from './engine/progression.js';
 import { estimateSessionDuration, remainingSessionSeconds, } from './engine/duration.js';
-import { aggregateSides, currentSide, bothSidesDone, countSessionSets, isSessionComplete as isSessionCompletePure, countCompletedStrengthSessions, weekdayOffset, targetRirForSet, isSetValid, countsForHistory, finishStatus, formatSeconds, closeSession, resetExerciseLogForVariant, } from './engine/session.js';
+import { aggregateSides, currentSide, bothSidesDone, countSessionSets, isSessionComplete as isSessionCompletePure, countCompletedStrengthSessions, weekdayOffset, targetRirForSet, isSetValid, countsForHistory, finishStatus, formatSeconds, closeSession, resetExerciseLogForVariant, timedExerciseStatus, timedExerciseActions, timedStopRequest, } from './engine/session.js';
 import { analyzeWeightTrend, macrosForCalories, targetWeight, weeklyTargets, } from './engine/weight.js';
 import { analyzeRecovery, analyzeStrengthTrend, } from './engine/recovery.js';
-import { activityGoalLabel, activityModeLabel, activityProgress, activitySummary, } from './engine/activity.js';
+import { activityGoalHelp, activityGoalLabel, activityModeLabel, activityProgress, activitySummary, } from './engine/activity.js';
 import { addDays, isoDate, startOfWeek, uid, weekIndexFromStart, } from './engine/math.js';
 import { computeExecutionStep, executionProgress, normalizeExecutionState, STAGES, } from './engine/execution.js';
-import { createTimer, remainingSeconds as timerRemaining, isExpired as timerExpired, pauseTimer, resumeTimer, adjustTimer as adjustTimerState, timerLabel, timerControls, canShortenTimer, } from './engine/timer.js';
+import { createTimer, remainingSeconds as timerRemaining, isExpired as timerExpired, pauseTimer, resumeTimer, adjustTimer as adjustTimerState, timerLabel, timerControls, canShortenTimer, timerEndMessage, } from './engine/timer.js';
 import { applyTimerOutcome, createTimerResolutionQueue } from './engine/timer-effects.js';
 import { computeRampSets, normalizeWarmupState, resolveReferenceLoad, clearExerciseRamps, GENERAL_WARMUP, } from './engine/warmup.js';
 import { renderExecution } from './ui/execution.js';
@@ -51,6 +51,7 @@ export class ColosseApp {
     tickHandle = null;
     saveDebounce = null;
     toastHandle = null;
+    activeToast = null;
     wakeLock = null;
     installPrompt = null;
     constructor(root) {
@@ -238,6 +239,7 @@ export class ColosseApp {
           <button data-action="reload-update">Installer</button>
         </div>
       </div>`;
+        this.restoreToast();
         this.tick();
     }
     renderHeader() {
@@ -516,8 +518,15 @@ export class ColosseApp {
         const log = context.session.exercises[exercise.id];
         const set = log?.sets?.[0];
         const doneSec = Number(set?.reps) || 0;
-        const done = !!set?.done;
         const targetSec = exercise.durationSec ?? plan.repMin;
+        // Accompli = durée réellement chronométrée atteinte ET enregistrée.
+        // Jamais un clic.
+        const status = timedExerciseStatus(doneSec, targetSec, set?.done === true);
+        // `legacy` : validé par l'ancien bug, sans durée. Reste compté comme
+        // fait (on ne touche pas à l'historique), mais la carte le dit.
+        const done = status.done || status.legacy;
+        const running = context.session.activeTimer?.context?.exerciseId === exercise.id;
+        const actions = timedExerciseActions(status, running);
         return `<article class="exercise-card cardio-card ${done ? 'complete' : ''}" style="--accent:${context.day.color}" data-exercise-card="${exercise.id}">
       <div class="exercise-head">
         <div class="exercise-index">${String(index + 1).padStart(2, '0')}</div>
@@ -528,8 +537,8 @@ export class ColosseApp {
       </div>
       <p class="coaching-cue">${escapeHtml(exercise.coachingCue ?? '')}</p>
       <div class="cardio-actions">
-        <button class="primary-button" data-action="start-cardio" data-exercise="${exercise.id}" data-duration="${targetSec}">${done ? '↻ Refaire' : '▶ Démarrer'}</button>
-        <button class="secondary-button" data-action="finish-cardio" data-exercise="${exercise.id}" data-duration="${targetSec}">${done ? `✓ ${formatSeconds(doneSec)} réalisé` : 'Terminer'}</button>
+        ${actions.map((item) => `<button class="${item.style}-button" data-action="${item.action}" data-exercise="${exercise.id}" data-duration="${targetSec}" data-kind="${context.day.kind === 'recovery' ? 'recovery' : 'cardio'}">${escapeHtml(item.label)}</button>`).join('')}
+        <span class="cardio-status ${done ? 'is-done' : status.partial ? 'is-partial' : ''}">${done ? '✓ ' : ''}${escapeHtml(status.label)}</span>
       </div>
     </article>`;
     }
@@ -766,11 +775,11 @@ export class ColosseApp {
           ${this.profileField('fatG', 'Lipides', profile.fatG, 'g', '5', 40, 200)}
           ${this.profileField('minimumCalories', 'Plancher', profile.minimumCalories, 'kcal', '50', 1500, 5000)}
           ${this.profileField('maximumCalories', 'Plafond', profile.maximumCalories, 'kcal', '50', 2000, 7000)}
-          ${this.profileField('dailyStepTarget', 'Socle de pas', profile.dailyStepTarget, 'pas', '250', 1000, 20000)}
-          ${this.profileField('stepsOnlyTarget', 'Objectif 100 % pas', profile.stepsOnlyTarget, 'pas', '250', 3000, 30000)}
+          ${this.profileField('dailyStepTarget', 'Bas de la zone de pas', profile.dailyStepTarget, 'pas', '250', 1000, 20000)}
+          ${this.profileField('stepsOnlyTarget', 'Haut de la zone de pas', profile.stepsOnlyTarget, 'pas', '250', 3000, 30000)}
           ${this.profileField('bikeMinutesTarget', 'Vélo modéré', profile.bikeMinutesTarget, 'min', '5', 5, 120)}
         </div>
-        <p class="subtle-block settings-help">Colosse valide l’activité avec l’objectif de pas complet, ou avec le socle de pas accompagné du vélo.</p>
+        <p class="subtle-block settings-help">${escapeHtml(activityGoalHelp(profile))}</p>
       </section>
 
       <section class="card settings-section">
@@ -904,7 +913,7 @@ export class ColosseApp {
                 await this.moveExercise(actionElement.dataset.exercise ?? '', actionElement.dataset.direction === 'up' ? -1 : 1);
                 break;
             case 'start-cardio':
-                await this.beginTimedExercise(actionElement.dataset.exercise ?? '', Number(actionElement.dataset.duration), 'cardio');
+                await this.beginTimedExercise(actionElement.dataset.exercise ?? '', Number(actionElement.dataset.duration), actionElement.dataset.kind === 'recovery' ? 'recovery' : 'cardio');
                 break;
             case 'finish-cardio':
                 await this.stopTimedExercise(actionElement.dataset.exercise ?? '');
@@ -1166,27 +1175,23 @@ export class ColosseApp {
     async beginTimedExercise(exerciseId, durationSec, kind = 'cardio') {
         await this.startGenericTimer(kind, Math.max(30, durationSec || 600), { exerciseId });
     }
+    /**
+     * Arrête un exercice chronométré. Sans chrono en cours il n'y a RIEN à
+     * arrêter : un cardio ou une récupération ne se valide jamais à la main,
+     * seule la durée réellement écoulée peut le rendre accompli.
+     */
     async stopTimedExercise(exerciseId) {
         const ctx = this.currentContext();
         const timer = ctx.session.activeTimer;
-        if (timer && timer.context?.exerciseId === exerciseId) {
-            const isRecovery = timer.kind === 'recovery';
-            if (!confirm(isRecovery ? 'Arrêter cette étape de récupération ?' : 'Arrêter le cardio avant la fin ? La durée réelle sera enregistrée et l’étape restera incomplète.'))
-                return;
-            await this.resolveActiveTimer(true);
+        const request = timedStopRequest(timer, exerciseId);
+        if (request.action === 'refuse') {
+            this.showToast('Démarre le chrono : un exercice chronométré ne se valide pas à la main.', 'info', 5000);
             return;
         }
-        // Pas de timer en cours : bascule manuelle de l'étape.
-        const log = ctx.session.exercises[exerciseId];
-        const set = log?.sets?.[0];
-        if (!set)
+        const isRecovery = request.kind === 'recovery';
+        if (!confirm(isRecovery ? 'Arrêter cette étape de récupération ?' : 'Arrêter le cardio avant la fin ? La durée réelle sera enregistrée et l’étape restera incomplète.'))
             return;
-        set.done = !set.done;
-        set.weightKg = 0;
-        set.completedAt = set.done ? Date.now() : null;
-        ctx.session.updatedAt = Date.now();
-        await saveSession(ctx.session);
-        this.render();
+        await this.resolveActiveTimer(true);
     }
     async startGenericTimer(kind, seconds, context = {}) {
         const ctx = this.currentContext();
@@ -1217,8 +1222,16 @@ export class ColosseApp {
     async applyActiveTimerResolution(force) {
         const ctx = this.currentContext();
         const timer = ctx.session.activeTimer;
-        if (!timer)
-            return; // déjà résolu par la résolution précédente
+        if (!timer) {
+            // Déjà résolu, ou le timer appartient à une autre séance (changement
+            // de jour) : on lâche la référence en mémoire, sinon tick() rejoue
+            // la fin du minuteur toutes les 250 ms.
+            if (this.timer) {
+                this.timer = null;
+                this.render(); // retire l'overlay devenu orphelin
+            }
+            return;
+        }
         if (!force && !timerExpired(timer))
             return;
         const result = applyTimerOutcome(ctx.session, timer, Date.now());
@@ -1566,7 +1579,7 @@ export class ColosseApp {
             }
             catch { /* ignored */ }
         }
-        this.showToast('Repos terminé. Série suivante.', 'success');
+        this.showToast(timerEndMessage(this.timer?.kind), 'success');
     }
     tick() {
         const execElapsed = document.getElementById('exec-elapsed');
@@ -1678,6 +1691,9 @@ export class ColosseApp {
     }
     showToast(message, type = 'info', duration = 3500) {
         window.clearTimeout(this.toastHandle ?? undefined);
+        // Mémorisé : le rendu recrée #toast, un message émis juste avant un
+        // render disparaissait avant d'être lu.
+        this.activeToast = { message, type };
         const toast = document.getElementById('toast');
         if (!toast) {
             console.log(message);
@@ -1685,7 +1701,20 @@ export class ColosseApp {
         }
         toast.textContent = message;
         toast.className = `toast ${type}`;
-        this.toastHandle = window.setTimeout(() => toast.classList.add('hidden'), duration);
+        this.toastHandle = window.setTimeout(() => {
+            this.activeToast = null;
+            document.getElementById('toast')?.classList.add('hidden');
+        }, duration);
+    }
+    /** Réapplique un message encore à l'écran après un rendu. */
+    restoreToast() {
+        if (!this.activeToast)
+            return;
+        const toast = document.getElementById('toast');
+        if (!toast)
+            return;
+        toast.textContent = this.activeToast.message;
+        toast.className = `toast ${this.activeToast.type}`;
     }
 }
 const root = document.getElementById('app');

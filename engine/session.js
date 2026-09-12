@@ -171,3 +171,67 @@ export function resetExerciseLogForVariant(log, variantId, setCount, createSet) 
         sets: Array.from({ length: Math.max(0, Number(setCount) || 0) }, () => createSet()),
     };
 }
+
+/**
+ * Règle des exercices chronométrés (cardio, récupération) : accompli UNIQUEMENT
+ * si la durée réellement enregistrée atteint la durée prescrite.
+ * Aucune validation à la main, jamais.
+ */
+export function timedExerciseStatus(recordedSec, prescribedSec, validated = undefined) {
+    const num = (value) => {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+    };
+    const recorded = num(recordedSec);
+    const prescribed = num(prescribedSec);
+    // La durée atteint-elle la consigne ? C'est la condition nécessaire.
+    const reaches = prescribed > 0 && recorded >= prescribed;
+    // `validated` = ce qui est réellement enregistré (set.done). Omis : on ne
+    // juge que la durée. Fourni : les deux doivent être d'accord, sinon
+    // l'étape n'est pas accomplie (donnée héritée, ou chrono rallongé et
+    // arrêté avant la fin).
+    const done = reaches && (validated === undefined ? true : validated === true);
+    // Donnée antérieure à v3.5.3 : étape validée à la main, sans durée. On ne
+    // réécrit pas l'historique — l'affichage reste aligné sur les compteurs,
+    // mais il dit qu'aucune durée n'a été chronométrée.
+    const legacy = validated === true && !reaches;
+    const started = recorded > 0;
+    return {
+        recordedSec: recorded,
+        prescribedSec: prescribed,
+        reaches,
+        done,
+        legacy,
+        started,
+        partial: started && !done && !legacy,
+        label: done
+            ? `${formatSeconds(recorded)} réalisé`
+            : legacy
+                ? 'validé sans chrono'
+                : started
+                    ? `${formatSeconds(recorded)} / ${formatSeconds(prescribed)} — incomplet`
+                    : formatSeconds(prescribed),
+        actionLabel: done || legacy ? '↻ Refaire' : started ? '↻ Reprendre' : '▶ Démarrer',
+    };
+}
+
+/**
+ * Actions autorisées sur un exercice chronométré. Il n'en existe que deux :
+ * lancer le chrono, ou arrêter celui qui tourne. Aucune ne valide l'étape.
+ */
+export function timedExerciseActions(status, running = false) {
+    if (running)
+        return [{ action: 'finish-cardio', label: '■ Arrêter le chrono', style: 'secondary' }];
+    return [{ action: 'start-cardio', label: status?.actionLabel ?? '▶ Démarrer', style: 'primary' }];
+}
+
+/**
+ * Demande d'arrêt d'un exercice chronométré.
+ * Sans chrono en cours pour CET exercice, il n'y a rien à arrêter : on refuse.
+ * C'est ce refus qui interdit de valider un cardio sans l'avoir fait.
+ */
+export function timedStopRequest(activeTimer, exerciseId) {
+    if (activeTimer && activeTimer.context?.exerciseId === exerciseId)
+        return { action: 'resolve-timer', kind: activeTimer.kind };
+    return { action: 'refuse', reason: 'no-active-timer' };
+}
