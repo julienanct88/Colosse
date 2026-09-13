@@ -4,30 +4,32 @@ import { escapeHtml, formatClock } from './templates.js';
 import { STAGES } from '../engine/execution.js';
 import { GENERAL_WARMUP } from '../engine/warmup.js';
 import { formatSeconds } from '../engine/session.js';
+import { icon } from './forge.js';
 
 /** Un chrono tourne-t-il déjà pour cette étape ? */
 const timerRunsFor = (ctx, exerciseId) => ctx?.session?.activeTimer?.context?.exerciseId === exerciseId;
 /** Un chrono de ce type tourne-t-il ? (l'échauffement général n'a pas d'exerciseId) */
 const timerRunsKind = (ctx, kind) => ctx?.session?.activeTimer?.kind === kind;
 
-const rirScale = (target) => [0, 1, 2, 3, 4].map((v) => `<button type="button" class="chip-choice ${v === target ? 'is-target' : ''}" data-exec-field="rir" data-value="${v}">${v === 4 ? '4+' : v}</button>`).join('');
-const painScale = () => [0, 1, 2, 3, 4].map((v) => `<button type="button" class="chip-choice ${v === 0 ? 'selected' : ''}" data-exec-field="pain" data-value="${v}">${v === 4 ? '4+' : v}</button>`).join('');
+const rirScale = (target) => [0, 1, 2, 3, 4, 5, 6].map((v) => `<button type="button" class="chip-choice ${v === target ? 'is-target' : ''}" data-exec-field="rir" data-value="${v}" aria-pressed="false" aria-label="${v === 6 ? '6 répétitions ou plus' : `${v} répétition${v > 1 ? 's' : ''} encore possible${v > 1 ? 's' : ''}`}">${v === 6 ? '6+' : v}</button>`).join('');
+const painScale = () => Array.from({ length: 11 }, (_, v) => `<button type="button" class="chip-choice ${v === 0 ? 'selected' : ''}" data-exec-field="pain" data-value="${v}" aria-pressed="${v === 0}" aria-label="Douleur ${v} sur 10">${v}</button>`).join('');
 
 function header(day, progress, elapsedSec) {
     return `<div class="exec-header">
-    <div class="exec-header__top"><span class="exec-day">${escapeHtml(day.name)}</span><span class="exec-clock" id="exec-elapsed">${formatClock(elapsedSec)}</span></div>
+    <div class="exec-header__top"><button class="f-exec-back" data-action="exec-show-program" aria-label="Revenir au programme sans terminer la séance">${icon('back')}</button><div class="f-exec-context"><span class="exec-day">${escapeHtml(day.name)}</span><span class="exec-clock"><span id="exec-elapsed">${formatClock(elapsedSec)}</span> · séance en cours</span></div><button class="f-exec-menu" data-action="exec-menu" aria-label="Options de la séance">${icon('dots')}</button></div>
     <div class="exec-progress"><i style="width:${progress.percent}%"></i></div>
-    <div class="exec-progress__label">${progress.done}/${progress.total} étapes · ${progress.percent} %</div>
+    <div class="exec-progress__label"><span>${progress.done}/${progress.total} étapes</span><span>${progress.percent} %</span></div>
   </div>`;
 }
 
 function shell(day, progress, elapsedSec, body) {
-    return `<section class="execution" aria-live="polite">
+    return `<section class="execution">
     ${header(day, progress, elapsedSec)}
     ${body}
     <div class="exec-secondary">
-      <button class="ghost-button" data-action="exec-show-program">Voir toute la séance</button>
-      <button class="ghost-button" data-action="exec-menu">⋯</button>
+      <button class="ghost-button" data-action="exec-show-program">${icon('list')} Séance</button>
+      <button class="ghost-button" data-action="forge-notes">${icon('note')} Notes</button>
+      <button class="ghost-button" data-action="exec-menu">${icon('tune')} Options</button>
     </div>
   </section>`;
 }
@@ -104,32 +106,47 @@ function renderWorkSet(step, ctx) {
     const log = ctx.session.exercises[exercise.id];
     const set = log?.sets?.[setIndex] ?? {};
     const load = set.weightKg ?? ctx.prescriptionLoadKg ?? '';
-    const amountLabel = plan.metric === 'seconds' ? 'Durée (s)' : 'Répétitions';
+    const amountLabel = plan.metric === 'seconds' ? 'Durée · secondes' : 'Répétitions';
     const rangeLabel = plan.metric === 'seconds'
         ? `${formatSeconds(plan.repMin)}–${formatSeconds(plan.repMax)}`
-        : `${plan.repMin}–${plan.repMax} répétitions`;
+        : `${plan.repMin}–${plan.repMax} reps`;
     const needsLoad = (step.variant?.loadMode ?? 'external') === 'external';
-    return `<div class="exec-card exec-work">
-    <div class="exec-sub">${escapeHtml(exercise.name)}</div>
-    <h2 class="exec-title">SÉRIE ${setIndex + 1} / ${totalSets}</h2>
+    const increment = Number(step.variant?.incrementKg) > 0 ? Number(step.variant.incrementKg) : 0.25;
+    const order = ctx.session.exerciseOrder ?? ctx.day.exercises.map(ex => ex.id);
+    const position = Math.max(0, order.indexOf(exercise.id)) + 1;
+    const key = `${ctx.session.id}:${exercise.id}:${log.variantId}:${setIndex}:${side ?? 'both'}`;
+    const stepper = (field, label, value, placeholder, delta, inputmode) => `<div class="f-value-cell"><label><span class="f-value-label">${label}</span><input type="number" inputmode="${inputmode}" min="0" step="${field === 'weightKg' ? '0.25' : '1'}" data-exec-field="${field}" value="${escapeHtml(String(value))}" placeholder="${escapeHtml(String(placeholder))}" aria-label="${label}"/></label><div class="f-stepper"><button type="button" data-action="forge-step" data-delta="-${delta}" aria-label="Diminuer ${label} de ${delta}">${icon('minus')}</button><button type="button" data-action="forge-step" data-delta="${delta}" aria-label="Augmenter ${label} de ${delta}">${icon('plus')}</button></div></div>`;
+    return `<div class="exec-card exec-work" data-forge-step="${escapeHtml(key)}">
+    <div class="f-work-kicker">EXERCICE ${String(position).padStart(2,'0')} / ${String(order.length).padStart(2,'0')}<span>${log.sets.filter(s => s.done).length}/${totalSets} séries validées</span></div>
+    <h2 class="exec-title">${escapeHtml(exercise.name)}</h2>
+    <p class="f-work-variant">${escapeHtml(step.variant?.label ?? 'Variante du programme')}${needsLoad ? '' : ' · poids du corps'}</p>
     ${side ? `<div class="exec-side ${side}">${side === 'left' ? 'CÔTÉ GAUCHE' : 'CÔTÉ DROIT'}</div>` : ''}
-    ${needsLoad ? `<div class="exec-huge">${load !== '' ? `${load} kg` : '—'}</div>` : '<div class="exec-huge exec-huge--sm">poids du corps</div>'}
-    <div class="exec-meta"><span>${rangeLabel}</span><span>RIR cible ${targetRir}</span>${plan.tempo ? `<span>tempo ${escapeHtml(plan.tempo)}</span>` : ''}</div>
-    ${ctx.lastExposure ? `<p class="exec-last">Dernière exposition : ${escapeHtml(ctx.lastExposure)}</p>` : ''}
-    ${exercise.coachingCue ? `<p class="exec-cue">${escapeHtml(exercise.coachingCue)}</p>` : ''}
-    <div class="exec-fields">
-      ${needsLoad ? `<label class="exec-input"><span>Charge (kg)</span><input type="number" inputmode="decimal" min="0" step="0.25" data-exec-field="weightKg" value="${load}"/></label>` : ''}
-      <label class="exec-input"><span>${amountLabel}</span><input type="number" inputmode="numeric" min="0" step="1" data-exec-field="reps" value="${set.reps ?? ''}" placeholder="${plan.repMin}"/></label>
+    <div class="f-set-dots" aria-hidden="true">${Array.from({length:totalSets},(_,i)=>`<span class="${log.sets[i]?.done?'is-done':i===setIndex?'is-current':''}"></span>`).join('')}</div>
+    <div class="f-work-panel">
+      <div class="f-set-caption">Série ${setIndex + 1} sur ${totalSets}<span>À toi de jouer</span></div>
+      <div class="exec-fields ${needsLoad ? '' : 'single'}">
+        ${needsLoad ? stepper('weightKg', 'Charge · kg', load, '0', increment, 'decimal') : ''}
+        ${stepper('reps', amountLabel, set.reps ?? '', plan.repMin, plan.metric === 'seconds' ? 5 : 1, 'numeric')}
+      </div>
+      <p class="f-last-exposure">${icon('clock')}<span>${ctx.lastExposure ? `Dernière exposition : ${escapeHtml(ctx.lastExposure)}` : 'Première exposition : calibre ta charge prudemment.'}</span></p>
     </div>
-    <div class="exec-choice"><span>RIR réel <small class="rir-target">(cible ${targetRir})</small></span><div class="chip-row" data-exec-group="rir">${rirScale(targetRir)}</div></div>
-    <div class="exec-choice"><span>Technique</span><div class="chip-row" data-exec-group="technique">
-      <button type="button" class="chip-choice selected" data-exec-field="technique" data-value="good">PROPRE</button>
-      <button type="button" class="chip-choice" data-exec-field="technique" data-value="degraded">DÉGRADÉE</button>
-    </div></div>
-    <div class="exec-choice"><span>Douleur</span><div class="chip-row" data-exec-group="pain">${painScale()}</div></div>
-    <button class="exec-primary" data-action="exec-validate-set" data-exercise="${exercise.id}" data-set="${setIndex}">
-      ${side ? `VALIDER ${side === 'left' ? 'CÔTÉ GAUCHE' : 'CÔTÉ DROIT'}` : 'VALIDER LA SÉRIE'}
-    </button>
+    <div class="exec-meta"><span>${rangeLabel}</span><span>Repos ${formatClock(plan.restSec)}</span>${plan.tempo ? `<span>Tempo ${escapeHtml(plan.tempo)}</span>` : ''}</div>
+    <div class="exec-choice"><span>Répétitions encore possibles <small class="rir-target">Cible ${targetRir}</small></span><div class="chip-row" data-exec-group="rir" aria-label="RIR réellement ressenti">${rirScale(targetRir)}</div></div>
+    <details class="f-feedback-details" data-forge-detail="feedback:${escapeHtml(key)}">
+      <summary>Technique & douleur · à vérifier</summary>
+      <div>
+        <div class="exec-choice"><span>Qualité du mouvement</span><div class="chip-row" data-exec-group="technique">
+          <button type="button" class="chip-choice selected" data-exec-field="technique" data-value="good" aria-pressed="true">Propre</button>
+          <button type="button" class="chip-choice" data-exec-field="technique" data-value="degraded" aria-pressed="false">Dégradée</button>
+        </div></div>
+        <div class="exec-choice"><span>Douleur · 0 = aucune, 10 = maximale</span><div class="chip-row" data-exec-group="pain">${painScale()}</div></div>
+        ${exercise.coachingCue ? `<p class="exec-cue">${escapeHtml(exercise.coachingCue)}</p>` : ''}
+      </div>
+    </details>
+    <div class="f-work-actions"><button class="exec-primary" data-action="exec-validate-set" data-exercise="${exercise.id}" data-set="${setIndex}">
+      ${side ? `Valider le côté ${side === 'left' ? 'gauche' : 'droit'}` : `Valider la série ${setIndex + 1}`} ${icon('check')}
+    </button></div>
+    <button class="ghost-button" data-action="exec-show-program" data-exercise="${exercise.id}">${icon('list')} Toutes les séries & variantes</button>
   </div>`;
 }
 

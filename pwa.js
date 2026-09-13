@@ -1,4 +1,5 @@
 let refreshing = false;
+const controlledOnLoad = !!navigator.serviceWorker?.controller;
 export async function registerPwa() {
     if (!('serviceWorker' in navigator))
         return;
@@ -18,7 +19,7 @@ export async function registerPwa() {
             });
         });
         navigator.serviceWorker.addEventListener('controllerchange', () => {
-            if (refreshing)
+            if (refreshing || !controlledOnLoad)
                 return;
             refreshing = true;
             window.location.reload();
