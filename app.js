@@ -6,7 +6,7 @@ import { clearAllData, deleteSession, loadSnapshot, saveAdjustment, saveDailyLog
 import { defaultDayForDate, findDay, findExercise, getExercisePlan, getTrainingPhase, TRAINING_DAYS, STRENGTH_DAYS } from './program.js';
 import { nextPrescription, prescriptionFromHistory, suggestNextSet, summarizeSession, } from './engine/progression.js';
 import { estimateSessionDuration, remainingSessionSeconds, } from './engine/duration.js';
-import { aggregateSides, currentSide, bothSidesDone, countSessionSets, isSessionComplete as isSessionCompletePure, countCompletedStrengthSessions, weekdayOffset, targetRirForSet, isSetValid, countsForHistory, finishStatus, formatSeconds, closeSession, cancelSessionSummary, cancelSessionMessage, cancelSession, resetExerciseLogForVariant, timedExerciseStatus, timedExerciseActions, timedStopRequest, } from './engine/session.js';
+import { aggregateSides, currentSide, bothSidesDone, countSessionSets, isSessionComplete as isSessionCompletePure, countCompletedStrengthSessions, weekdayOffset, targetRirForSet, isSetValid, countsForHistory, finishStatus, formatSeconds, closeSession, cancelSessionSummary, cancelSessionMessage, cancelSession, canCancelSession, resetExerciseLogForVariant, timedExerciseStatus, timedExerciseActions, timedStopRequest, } from './engine/session.js';
 import { analyzeWeightTrend, macrosForCalories, targetWeight, weeklyTargets, } from './engine/weight.js';
 import { analyzeRecovery, analyzeStrengthTrend, } from './engine/recovery.js';
 import { activityGoalHelp, activityGoalLabel, activityModeLabel, activityProgress, activitySummary, } from './engine/activity.js';
@@ -491,7 +491,7 @@ export class ColosseApp {
           <div class="${planned.targetMaxMinutes && projected > planned.targetMaxMinutes * 60 ? 'over-target' : ''}"><span>Durée estimée</span><strong id="session-projected">${formatClock(projected)}</strong></div>
         </div>
         <div class="session-actions">
-          ${!context.session.startedAt ? '<button class="primary-button" data-action="start-session">▶ Démarrer la séance</button>' : !context.session.endedAt ? `${executing ? '' : '<button class="primary-button" data-action="exec-enter">▶ Mode guidé</button>'}<button class="secondary-button" data-action="finish-session">■ Terminer</button><button class="ghost-button f-cancel-session" data-action="cancel-session">↺ Annuler la séance</button>` : '<button class="secondary-button" data-action="resume-session">↻ Reprendre</button>'}
+          ${!context.session.startedAt ? '<button class="primary-button" data-action="start-session">▶ Démarrer la séance</button>' : !context.session.endedAt ? `${executing ? '' : '<button class="primary-button" data-action="exec-enter">▶ Mode guidé</button>'}<button class="secondary-button" data-action="finish-session">■ Terminer</button>${canCancelSession(context.session) ? '<button class="ghost-button f-cancel-session" data-action="cancel-session">↺ Annuler la séance</button>' : ''}` : '<button class="secondary-button" data-action="resume-session">↻ Reprendre</button>'}
           <a class="ghost-button" href="${YOUTUBE_SEARCH}${encodeURIComponent(context.day.focus + ' échauffement musculation')}" target="_blank" rel="noopener">Échauffement</a>
         </div>
         ${complete ? '<div class="complete-banner">Séance validée. La prochaine prescription est déjà calculée.</div>' : ''}
@@ -1056,6 +1056,8 @@ export class ColosseApp {
                 break;
             case 'resume-session': {
                 const context = this.currentContext();
+                // Marqueur additif : une séance déjà enregistrée ne peut plus être « annulée » (son historique serait effacé).
+                context.session.reopenedAt = Date.now();
                 context.session.endedAt = null;
                 context.session.updatedAt = Date.now();
                 await saveSession(context.session);
@@ -1620,10 +1622,16 @@ export class ColosseApp {
             this.showToast('Cette séance n’est pas en cours : rien à annuler.', 'info');
             return;
         }
-        if (!confirm(cancelSessionMessage(cancelSessionSummary(session), context.day.name)))
+        if (!canCancelSession(session)) {
+            this.showToast('Cette séance a déjà été enregistrée puis rouverte : touche « Terminer » pour la refermer, ses séries restent dans l’historique.', 'info', 7000);
             return;
-        // Le chrono de CETTE séance est abandonné sans effet ; celui d'une autre séance n'est pas touché.
-        const ownTimer = !!session.activeTimer || this.timer?.context?.sessionId === session.id;
+        }
+        const dateLabel = formatDateFr(context.date, { weekday: 'long', day: 'numeric', month: 'long' });
+        const timerLabel = session.activeTimer ? `${session.activeTimer.label ?? 'chrono'}, ${formatClock(Math.max(0, Math.round((Date.now() - session.activeTimer.startedAt) / 1000)))}` : '';
+        if (!confirm(cancelSessionMessage(cancelSessionSummary(session), context.day.name, { dateLabel, timerLabel })))
+            return;
+        // Seul le chrono EN MÉMOIRE de cette séance est abandonné ; celui d'une autre séance continue.
+        const ownTimer = !!this.timer && (this.timer.context?.sessionId ?? session.id) === session.id;
         const cancelled = cancelSession(session, { now: Date.now(), createSet: makeSet });
         this.replaceSession(cancelled);
         if (ownTimer)
@@ -1635,11 +1643,22 @@ export class ColosseApp {
         // Charges prescrites remises comme pour une séance jamais démarrée.
         this.seedSessionPrescriptions(cancelled, context.day, context.date, context.weekIndex);
         await saveSession(cancelled);
+        // Saisies non validées : effacées du stockage ET de la mémoire, et le formulaire
+        // encore affiché n'est pas recapturé par le rendu suivant.
         removeSessionDrafts(this.draftStorage(), session.id);
-        if (!this.snapshot.sessions.some((item) => item.execution?.active && !item.endedAt))
+        this.root.querySelectorAll('[data-forge-step]').forEach((el) => el.removeAttribute('data-forge-step'));
+        if (this.forgeDraft?.key?.startsWith(`${session.id}:`))
+            this.forgeDraft = null;
+        for (const key of [...this.forgeDetails.keys()])
+            if (key.startsWith(`feedback:${session.id}:`))
+                this.forgeDetails.delete(key);
+        const autre = this.snapshot.sessions.find((item) => item.id !== session.id && item.execution?.active && !item.endedAt);
+        if (!autre)
             await this.releaseWakeLock();
         this.render();
-        this.showToast(`Séance ${context.day.name} annulée : elle redevient au programme.`, 'success', 5000);
+        this.showToast(autre
+            ? `Séance ${context.day.name} annulée. Attention : ${findDay(autre.dayId)?.name ?? 'une autre séance'} du ${formatDateFr(autre.date, { weekday: 'long', day: 'numeric', month: 'long' })} est encore en cours.`
+            : `Séance ${context.day.name} annulée : elle redevient au programme.`, autre ? 'info' : 'success', autre ? 8000 : 5000);
     }
     readSetRow(exerciseId, setIndex) {
         const row = this.root.querySelector(`[data-set-row][data-exercise="${CSS.escape(exerciseId)}"][data-set="${setIndex}"]`);
@@ -2073,7 +2092,7 @@ export class ColosseApp {
             return '';
         const { step } = this.executionContext();
         const deferable = !!step.exerciseId && step.stage !== STAGES.CARDIO && step.stage !== STAGES.RECOVERY;
-        return renderExecMenu({ canDefer: deferable, exerciseName: step.exercise?.shortName ?? step.exercise?.name ?? null });
+        return renderExecMenu({ canDefer: deferable, exerciseName: step.exercise?.shortName ?? step.exercise?.name ?? null, canCancel: canCancelSession(this.currentContext().session) });
     }
     /** Écrit un nouvel ordre pour LA SÉANCE DU JOUR uniquement. */
     async applySessionOrder(order, message) {

@@ -325,11 +325,11 @@ test('Annuler une séance : elle redevient au programme, variantes/ordre/notes c
     // Ce qui est annoncé avant confirmation
     const sum = cancelSessionSummary(s);
     assert.deepEqual([sum.sets, sum.sides, sum.skipped, sum.timer], [2, 1, 1, true]);
-    assert.match(cancelSessionMessage(sum, 'Legs A'), /2 séries validées, 1 série commencée \(un côté\)/);
+    assert.match(cancelSessionMessage(sum, 'Legs A'), /2 séries validées ; 1 série commencée \(un côté\)/);
     assert.match(cancelSessionMessage(sum, 'Legs A'), /« Terminer »/);
-    const vierge = (dayId) => { const v = seance(dayId); v.startedAt = 1; for (const log of Object.values(v.exercises)) log.sets.forEach((set) => { set.reps = null; set.rir = null; }); return v; };
+    const vierge = (dayId) => { const v = seance(dayId); v.startedAt = 1; v.warmup = emptyWarmupState(); for (const log of Object.values(v.exercises)) log.sets.forEach((set) => { set.reps = null; set.rir = null; }); return v; };
     const vide = vierge('pull-a');
-    assert.match(cancelSessionMessage(cancelSessionSummary(vide), 'Pull A'), /Rien n’a été validé/);
+    assert.match(cancelSessionMessage(cancelSessionSummary(vide), 'Pull A'), /Rien n’a été fait/);
     const saisie = vierge('pull-a'); saisie.exercises[saisie.exerciseOrder[0]].sets[0].reps = 9;
     assert.match(cancelSessionMessage(cancelSessionSummary(saisie), 'Pull A'), /1 saisie non validée/);
 });
@@ -353,4 +353,36 @@ test('Annuler une séance : seuls ses brouillons sont supprimés', async () => {
 test('Annuler une séance est proposé dans le menu du mode guidé', async () => {
     const { renderExecMenu } = await import('../ui/execution.js');
     assert.match(renderExecMenu({ canDefer: false, exerciseName: null }), /data-action="cancel-session"[^>]*>[^<]*Annuler la séance/);
+});
+
+
+test('Annuler : la confirmation annonce aussi échauffement, rampes, exercices passés et chrono en cours, avec la date', async () => {
+    const { cancelSessionSummary, cancelSessionMessage } = await import('../engine/session.js');
+    const base = () => { const v = seance('recovery'); v.startedAt = 1; v.warmup = emptyWarmupState(); for (const log of Object.values(v.exercises)) log.sets.forEach((set) => { set.reps = null; set.done = false; }); return v; };
+    const cas = [
+        [(v) => { v.activeTimer = createTimer('recovery', 2400, { exerciseId: Object.keys(v.exercises)[0], setIndex: 0, sessionId: v.id }, 0); }, /le chrono en cours \(Récup, 25:00\) : la durée déjà faite ne sera pas enregistrée/],
+        [(v) => { v.warmup.general = { done: true, skipped: false, durationSec: 480 }; }, /l’échauffement déjà fait/],
+        [(v) => { v.warmup.ramps = { a: { referenceLoadKg: 100, done: [true] }, b: { referenceLoadKg: 60, done: [] } }; }, /2 montées en charge/],
+        [(v) => { Object.values(v.exercises)[0].skipped = true; }, /1 exercice passé \(redeviendra à faire\)/],
+    ];
+    for (const [preparer, attendu] of cas) {
+        const v = base(); preparer(v);
+        const msg = cancelSessionMessage(cancelSessionSummary(v), 'Récupération', { dateLabel: 'lundi 14 septembre', timerLabel: v.activeTimer ? 'Récup, 25:00' : '' });
+        assert.doesNotMatch(msg, /Rien n’a été fait/, msg);
+        assert.match(msg, attendu, msg);
+        assert.match(msg, /du lundi 14 septembre/);
+        assert.match(msg, /« Terminer »/);
+    }
+});
+
+test('Annuler n’est jamais proposé sur une séance déjà enregistrée puis rouverte', async () => {
+    const { canCancelSession } = await import('../engine/session.js');
+    const { renderExecMenu } = await import('../ui/execution.js');
+    assert.equal(canCancelSession({ startedAt: 1, endedAt: null }), true);
+    assert.equal(canCancelSession({ startedAt: null, endedAt: null }), false, 'pas commencée');
+    assert.equal(canCancelSession({ startedAt: 1, endedAt: 2 }), false, 'terminée');
+    assert.equal(canCancelSession({ startedAt: 1, endedAt: null, status: 'COMPLETE' }), false, 'rouverte (statut conservé)');
+    assert.equal(canCancelSession({ startedAt: 1, endedAt: null, reopenedAt: 3 }), false, 'rouverte (ancienne séance sans statut)');
+    assert.equal(canCancelSession(null), false);
+    assert.doesNotMatch(renderExecMenu({ canDefer: true, exerciseName: 'X', canCancel: false }), /cancel-session/);
 });

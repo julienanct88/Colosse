@@ -419,7 +419,7 @@ async function scenario(nom, fn) {
     let h = await page.evaluate(() => ({ statut: document.querySelector('.f-top-status')?.textContent.trim(), pill: document.querySelector('.f-session-hero .f-pill')?.textContent }));
     attendu(/En séance/.test(h.statut) && h.pill === 'En cours', 'état de départ non reproduit : ' + JSON.stringify(h));
     await toucher(page, '.f-session-hero [data-action="cancel-session"]');
-    attendu(/Rien n’a été validé/.test(dialoguesVus.at(-1) ?? ''), 'confirmation absente ou inexacte : ' + dialoguesVus.at(-1));
+    attendu(/Rien n’a été fait/.test(dialoguesVus.at(-1) ?? '') && /du lundi 14 septembre/.test(dialoguesVus.at(-1) ?? ''), 'confirmation absente ou inexacte : ' + dialoguesVus.at(-1));
     h = await page.evaluate(() => ({ statut: document.querySelector('.f-top-status')?.textContent.trim(), pill: document.querySelector('.f-session-hero .f-pill')?.textContent, cta: document.querySelector('.f-session-hero .f-cta')?.textContent.trim(), annuler: !!document.querySelector('[data-action="cancel-session"]') }));
     attendu(!/En séance/.test(h.statut) && h.pill === 'Au programme' && /Préparer ma séance/.test(h.cta) && !h.annuler, 'toujours en séance : ' + JSON.stringify(h));
     let s = await seanceDu(page, 'pull-a');
@@ -437,7 +437,12 @@ async function scenario(nom, fn) {
   await scenario('S11 Annuler pendant un repos avec séries validées (menu Options) : refus = rien, accord = tout remis, aucun chrono fantôme', async ({ page, setDialogues, dialoguesVus }) => {
     await demarrer(page, 'push-a'); await jusquASerie(page);
     await saisirEtValider(page, { kg: 80, reps: 8 });
-    await page.fill('[data-exec-field="reps"]', '7').catch(() => {});
+    await page.evaluate(() => document.querySelector('.timer-overlay [data-action="timer-skip"]')?.click()); await wait(400);
+    await page.fill('[data-exec-field="reps"]', '3'); await toucher(page, '[data-exec-field="rir"][data-value="0"]');
+    await saisirEtValider(page, { kg: 80, reps: 8 });
+    // saisie NON validée sur la série suivante, pendant le repos
+    await page.fill('[data-exec-field="weightKg"]', '99'); await page.fill('[data-exec-field="reps"]', '3');
+    await page.evaluate(() => document.querySelector('[data-exec-field="rir"][data-value="5"]')?.click()); await wait(300);
     let s = await seanceDu(page, 'push-a');
     attendu(s.activeTimer?.kind === 'work-rest', 'repos non lancé');
     const avant = JSON.stringify(s);
@@ -445,7 +450,7 @@ async function scenario(nom, fn) {
     await toucher(page, '.exec-secondary [data-action="exec-menu"]');
     setDialogues('refuser');
     await toucher(page, '.sheet [data-action="cancel-session"]');
-    attendu(/1 série validée/.test(dialoguesVus.at(-1) ?? '') && /« Terminer »/.test(dialoguesVus.at(-1)), 'confirmation sans détail : ' + dialoguesVus.at(-1));
+    attendu(/2 séries validées/.test(dialoguesVus.at(-1) ?? '') && /« Terminer »/.test(dialoguesVus.at(-1)), 'confirmation sans détail : ' + dialoguesVus.at(-1));
     attendu(JSON.stringify(await seanceDu(page, 'push-a')) === avant, 'refuser l’annulation a modifié la séance');
     setDialogues('accepter');
     if (!(await page.evaluate(() => !!document.querySelector('.sheet [data-action="cancel-session"]')))) await toucher(page, '.exec-secondary [data-action="exec-menu"]');
@@ -463,6 +468,10 @@ async function scenario(nom, fn) {
     // On peut redémarrer normalement : l'échauffement recommence
     await allerJour(page, 'push-a'); await page.evaluate(() => window.scrollTo(0, 0)); await toucher(page, '[data-action="start-session"]');
     attendu(/ÉCHAUFFEMENT/.test(await page.evaluate(() => document.querySelector('.exec-eyebrow')?.textContent ?? '')), 'redémarrage : pas de retour à l’échauffement');
+    // Redémarrage : la 1re série est vierge (aucune valeur de la séance annulée), testé aussi SANS rechargement plus bas
+    await jusquASerie(page);
+    const vierge = await page.evaluate(() => ({ reps: document.querySelector('[data-exec-field="reps"]').value, rir: document.querySelector('[data-exec-group="rir"] .chip-choice.selected')?.dataset.value ?? null, serie: document.body.innerText.match(/Série \d+ sur \d+/)?.[0] }));
+    attendu(vierge.serie === 'Série 1 sur 4' && vierge.reps === '' && vierge.rir === null, 'après redémarrage, série pas vierge : ' + JSON.stringify(vierge));
     return 'refus → séance identique ; accord → 0 série, pas de repos, pas de brouillon, écran « Démarrer » ; rechargement sans fantôme ; redémarrage à l’échauffement';
   });
 
@@ -483,6 +492,61 @@ async function scenario(nom, fn) {
     attendu(s.startedAt !== null && s.endedAt !== null && s.status === 'INCOMPLETE', '« Terminer » ne fonctionne plus comme avant');
     attendu(!(await page.evaluate(() => !!document.querySelector('[data-action="cancel-session"]'))), '« Annuler » proposé sur une séance terminée');
     return 'annulée depuis la liste ; « Terminer » enregistre toujours la séance (INCOMPLETE), pas d’annulation proposée ensuite';
+  });
+
+  await scenario('S13 Saisie non validée puis annulation SANS rechargement : rien ne revient au redémarrage', async ({ page }) => {
+    await demarrer(page, 'push-a'); await jusquASerie(page);
+    const initial = await page.evaluate(() => document.querySelector('[data-exec-field="weightKg"]').value);
+    await page.fill('[data-exec-field="weightKg"]', '99'); await page.fill('[data-exec-field="reps"]', '3');
+    await toucher(page, '[data-exec-field="rir"][data-value="0"]');
+    await toucher(page, '.exec-secondary [data-action="exec-menu"]');
+    await toucher(page, '.sheet [data-action="cancel-session"]');
+    await page.evaluate(() => window.scrollTo(0, 0)); await toucher(page, '[data-action="start-session"]');
+    await jusquASerie(page);
+    const v = await page.evaluate(() => ({ kg: document.querySelector('[data-exec-field="weightKg"]').value, reps: document.querySelector('[data-exec-field="reps"]').value, rir: document.querySelector('[data-exec-group="rir"] .chip-choice.selected')?.dataset.value ?? null }));
+    attendu(v.kg === initial && v.reps === '' && v.rir === null, `les valeurs de la séance annulée reviennent (charge initiale « ${initial} ») : ` + JSON.stringify(v));
+    return 'après annulation et redémarrage immédiat : charge ' + v.kg + ', répétitions vides, aucun RIR présélectionné';
+  });
+
+  await scenario('S14 Séance enregistrée puis rouverte : « Annuler » n’est proposé nulle part, l’historique reste', async ({ page }) => {
+    await demarrer(page, 'push-a'); await jusquASerie(page);
+    await saisirEtValider(page, { kg: 80, reps: 8 });
+    await page.evaluate(() => document.querySelector('.timer-overlay [data-action="timer-skip"]')?.click()); await wait(400);
+    await toucher(page, '.f-exec-tools [data-action="exec-show-program"]');
+    await page.evaluate(() => window.scrollTo(0, 0)); await toucher(page, '.session-actions [data-action="finish-session"]');
+    await page.evaluate(() => window.scrollTo(0, 0)); await toucher(page, '.session-actions [data-action="resume-session"]');
+    const partout = async () => page.evaluate(() => document.querySelectorAll('[data-action="cancel-session"]').length);
+    attendu(await partout() === 0, 'annulation proposée dans la liste d’une séance rouverte');
+    await toucher(page, '.bottom-nav [data-tab="home"]');
+    attendu(await partout() === 0, 'annulation proposée sur l’accueil');
+    const s = await seanceDu(page, 'push-a');
+    attendu(s.exercises['push-a-incline-smith'].sets[0].done && s.status && s.reopenedAt, 'séance rouverte altérée : ' + JSON.stringify({ status: s.status, reopenedAt: s.reopenedAt }));
+    return 'séance terminée puis « Reprendre » : aucun bouton d’annulation (liste, accueil), série et statut conservés';
+  });
+
+  await scenario('S15 Deux séances : annuler l’une ne coupe pas le repos en cours de l’autre', async ({ page }) => {
+    // Push A : repos en cours
+    await demarrer(page, 'push-a'); await jusquASerie(page); await saisirEtValider(page, { kg: 80, reps: 8 });
+    // Pull A démarrée aussi, puis l'app est fermée/rouverte
+    await toucher(page, '.f-exec-tools [data-action="exec-show-program"]');
+    await allerJour(page, 'pull-a'); await page.evaluate(() => window.scrollTo(0, 0)); await toucher(page, '[data-action="start-session"]');
+    await page.reload({ waitUntil: 'load' }); await wait(2500);
+    // après réouverture, le chrono affiché est celui de Pull A (le repos de Push A reste en base)
+    await jusquASerie(page, { reference: '50' });
+    await saisirEtValider(page, { kg: 50, reps: 10 });
+    let pull = await seanceDu(page, 'pull-a');
+    attendu(pull.activeTimer?.kind === 'work-rest', 'repos Pull A non lancé');
+    // On annule Push A (qui garde un vieux repos en base)
+    await toucher(page, '.f-exec-tools [data-action="exec-show-program"]');
+    await allerJour(page, 'push-a'); await page.evaluate(() => window.scrollTo(0, 0));
+    await toucher(page, '.session-actions [data-action="cancel-session"]');
+    const push = await seanceDu(page, 'push-a'); pull = await seanceDu(page, 'pull-a');
+    attendu(push.startedAt === null && push.activeTimer === null, 'Push A non annulée');
+    attendu(pull.activeTimer?.kind === 'work-rest', 'le repos de Pull A a disparu de la base');
+    attendu(await page.evaluate(() => !!document.querySelector('.timer-overlay')), 'le repos de Pull A n’est plus affiché');
+    const toast = await page.evaluate(() => document.getElementById('toast')?.textContent ?? '');
+    attendu(/Pull A du .* est encore en cours/.test(toast), 'pas d’avertissement sur l’autre séance en cours : ' + toast);
+    return 'Push A annulée ; repos de Pull A toujours affiché et enregistré ; message « Pull A … est encore en cours »';
   });
 
   console.log('\nRESUME ' + JSON.stringify({ total: resultats.length, ok: resultats.filter((r) => r.ok).length }));

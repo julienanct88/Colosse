@@ -184,17 +184,36 @@ export function cancelSessionSummary(session) {
 }
 
 /** Message de confirmation : dit exactement ce qui sera perdu, et comment le garder. */
-export function cancelSessionMessage(summary, dayName) {
+export function cancelSessionMessage(summary, dayName, { dateLabel = '', timerLabel = '' } = {}) {
+    const pluriel = (n, un, plusieurs) => `${n} ${n > 1 ? plusieurs : un}`;
     const pertes = [];
     if (summary.sets)
-        pertes.push(`${summary.sets} série${summary.sets > 1 ? 's' : ''} validée${summary.sets > 1 ? 's' : ''}`);
+        pertes.push(pluriel(summary.sets, 'série validée', 'séries validées'));
     if (summary.sides)
-        pertes.push(`${summary.sides} série${summary.sides > 1 ? 's' : ''} commencée${summary.sides > 1 ? 's' : ''} (un côté)`);
+        pertes.push(`${pluriel(summary.sides, 'série commencée', 'séries commencées')} (un côté)`);
     if (summary.entries)
-        pertes.push(`${summary.entries} saisie${summary.entries > 1 ? 's' : ''} non validée${summary.entries > 1 ? 's' : ''} (répétitions ou durée)`);
+        pertes.push(`${pluriel(summary.entries, 'saisie non validée', 'saisies non validées')} (répétitions ou durée)`);
+    if (summary.timer)
+        pertes.push(`le chrono en cours${timerLabel ? ` (${timerLabel})` : ''} : la durée déjà faite ne sera pas enregistrée`);
+    if (summary.warmup)
+        pertes.push('l’échauffement déjà fait');
+    if (summary.ramps)
+        pertes.push(pluriel(summary.ramps, 'montée en charge (charge de référence)', 'montées en charge (charges de référence)'));
+    if (summary.skipped)
+        pertes.push(pluriel(summary.skipped, 'exercice passé (redeviendra à faire)', 'exercices passés (redeviendront à faire)'));
+    const quoi = `la séance ${dayName}${dateLabel ? ` du ${dateLabel}` : ''}`;
     if (!pertes.length)
-        return `Annuler la séance ${dayName} ? Rien n’a été validé : elle redevient « au programme », comme si tu ne l’avais pas démarrée.`;
-    return `Annuler la séance ${dayName} ? Seront effacés : ${pertes.join(', ')}, ainsi que l’échauffement et le chrono de cette séance. Pour les garder, choisis plutôt « Terminer ». Annuler quand même ?`;
+        return `Annuler ${quoi} ? Rien n’a été fait : elle redevient « au programme », comme si tu ne l’avais pas démarrée.`;
+    return `Annuler ${quoi} ? Seront effacés : ${pertes.join(' ; ')}. Pour garder ce qui a été fait, choisis plutôt « Terminer ». Annuler quand même ?`;
+}
+
+/**
+ * Peut-on « annuler » cette séance ? Seulement si elle est commencée, pas
+ * terminée, et n'a JAMAIS été enregistrée : une séance terminée puis rouverte
+ * (« Reprendre ») fait partie de l'historique et ne doit pas être effacée ainsi.
+ */
+export function canCancelSession(session) {
+    return !!session?.startedAt && !session.endedAt && !session.status && !session.reopenedAt;
 }
 
 /**
