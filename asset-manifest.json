@@ -1,6 +1,6 @@
 {
   "version": "3.6.0",
-  "cacheVersion": "colosse-adaptive-v3-reorder-360",
+  "cacheVersion": "colosse-adaptive-v3-retour-360",
   "assets": [
     "./",
     "./app.js",
