@@ -1,5 +1,6 @@
 import './pwa.js';
-import { renderForgeHeader, renderForgeNav, renderForgeHome, renderForgeTools, normalizeSearch, steppedValue, icon } from './ui/forge.js';
+import { renderForgeHeader, renderForgeNav, renderForgeHome, renderForgeTools, normalizeSearch, steppedValue, icon, demoSearch, variantDisplay } from './ui/forge.js';
+import { draftKey, readDraft, saveDraft, removeDraft, pruneStoredDrafts } from './ui/drafts.js';
 import { APP_VERSION, defaultSnapshot, emptyDailyLog, makeExerciseLog, makeSession, makeSet, } from './defaults.js';
 import { clearAllData, deleteSession, loadSnapshot, saveAdjustment, saveDailyLog, saveProfile, saveSession, saveSettings, saveSnapshot, storageMode, } from './data/database.js';
 import { defaultDayForDate, findDay, findExercise, getExercisePlan, getTrainingPhase, TRAINING_DAYS, STRENGTH_DAYS } from './program.js';
@@ -10,11 +11,11 @@ import { analyzeWeightTrend, macrosForCalories, targetWeight, weeklyTargets, } f
 import { analyzeRecovery, analyzeStrengthTrend, } from './engine/recovery.js';
 import { activityGoalHelp, activityGoalLabel, activityModeLabel, activityProgress, activitySummary, } from './engine/activity.js';
 import { addDays, isoDate, startOfWeek, uid, weekIndexFromStart, } from './engine/math.js';
-import { computeExecutionStep, executionProgress, normalizeExecutionState, STAGES, canReorder, programOrder, normalizeOrder, pickSessionOrder, moveInOrder, deferExercise, isExercisePending, } from './engine/execution.js';
+import { computeExecutionStep, executionProgress, normalizeExecutionState, STAGES, canReorder, programOrder, normalizeOrder, pickSessionOrder, moveInOrder, deferExercise, isExercisePending, bringToFront, executionChangeDecision, halfDoneUnilateral, } from './engine/execution.js';
 import { createTimer, remainingSeconds as timerRemaining, isExpired as timerExpired, pauseTimer, resumeTimer, adjustTimer as adjustTimerState, timerLabel, timerControls, canShortenTimer, timerEndMessage, } from './engine/timer.js';
 import { applyTimerOutcome, createTimerResolutionQueue, startTimerDecision, timerOwnerSession } from './engine/timer-effects.js';
-import { computeRampSets, normalizeWarmupState, resolveReferenceLoad, clearExerciseRamps, GENERAL_WARMUP, } from './engine/warmup.js';
-import { renderExecution, renderExecMenu, renderReorderPanel } from './ui/execution.js';
+import { computeRampSets, normalizeWarmupState, resolveReferenceLoad, clearExerciseRamps, GENERAL_WARMUP, WARMUP_EQUIPMENT, resolveWarmupEquipment, activationSteps, } from './engine/warmup.js';
+import { renderExecution, renderExecMenu, renderReorderPanel, renderExerciseSheet } from './ui/execution.js';
 import { decisionMeta, escapeHtml, formatClock, formatDateFr, formatKg, numberInputValue, pct, sparklineSvg, } from './ui/templates.js';
 const YOUTUBE_SEARCH = 'https://www.youtube.com/results?search_query=';
 function parseNumber(value) {
@@ -61,6 +62,8 @@ export class ColosseApp {
     timerCollapsed = false;
     updateAvailable = false;
     forgeDraft = null;
+    /** Fiche consultée ({ type: 'exercise' | 'activation', id }) : lecture seule. */
+    exerciseSheet = null;
     forgeDetails = new Map();
     constructor(root) {
         this.root = root;
@@ -89,6 +92,7 @@ export class ColosseApp {
         this.snapshot.settings.currentTab = running ? 'training' : 'home';
         await this.ensureCurrentSession();
         await this.restoreTimerFromSession();
+        pruneStoredDrafts(this.draftStorage(), new Set(this.snapshot.sessions.filter((item) => !item.endedAt).map((item) => item.id)));
         this.bindEvents();
         this.tickHandle = window.setInterval(() => this.tick(), 250);
         this.render();
@@ -103,6 +107,7 @@ export class ColosseApp {
             if (event.key === 'Escape') {
                 this.execMenuOpen = false;
                 this.reorderOpen = false;
+                this.exerciseSheet = null;
                 this.render();
                 this.root.querySelector('[data-action="exec-menu"]')?.focus();
             }
@@ -255,9 +260,30 @@ export class ColosseApp {
         }
         this.root.querySelectorAll('details[data-forge-detail]').forEach(el => this.forgeDetails.set(el.dataset.forgeDetail, el.open));
     }
+    draftStorage() {
+        try {
+            return window.localStorage;
+        }
+        catch {
+            return null;
+        }
+    }
+    /** Enregistre la saisie non validée de l'écran guidé (jamais comptée comme série). */
+    persistForgeDraft() {
+        this.captureForgeForm();
+        const draft = this.forgeDraft;
+        if (draft?.key)
+            saveDraft(this.draftStorage(), draft.key, draft);
+    }
     restoreForgeForm() {
         const form = this.root.querySelector('[data-forge-step]');
-        const draft = this.forgeDraft;
+        // Brouillon de CET écran : d'abord celui en mémoire (dernier rendu), sinon
+        // celui enregistré (autre écran, fiche consultée, rechargement de l'app).
+        let draft = this.forgeDraft;
+        if (form && draft?.key !== form.dataset.forgeStep) {
+            const stored = readDraft(this.draftStorage(), form.dataset.forgeStep);
+            draft = stored ? { key: form.dataset.forgeStep, fields: stored.fields ?? {}, choices: stored.choices ?? {} } : null;
+        }
         if (form && draft?.key === form.dataset.forgeStep) {
             form.querySelectorAll('input[data-exec-field]').forEach(el => {
                 if (Object.hasOwn(draft.fields, el.dataset.execField)) el.value = draft.fields[el.dataset.execField];
@@ -286,7 +312,7 @@ export class ColosseApp {
             : tab === 'settings' ? this.renderSettingsPage()
             : (this.shouldRenderExecution() ? this.renderExecutionPage() : this.renderTrainingPage());
         const executing = this.shouldRenderExecution();
-        const sheetOpen = this.execMenuOpen || this.reorderOpen;
+        const sheetOpen = this.execMenuOpen || this.reorderOpen || !!this.exerciseSheet;
         this.root.innerHTML = `
       <div class="app-shell ${executing ? 'is-executing' : ''} ${this.timer ? 'has-timer' : ''} ${this.timerCollapsed ? 'timer-is-mini' : ''} ${sheetOpen ? 'has-sheet' : ''}" data-current-tab="${escapeHtml(tab)}">
         ${this.renderHeader()}
@@ -296,6 +322,7 @@ export class ColosseApp {
         ${this.renderTimerOverlay()}
         ${this.renderExecMenuSheet()}
         ${this.renderReorder()}
+        ${this.renderExerciseSheetOverlay()}
         <div id="update-banner" class="update-banner ${this.updateAvailable ? '' : 'hidden'}">
           <span>Nouvelle version disponible</span>
           <button data-action="reload-update">Mettre à jour</button>
@@ -352,9 +379,14 @@ export class ColosseApp {
             if (lastSet)
                 lastExposure = `${formatKg(lastSet.weightKg)} kg × ${lastSet.reps} — RIR ${lastSet.rir ?? '?'}`;
         }
+        const prochain = this.orderedExercises(context.day, context.session)
+            .find((ex) => isExercisePending(ex, context.session.exercises[ex.id], resolvePlan(ex)));
+        const varianteProchain = prochain ? (prochain.variants?.find((v) => v.id === context.session.exercises[prochain.id]?.variantId) ?? prochain.variants?.[0]) : null;
         return renderExecution(step, {
             day: context.day,
             session: context.session,
+            preferredWarmupEquipment: this.snapshot.settings.warmupEquipment ?? null,
+            nextExercise: prochain ? { id: prochain.id, name: prochain.name, variantLabel: varianteProchain?.label ?? '' } : null,
             progress,
             elapsedSec: sessionDurationSeconds(context.session),
             prescriptionLoadKg,
@@ -410,6 +442,8 @@ export class ColosseApp {
         const remaining = remainingSessionSeconds(context.day, (exercise) => getExercisePlan(exercise, context.weekIndex), completedCounts);
         const projected = context.session.startedAt ? elapsed + remaining : planned.seconds;
                 const complete = this.isSessionComplete(context.session, context.day);
+        const nextPendingId = context.session.endedAt ? null : (orderedExercises.find((exercise) => isExercisePending(exercise, context.session.exercises[exercise.id], getExercisePlan(exercise, context.weekIndex)))?.id ?? null);
+        const executing = this.execState(context.session).active && !context.session.endedAt;
         return `
       <details class="f-program-phase" data-forge-detail="phase-plan">
       <summary><span><small>Cycle & objectifs · Semaine ${context.weekIndex}</small><strong>${escapeHtml(phase.name)}</strong></span>${icon('chevron')}</summary>
@@ -444,7 +478,7 @@ export class ColosseApp {
         }).join('')}
       </section>
 
-      ${this.execState(context.session).active && !context.session.endedAt ? '<button class="exec-resume-banner" data-action="exec-resume">\u25b6 REPRENDRE LA S\u00c9ANCE</button>' : ''}
+      ${executing ? '<button class="exec-resume-banner" data-action="exec-resume">\u25b6 Revenir à l’étape en cours</button>' : ''}
       <section class="session-card ${complete ? 'complete' : ''}">
         <div class="session-heading">
           <div><span class="eyebrow">${escapeHtml(context.day.focus)}</span><h2>${escapeHtml(context.day.name)}</h2></div>
@@ -457,15 +491,19 @@ export class ColosseApp {
           <div class="${planned.targetMaxMinutes && projected > planned.targetMaxMinutes * 60 ? 'over-target' : ''}"><span>Durée estimée</span><strong id="session-projected">${formatClock(projected)}</strong></div>
         </div>
         <div class="session-actions">
-          ${!context.session.startedAt ? '<button class="primary-button" data-action="start-session">▶ Démarrer la séance</button>' : !context.session.endedAt ? '<button class="secondary-button" data-action="finish-session">■ Terminer</button>' : '<button class="secondary-button" data-action="resume-session">↻ Reprendre</button>'}
+          ${!context.session.startedAt ? '<button class="primary-button" data-action="start-session">▶ Démarrer la séance</button>' : !context.session.endedAt ? `${executing ? '' : '<button class="primary-button" data-action="exec-enter">▶ Mode guidé</button>'}<button class="secondary-button" data-action="finish-session">■ Terminer</button>` : '<button class="secondary-button" data-action="resume-session">↻ Reprendre</button>'}
           <a class="ghost-button" href="${YOUTUBE_SEARCH}${encodeURIComponent(context.day.focus + ' échauffement musculation')}" target="_blank" rel="noopener">Échauffement</a>
         </div>
         ${complete ? '<div class="complete-banner">Séance validée. La prochaine prescription est déjà calculée.</div>' : ''}
       </section>
 
       ${this.renderReadiness(context.session)}
+      <section class="f-session-tools" aria-label="Organisation de la séance">
+        <div><strong>Tous les exercices</strong><span>${orderedExercises.length} exercices · choisis selon les machines libres</span></div>
+        <button class="secondary-button" data-action="exec-reorder">${icon('tune')} Modifier l’ordre</button>
+      </section>
       <section class="exercise-list" id="forge-exercises" data-drag-list="programme">
-        ${orderedExercises.map((exercise, index) => this.renderExerciseCard(context, exercise, index, orderedExercises.length)).join('')}
+        ${orderedExercises.map((exercise, index) => this.renderExerciseCard(context, exercise, index, orderedExercises.length, nextPendingId)).join('')}
       </section>
       <section class="notes-card card" id="forge-notes">
         <label for="session-notes">Notes de séance</label>
@@ -482,7 +520,7 @@ export class ColosseApp {
       </div>
     </section>`;
     }
-    renderExerciseCard(context, exercise, index, exerciseCount) {
+    renderExerciseCard(context, exercise, index, exerciseCount, nextId = null) {
         if (exercise.kind === 'cardio')
             return this.renderCardioCard(context, exercise, index);
 
@@ -521,11 +559,25 @@ export class ColosseApp {
           <div class="exercise-name-row"><h3>${escapeHtml(exercise.name)}</h3>${exercise.optional ? '<span class="badge">BONUS</span>' : ''}${exercise.superset ? `<span class="badge muted">SUPERSET ${escapeHtml(exercise.superset.split('-').at(-1) ?? '')}</span>` : ''}</div>
           <div class="exercise-plan"><b>${plan.sets} × ${plan.metric === 'seconds' ? `${formatSeconds(plan.repMin)}\u2013${formatSeconds(plan.repMax)}` : `${plan.repMin}\u2013${plan.repMax} reps`}</b><span>garde ${plan.targetRir} reps</span><span>repos ${formatClock(plan.restSec)}</span>${plan.tempo ? `<span class="tempo-hint" title="Tempo ${escapeHtml(plan.tempo)} : secondes de descente \u2013 pause basse \u2013 mont\u00e9e \u2013 pause haute">tempo ${escapeHtml(plan.tempo)}</span>` : ''}</div>
         </div>
-        <a class="video-link" href="${YOUTUBE_SEARCH}${encodeURIComponent(exercise.name + ' technique musculation')}" target="_blank" rel="noopener" aria-label="Voir la technique">▶</a>
+        <a class="video-link" href="${escapeHtml(demoSearch({ name: exercise.name, variantLabel: variant.label }).url)}" target="_blank" rel="noopener noreferrer" aria-label="Rechercher une démonstration de ${escapeHtml(exercise.name)} (YouTube)">▶</a>
       </div>
+      ${(() => {
+            const pending = isExercisePending(exercise, log, plan);
+            const statut = log.skipped ? ['is-skipped', 'Passé'] : !pending ? ['is-done', `Terminé · ${doneSets.length}/${plan.sets}`] : doneSets.length ? ['is-partial', `En cours · ${doneSets.length}/${plan.sets} séries`] : ['', `À faire · 0/${plan.sets} séries`];
+            return `<div class="f-card-summary">
+        <p class="f-card-variant"><span>${escapeHtml(variantDisplay(variant))}</span><span class="f-card-status ${statut[0]}">${exercise.id === nextId ? 'Prochain · ' : ''}${escapeHtml(statut[1])}</span></p>
+        ${exercise.coachingCue ? `<p class="f-card-cue">${escapeHtml(exercise.coachingCue)}</p>` : ''}
+        <div class="f-card-actions">
+          <button class="f-help-button" data-action="exercise-view" data-exercise="${exercise.id}">${icon('note')}<span>Voir l’exercice</span></button>
+          ${log.skipped
+                ? `<button class="f-help-button" data-action="toggle-skip-exercise" data-exercise="${exercise.id}">${icon('play')}<span>Réactiver</span></button>`
+                : pending && !context.session.endedAt ? `<button class="f-do-now" data-action="exercise-do-now" data-exercise="${exercise.id}">${icon('play')}<span>Faire maintenant</span></button>` : ''}
+        </div>
+      </div>`;
+        })()}
 
       <details class="f-exercise-detail" data-forge-detail="${escapeHtml(context.session.id)}:${exercise.id}">
-      <summary><span>Séries, variante & prescription</span><span>${doneSets.length}/${plan.sets} séries</span></summary>
+      <summary><span>Séries, variante & corrections</span><span>${doneSets.length}/${plan.sets} séries</span></summary>
       <div class="exercise-order-bar" aria-label="Changer la position de ${escapeHtml(exercise.name)}">
         <span class="exercise-order-handle" data-drag-handle role="button" tabindex="0" aria-label="Déplacer ${escapeHtml(exercise.name)}">☰</span>
         <span>Ordre (cette séance)</span>
@@ -588,6 +640,7 @@ export class ColosseApp {
         </div>
       </div>
       <p class="coaching-cue">${escapeHtml(exercise.coachingCue ?? '')}</p>
+      <div class="f-card-actions"><button class="f-help-button" data-action="exercise-view" data-exercise="${exercise.id}">${icon('note')}<span>Voir l’exercice</span></button><span class="f-card-status">Épinglé en fin de séance</span></div>
       <div class="cardio-actions">
         ${actions.map((item) => `<button class="${item.style}-button" data-action="${item.action}" data-exercise="${exercise.id}" data-duration="${targetSec}" data-kind="${context.day.kind === 'recovery' ? 'recovery' : 'cardio'}">${escapeHtml(item.label)}</button>`).join('')}
         <span class="cardio-status ${done ? 'is-done' : status.partial ? 'is-partial' : ''}">${done ? '✓ ' : ''}${escapeHtml(status.label)}</span>
@@ -840,6 +893,7 @@ export class ColosseApp {
           ${this.settingToggle('autoStartTimer', 'Démarrer automatiquement le repos', settings.autoStartTimer)}
           ${this.settingToggle('soundEnabled', 'Signal sonore en fin de repos', settings.soundEnabled)}
           ${this.settingToggle('vibrationEnabled', 'Vibration en fin de repos', settings.vibrationEnabled)}
+          <label class="toggle-row f-select-row"><span>Échauffement général proposé en premier</span><select data-setting-field="warmupEquipment" aria-label="Matériel d’échauffement proposé en premier">${Object.values(WARMUP_EQUIPMENT).map((option) => `<option value="${option.id}" ${(settings.warmupEquipment ?? 'treadmill') === option.id ? 'selected' : ''}>${escapeHtml(option.label)}</option>`).join('')}</select></label>
         </div>
         ${this.installPrompt ? '<button class="primary-button" data-action="install-app">Installer Colosse sur cet appareil</button>' : ''}
       </section>
@@ -900,6 +954,8 @@ export class ColosseApp {
             chip.closest('.chip-row')?.querySelectorAll('.chip-choice').forEach((el) => { el.classList.remove('selected'); el.setAttribute('aria-pressed', 'false'); });
             chip.classList.add('selected');
             chip.setAttribute('aria-pressed', 'true');
+            if (chip.closest('[data-forge-step]'))
+                this.persistForgeDraft();
             return;
         }
         const actionElement = event.target instanceof Element ? event.target.closest('[data-action]') : null;
@@ -1066,9 +1122,69 @@ export class ColosseApp {
             case 'reorder-restore':
                 await this.restoreProgramOrder();
                 break;
-            case 'exec-start-general-warmup':
-                await this.startGenericTimer('general-warmup', GENERAL_WARMUP.durationSec, {});
+            case 'exec-start-general-warmup': {
+                // Le matériel choisi est noté AVEC l'échauffement de cette séance.
+                const context = this.currentContext();
+                const equipment = resolveWarmupEquipment(normalizeWarmupState(context.session.warmup).general, actionElement.dataset.equipment ?? this.snapshot.settings.warmupEquipment);
+                await this.patchWarmup((w) => { w.general.equipment = equipment; });
+                await this.startGenericTimer('general-warmup', WARMUP_EQUIPMENT[equipment]?.durationSec ?? GENERAL_WARMUP.durationSec, { equipment });
                 break;
+            }
+            case 'warmup-equipment': {
+                const equipment = actionElement.dataset.equipment;
+                const context = this.currentContext();
+                const general = normalizeWarmupState(context.session.warmup).general;
+                if (!WARMUP_EQUIPMENT[equipment] || general.done || general.skipped || context.session.activeTimer?.kind === 'general-warmup')
+                    break;
+                await this.patchWarmup((w) => { w.general.equipment = equipment; });
+                this.render();
+                break;
+            }
+            case 'warmup-equipment-default': {
+                const equipment = actionElement.dataset.equipment;
+                if (!WARMUP_EQUIPMENT[equipment])
+                    break;
+                this.snapshot.settings.warmupEquipment = equipment;
+                await saveSettings(this.snapshot.settings);
+                this.render();
+                this.showToast(`${WARMUP_EQUIPMENT[equipment].label} sera proposé en premier aux prochaines séances.`, 'success');
+                break;
+            }
+            case 'exercise-view':
+                this.exerciseSheet = { type: 'exercise', id: actionElement.dataset.exercise ?? '' };
+                this.render();
+                break;
+            case 'activation-view':
+                this.exerciseSheet = { type: 'activation', id: actionElement.dataset.step ?? '' };
+                this.render();
+                break;
+            case 'exercise-sheet-close':
+                this.exerciseSheet = null;
+                this.render();
+                break;
+            case 'exercise-do-now':
+                await this.doExerciseNow(actionElement.dataset.exercise ?? '');
+                break;
+            case 'exec-enter':
+                // Entrer dans le mode guidé d'une séance déjà commencée, sans remettre le temps à zéro.
+                this.programViewOverride = false;
+                await this.saveExecution({ active: true });
+                this.render();
+                window.scrollTo({ top: 0, behavior: 'instant' });
+                break;
+            case 'reorder-end-timer': {
+                const timer = this.timerOwner()?.activeTimer ?? null;
+                if (!timer) {
+                    this.render();
+                    break;
+                }
+                if (!confirm(this.reorderBlockedMessage(timer) + ' Continuer ?'))
+                    break;
+                await this.resolveActiveTimer(true);
+                this.reorderOpen = true;
+                this.render();
+                break;
+            }
             case 'exec-skip-general-warmup':
                 if (!confirm('Passer l’échauffement général ? Ce sera enregistré.'))
                     break;
@@ -1244,6 +1360,14 @@ export class ColosseApp {
             return;
         }
         const settingField = target.dataset.settingField;
+        if (settingField === 'warmupEquipment' && target instanceof HTMLSelectElement) {
+            if (WARMUP_EQUIPMENT[target.value]) {
+                this.snapshot.settings.warmupEquipment = target.value;
+                await saveSettings(this.snapshot.settings);
+                this.render();
+            }
+            return;
+        }
         if (settingField && target instanceof HTMLInputElement) {
             this.snapshot.settings[settingField] = target.checked;
             await saveSettings(this.snapshot.settings);
@@ -1252,6 +1376,10 @@ export class ColosseApp {
     }
     async handleInput(event) {
         const target = event.target;
+        if (target instanceof Element && target.matches('input[data-exec-field]') && target.closest('[data-forge-step]')) {
+            this.persistForgeDraft();
+            return;
+        }
         if (target.id === 'forge-tool-search') {
             const query = normalizeSearch(target.value);
             let visible = 0;
@@ -1569,6 +1697,7 @@ export class ColosseApp {
                 set.side = 'right';
                 context.session.updatedAt = Date.now();
                 await saveSession(context.session);
+                removeDraft(this.draftStorage(), draftKey({ sessionId: context.session.id, exerciseId: exercise.id, variantId: log.variantId, setIndex, side: 'left' }));
                 await this.startGenericTimer('side-switch', Math.max(5, planSide.sideSwitchSec || 15), { exerciseId: exercise.id, setIndex });
                 this.showToast('Côté gauche validé — passe au côté droit.', 'info');
                 return;
@@ -1585,6 +1714,7 @@ export class ColosseApp {
         set.done = true;
         set.completedAt = Date.now();
         context.session.updatedAt = Date.now();
+        removeDraft(this.draftStorage(), draftKey({ sessionId: context.session.id, exerciseId: exercise.id, variantId: log.variantId, setIndex, side: planSide.perSide ? 'right' : null }));
         const plan = getExercisePlan(exercise, context.weekIndex);
         const variant = exercise.variants.find((item) => item.id === log.variantId) ?? exercise.variants[0];
         const suggestion = suggestNextSet(set, plan, exercise, variant.incrementKg);
@@ -1750,6 +1880,124 @@ export class ColosseApp {
     reorderAllowed() {
         return canReorder(this.timerOwner()?.activeTimer ?? this.timer ?? null);
     }
+    /** Fiche d'exercice ou d'activation : consultation pure, n'écrit rien. */
+    renderExerciseSheetOverlay() {
+        const sheet = this.exerciseSheet;
+        if (!sheet)
+            return '';
+        const context = this.currentContext();
+        const tempoHelp = 'secondes de descente – pause en bas – montée – pause en haut';
+        if (sheet.type === 'activation') {
+            const step = activationSteps(context.day).find((item) => item.key === sheet.id);
+            if (!step)
+                return '';
+            return renderExerciseSheet({
+                eyebrow: 'ACTIVATION · ne compte pas comme série', title: step.name,
+                subtitle: step.side ? (step.side === 'left' ? 'Côté gauche' : 'Côté droit') : '',
+                planLines: [step.detail, step.tempo ? `tempo ${step.tempo}` : ''].filter(Boolean),
+                cue: 'Préparation légère avant les séries : mouvement contrôlé, sans chercher la fatigue.',
+                tempo: step.tempo, tempoHelp: step.tempo ? tempoHelp : '',
+                demo: demoSearch({ name: step.name, context: 'échauffement activation' }), doNow: false,
+            });
+        }
+        const exercise = context.day.exercises.find((item) => item.id === sheet.id) ?? findExercise(sheet.id);
+        if (!exercise)
+            return '';
+        const plan = getExercisePlan(exercise, context.weekIndex);
+        const log = context.session.exercises[exercise.id];
+        const variant = exercise.variants?.find((item) => item.id === log?.variantId) ?? exercise.variants?.[0];
+        const pending = isExercisePending(exercise, log, plan);
+        const doneSets = (log?.sets ?? []).slice(0, plan.sets).filter((set) => set.done).length;
+        let lastExposure = null;
+        if (log && exercise.kind !== 'cardio') {
+            const lastSet = this.exerciseHistory(exercise.id, log.variantId, context.date, context.session.id).at(-1)?.sets?.filter((x) => x.done).at(-1);
+            if (lastSet)
+                lastExposure = `${formatKg(lastSet.weightKg)} kg × ${lastSet.reps} — RIR ${lastSet.rir ?? '?'} (${variant?.label ?? 'même variante'})`;
+        }
+        const planLines = exercise.kind === 'cardio'
+            ? [formatSeconds(exercise.durationSec ?? plan.repMin), exercise.inclinePct ? `inclinaison ${exercise.inclinePct} %` : '', exercise.speedKmh ? `vitesse ${exercise.speedKmh}${/[0-9]/.test(String(exercise.speedKmh)) ? ' km/h' : ''}` : ''].filter(Boolean)
+            : [`${plan.sets} × ${plan.metric === 'seconds' ? `${formatSeconds(plan.repMin)}–${formatSeconds(plan.repMax)}` : `${plan.repMin}–${plan.repMax} reps`}`, `RIR cible ${plan.targetRir}`, `repos ${formatClock(plan.restSec)}`, plan.perSide ? 'gauche puis droite' : ''].filter(Boolean);
+        const status = log?.skipped ? 'Passé (réactivable dans les détails de la carte)'
+            : exercise.kind === 'cardio' ? (pending ? 'Cardio de fin de séance' : 'Fait')
+                : !pending ? `Terminé · ${doneSets}/${plan.sets} séries` : doneSets ? `En cours · ${doneSets}/${plan.sets} séries faites` : `À faire · 0/${plan.sets} séries`;
+        return renderExerciseSheet({
+            eyebrow: exercise.kind === 'cardio' ? 'FICHE CARDIO' : 'FICHE EXERCICE',
+            title: exercise.name,
+            subtitle: [variantDisplay(variant), variant?.incrementKg ? `pas de ${formatKg(variant.incrementKg)} kg` : ''].filter(Boolean).join(' · '),
+            status, planLines, cue: exercise.coachingCue ?? '', tempo: plan.tempo, tempoHelp: plan.tempo ? tempoHelp : '', lastExposure,
+            demo: demoSearch({ name: exercise.name, variantLabel: variant?.label ?? '' }),
+            doNow: pending && !log?.skipped && exercise.kind !== 'cardio' && !context.session.endedAt,
+            exerciseId: exercise.id,
+        });
+    }
+    /**
+     * « Faire maintenant » : l'exercice choisi devient le prochain à faire.
+     * Seul l'ordre de la séance du jour change : aucune série n'est touchée,
+     * aucun exercice n'est passé, la variante reste la même. Un chrono n'est
+     * jamais réaffecté : il est au besoin arrêté, après confirmation explicite.
+     */
+    async doExerciseNow(exerciseId) {
+        const context = this.currentContext();
+        const exercise = context.day.exercises.find((item) => item.id === exerciseId);
+        if (!exercise)
+            return;
+        const resolvePlan = (ex) => getExercisePlan(ex, context.weekIndex);
+        const log = context.session.exercises[exerciseId];
+        if (context.session.endedAt) {
+            this.showToast('Cette séance est terminée : touche « Reprendre » pour la rouvrir.', 'info', 5000);
+            return;
+        }
+        if (log?.skipped) {
+            this.showToast(`${exercise.name} est passé : réactive-le d’abord.`, 'info', 5000);
+            return;
+        }
+        if (!isExercisePending(exercise, log, resolvePlan(exercise))) {
+            this.showToast(`${exercise.name} est déjà terminé.`, 'info');
+            return;
+        }
+        const names = Object.fromEntries(context.day.exercises.map((ex) => [ex.id, ex.name]));
+        const timer = this.timerOwner()?.activeTimer ?? null;
+        if (timer?.context?.exerciseId && !names[timer.context.exerciseId])
+            names[timer.context.exerciseId] = findExercise(timer.context.exerciseId)?.name;
+        const decision = executionChangeDecision({ activeTimer: timer, targetExerciseId: exerciseId, halfSetExerciseId: halfDoneUnilateral(context.session, context.day, resolvePlan), names });
+        if (decision.action === 'refuse') {
+            this.showToast(decision.message, 'info', 7000);
+            return;
+        }
+        if (decision.action === 'confirm') {
+            if (!confirm(decision.message))
+                return;
+            if (decision.endTimer)
+                await this.resolveActiveTimer(true);
+        }
+        const fresh = this.currentContext(); // une résolution de chrono a pu réécrire la session
+        const pendingIds = new Set(fresh.day.exercises.filter((ex) => isExercisePending(ex, fresh.session.exercises[ex.id], resolvePlan(ex))).map((ex) => ex.id));
+        const result = bringToFront(fresh.session.exerciseOrder, exerciseId, { isPending: (id) => pendingIds.has(id), day: fresh.day });
+        this.exerciseSheet = null;
+        const running = this.execState(fresh.session).active && !fresh.session.endedAt;
+        const warmup = normalizeWarmupState(fresh.session.warmup);
+        const warmupPending = fresh.day.kind !== 'recovery' && (!(warmup.general.done || warmup.general.skipped) || activationSteps(fresh.day).some((step) => !warmup.activation[step.key]));
+        const message = !running ? `${exercise.name} sera le premier exercice de la séance.`
+            : warmupPending ? `${exercise.name} passera juste après l’échauffement.`
+                : `C’est parti : ${exercise.name}.`;
+        if (running)
+            this.programViewOverride = false;
+        if (result.moved)
+            await this.applySessionOrder(result.order, message);
+        else {
+            this.render();
+            this.showToast(message, 'success');
+        }
+        if (running)
+            window.scrollTo({ top: 0, behavior: 'instant' });
+    }
+    /** Ce que change l'arrêt du chrono avant de réorganiser (jamais réaffecté). */
+    reorderBlockedMessage(timer) {
+        const nom = findExercise(timer.context?.exerciseId)?.name ?? 'l’exercice en cours';
+        if (timer.kind === 'side-switch')
+            return `Changement de côté en cours sur ${nom} : si tu arrêtes ce chrono, le côté droit de la série restera à faire et sera repris quand tu reviendras sur cet exercice.`;
+        return `Repos en cours après ${nom} : il sera arrêté maintenant et sa durée réelle sera enregistrée sur la série concernée.`;
+    }
     refuseReorder() {
         this.showToast('Termine ou passe le chrono avant de réorganiser.', 'info', 4000);
     }
@@ -1780,7 +2028,9 @@ export class ColosseApp {
         if (!this.reorderOpen)
             return '';
         const context = this.currentContext();
-        return renderReorderPanel({ dayName: context.day.name, rows: this.reorderRows(context), blocked: !this.reorderAllowed() });
+        const timer = this.timerOwner()?.activeTimer ?? null;
+        const blocked = !this.reorderAllowed();
+        return renderReorderPanel({ dayName: context.day.name, rows: this.reorderRows(context), blocked, blockedMessage: blocked && timer ? this.reorderBlockedMessage(timer) : null });
     }
     renderExecMenuSheet() {
         if (!this.execMenuOpen)

@@ -284,3 +284,78 @@ export function isExercisePending(exercise, log, plan) {
         return !log.sets?.[0]?.done;
     return workSetsDone(log, plan) < plan.sets;
 }
+
+// ---------------------------------------------------------------------------
+// « Faire maintenant » : choisir le prochain exercice. PUR, par l'ordre seul :
+// aucune série n'est touchée, rien n'est passé, la variante ne change pas.
+// ---------------------------------------------------------------------------
+
+/**
+ * Place l'exercice (et son groupe de superset éventuel) juste avant le premier
+ * exercice encore à faire. Les exercices terminés gardent leur place, le
+ * cardio de fin reste épinglé.
+ */
+export function bringToFront(order, exerciseId, { isPending, day }) {
+    const list = normalizeOrder(order, day);
+    const exercise = (day?.exercises ?? []).find((item) => item.id === exerciseId);
+    if (!exercise || !list.includes(exerciseId))
+        return { order: list, moved: false, reason: 'unknown-exercise' };
+    if (exercise.kind === 'cardio')
+        return { order: list, moved: false, reason: 'cardio-pinned' };
+    if (!isPending(exerciseId))
+        return { order: list, moved: false, reason: 'not-pending' };
+    const cardio = new Set((day?.exercises ?? []).filter((item) => item.kind === 'cardio').map((item) => item.id));
+    const group = exercise.superset
+        ? list.filter((id) => (day.exercises.find((item) => item.id === id)?.superset) === exercise.superset)
+        : [exerciseId];
+    const rest = list.filter((id) => !group.includes(id));
+    let at = rest.findIndex((id) => !cardio.has(id) && isPending(id));
+    if (at < 0) {
+        const firstCardio = rest.findIndex((id) => cardio.has(id));
+        at = firstCardio < 0 ? rest.length : firstCardio;
+    }
+    const next = normalizeOrder([...rest.slice(0, at), ...group, ...rest.slice(at)], day);
+    const moved = next.join('|') !== list.join('|');
+    return { order: next, moved, reason: moved ? null : 'already-next' };
+}
+
+/** Exercice unilatéral dont une série est à moitié faite (gauche validée, droite à faire). */
+export function halfDoneUnilateral(session, day, resolvePlan) {
+    for (const exercise of day?.exercises ?? []) {
+        const plan = exercise.kind === 'cardio' ? null : resolvePlan(exercise);
+        if (!plan?.perSide)
+            continue;
+        const sets = (session?.exercises?.[exercise.id]?.sets ?? []).slice(0, plan.sets);
+        if (sets.some((set) => !set.done && set.sides?.left?.done && !set.sides?.right?.done))
+            return exercise.id;
+    }
+    return null;
+}
+
+/**
+ * Changer d'exercice en cours de séance : que faire du chrono actif ?
+ * Aucun chrono n'est jamais réaffecté à un autre exercice.
+ * - 'proceed'  : rien ne s'y oppose ;
+ * - 'confirm'  : possible, mais la transition doit être acceptée (message) ;
+ * - 'refuse'   : impossible pour l'instant (message).
+ * `endTimer` indique qu'il faut arrêter le chrono (sa durée réelle est enregistrée).
+ */
+export function executionChangeDecision({ activeTimer, targetExerciseId, halfSetExerciseId = null, names = {} }) {
+    const nom = (id) => names[id] ?? 'l’exercice en cours';
+    if (activeTimer?.kind === 'side-switch')
+        return { action: 'refuse', endTimer: false, reason: 'side-switch',
+            message: `Changement de côté en cours sur ${nom(activeTimer.context?.exerciseId)} : fais d’abord le côté droit (ou passe ce chrono), puis choisis un autre exercice.` };
+    if (activeTimer && activeTimer.context?.exerciseId === targetExerciseId)
+        return { action: 'proceed', endTimer: false, reason: 'same-exercise', message: null };
+    if (activeTimer && ['work-rest', 'ramp-rest', 'activation-rest'].includes(activeTimer.kind))
+        return { action: 'confirm', endTimer: true, reason: 'rest-running',
+            message: `Un repos est en cours${activeTimer.context?.exerciseId ? ` après ${nom(activeTimer.context.exerciseId)}` : ''}. Il sera arrêté maintenant (sa durée réelle est enregistrée) pour passer à ${nom(targetExerciseId)}. Continuer ?` };
+    if (activeTimer && ['cardio', 'recovery'].includes(activeTimer.kind))
+        return { action: 'confirm', endTimer: true, reason: 'timed-running',
+            message: `${activeTimer.kind === 'recovery' ? 'La récupération' : 'Le cardio'} en cours sera arrêté à sa durée réelle et restera incomplet. Passer à ${nom(targetExerciseId)} ?` };
+    if (halfSetExerciseId && halfSetExerciseId !== targetExerciseId)
+        return { action: 'confirm', endTimer: false, reason: 'half-set',
+            message: `${nom(halfSetExerciseId)} a une série commencée (côté gauche fait). Elle restera à reprendre au côté droit. Passer à ${nom(targetExerciseId)} ?` };
+    // L'échauffement général peut continuer : l'exercice choisi viendra juste après.
+    return { action: 'proceed', endTimer: false, reason: activeTimer?.kind === 'general-warmup' ? 'after-warmup' : null, message: null };
+}

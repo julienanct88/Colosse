@@ -2,9 +2,9 @@
 // Fonctions de RENDU pures : elles reçoivent l'étape et renvoient du HTML.
 import { escapeHtml, formatClock } from './templates.js';
 import { STAGES } from '../engine/execution.js';
-import { GENERAL_WARMUP } from '../engine/warmup.js';
+import { GENERAL_WARMUP, WARMUP_EQUIPMENT, resolveWarmupEquipment } from '../engine/warmup.js';
 import { formatSeconds } from '../engine/session.js';
-import { icon } from './forge.js';
+import { icon, demoSearch, renderDemoButton, variantDisplay, normalizeSearch } from './forge.js';
 
 /** Un chrono tourne-t-il déjà pour cette étape ? */
 const timerRunsFor = (ctx, exerciseId) => ctx?.session?.activeTimer?.context?.exerciseId === exerciseId;
@@ -19,7 +19,32 @@ function header(day, progress, elapsedSec) {
     <div class="exec-header__top"><button class="f-exec-back" data-action="exec-show-program" aria-label="Revenir au programme sans terminer la séance">${icon('back')}</button><div class="f-exec-context"><span class="exec-day">${escapeHtml(day.name)}</span><span class="exec-clock"><span id="exec-elapsed">${formatClock(elapsedSec)}</span> · séance en cours</span></div><button class="f-exec-menu" data-action="exec-menu" aria-label="Options de la séance">${icon('dots')}</button></div>
     <div class="exec-progress"><i style="width:${progress.percent}%"></i></div>
     <div class="exec-progress__label"><span>${progress.done}/${progress.total} étapes</span><span>${progress.percent} %</span></div>
+    <div class="f-exec-tools">
+      <button class="f-exec-tool" data-action="exec-show-program">${icon('list')}<span>Tous les exercices</span></button>
+      <button class="f-exec-tool" data-action="exec-reorder">${icon('tune')}<span>Modifier l’ordre</span></button>
+    </div>
   </div>`;
+}
+
+/** Variante réellement choisie pour cet exercice dans la séance. */
+function variantFor(ctx, exercise) {
+    const id = ctx?.session?.exercises?.[exercise?.id]?.variantId;
+    return exercise?.variants?.find((v) => v.id === id) ?? exercise?.variants?.[0] ?? null;
+}
+function variantText(variant) {
+    return variantDisplay(variant);
+}
+/** Consulter la fiche ou lancer la recherche de démonstration : ne modifie rien. */
+function exerciseHelp(ctx, exercise, extraContext) {
+    const variant = variantFor(ctx, exercise);
+    return `<div class="f-help-row">
+      <button class="f-help-button" data-action="exercise-view" data-exercise="${escapeHtml(exercise.id)}">${icon('note')}<span>Voir l’exercice</span></button>
+      ${renderDemoButton(demoSearch({ name: exercise.name, variantLabel: variant?.label ?? '', context: extraContext }))}
+    </div>`;
+}
+function nextUp(ctx) {
+    const next = ctx?.nextExercise;
+    return next ? `<p class="f-next-up">Ensuite : <strong>${escapeHtml(next.name)}</strong>${next.variantLabel && !normalizeSearch(next.name).includes(normalizeSearch(next.variantLabel)) ? ` <span>· ${escapeHtml(next.variantLabel)}</span>` : ''}</p>` : '';
 }
 
 function shell(day, progress, elapsedSec, body) {
@@ -27,7 +52,7 @@ function shell(day, progress, elapsedSec, body) {
     ${header(day, progress, elapsedSec)}
     ${body}
     <div class="exec-secondary">
-      <button class="ghost-button" data-action="exec-show-program">${icon('list')} Séance</button>
+      <button class="ghost-button" data-action="exec-show-program">${icon('list')} Exercices</button>
       <button class="ghost-button" data-action="forge-notes">${icon('note')} Notes</button>
       <button class="ghost-button" data-action="exec-menu">${icon('tune')} Options</button>
     </div>
@@ -39,9 +64,9 @@ export function renderExecution(step, ctx) {
     let body = '';
     switch (step.stage) {
         case STAGES.GENERAL_WARMUP: body = renderGeneralWarmup(ctx); break;
-        case STAGES.ACTIVATION: body = renderActivation(step); break;
-        case STAGES.NEEDS_REFERENCE_LOAD: body = renderReferenceLoad(step); break;
-        case STAGES.RAMP_SET: body = renderRampSet(step); break;
+        case STAGES.ACTIVATION: body = renderActivation(step, ctx); break;
+        case STAGES.NEEDS_REFERENCE_LOAD: body = renderReferenceLoad(step, ctx); break;
+        case STAGES.RAMP_SET: body = renderRampSet(step, ctx); break;
         case STAGES.WORK_SET: body = renderWorkSet(step, ctx); break;
         case STAGES.CARDIO: body = renderCardio(step, ctx); break;
         case STAGES.RECOVERY: body = renderRecovery(step, ctx); break;
@@ -52,20 +77,32 @@ export function renderExecution(step, ctx) {
 }
 
 function renderGeneralWarmup(ctx) {
+    const general = ctx?.session?.warmup?.general;
+    const preferred = ctx?.preferredWarmupEquipment ?? null;
+    const choisi = resolveWarmupEquipment(general, preferred);
+    const option = WARMUP_EQUIPMENT[choisi];
+    const enCours = timerRunsKind(ctx, 'general-warmup');
+    const bouton = (id) => `<button type="button" class="f-equipment-choice ${id === choisi ? 'is-selected' : ''}" data-action="warmup-equipment" data-equipment="${id}" aria-pressed="${id === choisi}" ${enCours ? 'disabled' : ''}>${escapeHtml(WARMUP_EQUIPMENT[id].label)}</button>`;
     return `<div class="exec-card exec-warmup">
-    <span class="exec-eyebrow">ÉCHAUFFEMENT</span>
-    <h2 class="exec-title">${escapeHtml(GENERAL_WARMUP.name)}</h2>
-    <div class="exec-huge">${formatSeconds(GENERAL_WARMUP.durationSec)}</div>
-    <div class="exec-meta"><span>${escapeHtml(GENERAL_WARMUP.speedKmh)} km/h</span><span>inclinaison ${escapeHtml(GENERAL_WARMUP.inclinePct)} %</span></div>
-    <p class="exec-cue">${escapeHtml(GENERAL_WARMUP.cue)}</p>
-    ${timerRunsKind(ctx, 'general-warmup')
+    <span class="exec-eyebrow">ÉCHAUFFEMENT GÉNÉRAL — ne compte pas comme série</span>
+    <div class="f-equipment" role="group" aria-label="Matériel d’échauffement">${bouton('bike')}${bouton('treadmill')}</div>
+    ${preferred === choisi
+        ? `<p class="f-equipment-note">${icon('check')} ${escapeHtml(option.label)} : ton choix habituel</p>`
+        : `<button type="button" class="text-button f-equipment-remember" data-action="warmup-equipment-default" data-equipment="${choisi}">Mémoriser « ${escapeHtml(option.label)} » pour les prochaines séances</button>`}
+    <h2 class="exec-title">${escapeHtml(option.name)}</h2>
+    <div class="exec-huge">${formatSeconds(option.durationSec ?? GENERAL_WARMUP.durationSec)}</div>
+    <div class="exec-meta">${option.details.map((d) => `<span>${escapeHtml(d)}</span>`).join('')}</div>
+    <p class="exec-cue">${escapeHtml(option.cue)}</p>
+    ${renderDemoButton(demoSearch({ name: option.name === 'Vélo' ? 'vélo' : option.name, context: option.demoQuery }))}
+    ${nextUp(ctx)}
+    ${enCours
         ? '<button class="exec-primary" disabled>CHRONO EN COURS</button>'
-        : '<button class="exec-primary" data-action="exec-start-general-warmup">DÉMARRER</button>'}
+        : `<button class="exec-primary" data-action="exec-start-general-warmup" data-equipment="${choisi}">DÉMARRER</button>`}
     <button class="ghost-button" data-action="exec-skip-general-warmup">Passer l’échauffement</button>
   </div>`;
 }
 
-function renderActivation(step) {
+function renderActivation(step, ctx) {
     const a = step.activation;
     return `<div class="exec-card">
     <span class="exec-eyebrow">ACTIVATION — ne compte pas comme série</span>
@@ -73,14 +110,23 @@ function renderActivation(step) {
     ${a.side ? `<div class="exec-side ${a.side}">${a.side === 'left' ? 'CÔTÉ GAUCHE' : 'CÔTÉ DROIT'}</div>` : ''}
     <div class="exec-huge exec-huge--sm">${escapeHtml(a.detail)}</div>
     ${a.tempo ? `<div class="exec-meta"><span>tempo ${escapeHtml(a.tempo)}</span></div>` : ''}
+    <div class="f-help-row">
+      <button class="f-help-button" data-action="activation-view" data-step="${escapeHtml(a.key)}">${icon('note')}<span>Voir l’activation</span></button>
+      ${renderDemoButton(demoSearch({ name: a.name, context: 'échauffement activation' }))}
+    </div>
+    ${nextUp(ctx)}
     <button class="exec-primary" data-action="exec-validate-activation" data-step="${escapeHtml(a.key)}" data-rest="${a.restSec ?? 0}">VALIDÉ</button>
   </div>`;
 }
 
-function renderReferenceLoad(step) {
+function renderReferenceLoad(step, ctx) {
+    const variant = variantFor(ctx, step.exercise);
     return `<div class="exec-card">
     <span class="exec-eyebrow">MONTÉE EN CHARGE</span>
     <h2 class="exec-title">${escapeHtml(step.exercise.name)}</h2>
+    ${variant ? `<p class="f-work-variant">${escapeHtml(variantText(variant))}</p>` : ''}
+    ${step.exercise.coachingCue ? `<p class="exec-cue f-cue-visible">${escapeHtml(step.exercise.coachingCue)}</p>` : ''}
+    ${exerciseHelp(ctx, step.exercise)}
     <p class="exec-cue">Quelle charge de travail veux-tu tester aujourd’hui ?</p>
     <label class="exec-input"><span>Charge (kg)</span>
       <input type="number" inputmode="decimal" min="0" step="0.25" id="exec-reference-load" placeholder="0"/>
@@ -89,14 +135,18 @@ function renderReferenceLoad(step) {
   </div>`;
 }
 
-function renderRampSet(step) {
+function renderRampSet(step, ctx) {
     const r = step.ramp;
+    const variant = variantFor(ctx, step.exercise);
     return `<div class="exec-card exec-ramp">
     <span class="exec-eyebrow">ÉCHAUFFEMENT — ne compte pas dans les séries de travail</span>
     <h2 class="exec-title">${escapeHtml(step.exercise.name)}</h2>
-    <div class="exec-sub">Montée en charge ${escapeHtml(r.key)} · ${Math.round(r.pct * 100)} %</div>
+    ${variant ? `<p class="f-work-variant">${escapeHtml(variantText(variant))}</p>` : ''}
+    <div class="exec-sub">Montée en charge ${escapeHtml(r.key)} · ${Math.round(r.pct * 100)} % · même mouvement, plus léger</div>
     <div class="exec-huge">${r.loadKg} kg</div>
     <div class="exec-meta"><span>${r.reps} répétitions</span><span>repos ${formatClock(r.restSec)}</span></div>
+    ${step.exercise.coachingCue ? `<p class="exec-cue f-cue-visible">${escapeHtml(step.exercise.coachingCue)}</p>` : ''}
+    ${exerciseHelp(ctx, step.exercise)}
     <button class="exec-primary" data-action="exec-validate-ramp" data-exercise="${step.exerciseId}" data-index="${step.setIndex}" data-rest="${r.restSec}">SÉRIE FAITE</button>
   </div>`;
 }
@@ -119,7 +169,9 @@ function renderWorkSet(step, ctx) {
     return `<div class="exec-card exec-work" data-forge-step="${escapeHtml(key)}">
     <div class="f-work-kicker">EXERCICE ${String(position).padStart(2,'0')} / ${String(order.length).padStart(2,'0')}<span>${log.sets.filter(s => s.done).length}/${totalSets} séries validées</span></div>
     <h2 class="exec-title">${escapeHtml(exercise.name)}</h2>
-    <p class="f-work-variant">${escapeHtml(step.variant?.label ?? 'Variante du programme')}${needsLoad ? '' : ' · poids du corps'}</p>
+    <p class="f-work-variant">${escapeHtml(step.variant ? variantText(step.variant) : 'Variante du programme')}${needsLoad ? '' : ' · poids du corps'}</p>
+    ${exercise.coachingCue ? `<p class="exec-cue f-cue-visible">${escapeHtml(exercise.coachingCue)}</p>` : ''}
+    ${exerciseHelp(ctx, exercise)}
     ${side ? `<div class="exec-side ${side}">${side === 'left' ? 'CÔTÉ GAUCHE' : 'CÔTÉ DROIT'}</div>` : ''}
     <div class="f-set-dots" aria-hidden="true">${Array.from({length:totalSets},(_,i)=>`<span class="${log.sets[i]?.done?'is-done':i===setIndex?'is-current':''}"></span>`).join('')}</div>
     <div class="f-work-panel">
@@ -140,13 +192,12 @@ function renderWorkSet(step, ctx) {
           <button type="button" class="chip-choice" data-exec-field="technique" data-value="degraded" aria-pressed="false">Dégradée</button>
         </div></div>
         <div class="exec-choice"><span>Douleur · 0 = aucune, 10 = maximale</span><div class="chip-row" data-exec-group="pain">${painScale()}</div></div>
-        ${exercise.coachingCue ? `<p class="exec-cue">${escapeHtml(exercise.coachingCue)}</p>` : ''}
       </div>
     </details>
     <div class="f-work-actions"><button class="exec-primary" data-action="exec-validate-set" data-exercise="${exercise.id}" data-set="${setIndex}">
       ${side ? `Valider le côté ${side === 'left' ? 'gauche' : 'droit'}` : `Valider la série ${setIndex + 1}`} ${icon('check')}
     </button></div>
-    <button class="ghost-button" data-action="exec-show-program" data-exercise="${exercise.id}">${icon('list')} Toutes les séries & variantes</button>
+    <button class="ghost-button" data-action="exec-show-program" data-exercise="${exercise.id}">${icon('list')} Séries, variante & corrections de cet exercice</button>
   </div>`;
 }
 
@@ -161,6 +212,7 @@ function renderCardio(step, ctx) {
     ${timerRunsFor(ctx, ex.id)
         ? '<button class="exec-primary" disabled>CHRONO EN COURS</button>'
         : `<button class="exec-primary" data-action="exec-start-cardio" data-exercise="${ex.id}" data-duration="${step.durationSec}">DÉMARRER</button>`}
+    <button class="f-help-button" data-action="exercise-view" data-exercise="${escapeHtml(ex.id)}">${icon('note')}<span>Voir l’exercice</span></button>
   </div>`;
 }
 
@@ -174,6 +226,7 @@ function renderRecovery(step, ctx) {
     ${timerRunsFor(ctx, ex.id)
         ? '<button class="exec-primary" disabled>CHRONO EN COURS</button>'
         : `<button class="exec-primary" data-action="exec-start-recovery" data-exercise="${ex.id}" data-duration="${step.durationSec}">DÉMARRER</button>`}
+    <button class="f-help-button" data-action="exercise-view" data-exercise="${escapeHtml(ex.id)}">${icon('note')}<span>Voir l’exercice</span></button>
   </div>`;
 }
 
@@ -213,19 +266,23 @@ export function renderExecMenu({ canDefer, exerciseName }) {
  * Panneau « RÉORGANISER ».
  * rows = [{ id, name, stateLabel, done, pending, locked }]
  */
-export function renderReorderPanel({ dayName, rows, blocked }) {
+export function renderReorderPanel({ dayName, rows, blocked, blockedMessage = null }) {
     if (blocked) {
         return `<div class="sheet-backdrop" data-action="reorder-close"></div>
     <section class="sheet reorder-panel" role="dialog" aria-label="Réorganiser les exercices">
       <div class="reorder-head"><h2>RÉORGANISER</h2><button class="sheet-close" data-action="reorder-close" aria-label="Fermer">✕</button></div>
       <p class="reorder-hint">Termine ou passe le chrono avant de réorganiser.</p>
-      <div class="reorder-actions"><button class="primary-button" data-action="reorder-close">FERMER</button></div>
+      ${blockedMessage ? `<p class="reorder-hint">${escapeHtml(blockedMessage)}</p>` : ''}
+      <div class="reorder-actions">
+        ${blockedMessage ? '<button class="secondary-button" data-action="reorder-end-timer">Arrêter le chrono et modifier l’ordre</button>' : ''}
+        <button class="primary-button" data-action="reorder-close">FERMER</button>
+      </div>
     </section>`;
     }
     return `<div class="sheet-backdrop" data-action="reorder-close"></div>
   <section class="sheet reorder-panel" role="dialog" aria-label="Réorganiser les exercices">
     <div class="reorder-head"><h2>RÉORGANISER</h2><button class="sheet-close" data-action="reorder-close" aria-label="Fermer">✕</button></div>
-    <p class="reorder-hint">Maintiens ☰ et fais glisser. Cet ordre ne vaut que pour la séance du jour.</p>
+    <p class="reorder-hint">Maintiens ☰ et fais glisser, ou utilise ↑ ↓. Cet ordre ne vaut que pour la séance du jour : les séries déjà faites sont conservées.</p>
     <ul class="reorder-list" data-drag-list="reorder">
       ${rows.map((row, index) => `<li class="reorder-row ${row.done ? 'is-done' : ''} ${row.locked ? 'is-locked' : ''}"
         data-drag-item="${escapeHtml(row.id)}" data-drag-locked="${row.locked ? 'true' : 'false'}">
@@ -244,6 +301,30 @@ export function renderReorderPanel({ dayName, rows, blocked }) {
       <button class="primary-button" data-action="reorder-close">TERMINER</button>
       <button class="ghost-button" data-action="reorder-save-default">Enregistrer comme ordre par défaut${dayName ? ` (${escapeHtml(dayName)})` : ''}</button>
       <button class="ghost-button" data-action="reorder-restore">Restaurer l’ordre du programme</button>
+    </div>
+  </section>`;
+}
+
+/**
+ * Fiche d'un exercice ou d'une activation : CONSULTATION uniquement.
+ * Fermer la fiche ramène exactement à l'écran précédent ; rien n'est validé.
+ */
+export function renderExerciseSheet(d) {
+    return `<div class="sheet-backdrop" data-action="exercise-sheet-close"></div>
+  <section class="sheet f-exercise-sheet" role="dialog" aria-label="${escapeHtml(d.title)}">
+    <div class="reorder-head"><span class="exec-eyebrow">${escapeHtml(d.eyebrow)}</span><button class="sheet-close" data-action="exercise-sheet-close" aria-label="Fermer la fiche">✕</button></div>
+    <h2 class="f-sheet-title">${escapeHtml(d.title)}</h2>
+    ${d.subtitle ? `<p class="f-work-variant">${escapeHtml(d.subtitle)}</p>` : ''}
+    ${d.status ? `<p class="f-sheet-status">${escapeHtml(d.status)}</p>` : ''}
+    ${d.planLines?.length ? `<div class="exec-meta">${d.planLines.map((l) => `<span>${escapeHtml(l)}</span>`).join('')}</div>` : ''}
+    ${d.cue ? `<div class="f-sheet-block"><strong>Consignes essentielles</strong><p>${escapeHtml(d.cue)}</p></div>` : ''}
+    ${d.tempoHelp ? `<div class="f-sheet-block"><strong>Tempo ${escapeHtml(d.tempo)}</strong><p>${escapeHtml(d.tempoHelp)}</p></div>` : ''}
+    ${d.lastExposure ? `<div class="f-sheet-block"><strong>Dernière fois</strong><p>${escapeHtml(d.lastExposure)}</p></div>` : ''}
+    ${d.demo ? renderDemoButton(d.demo, 'f-demo-wide') : ''}
+    <p class="reorder-hint">Consulter cette fiche ne modifie pas ta séance.</p>
+    <div class="reorder-actions">
+      ${d.doNow ? `<button class="primary-button" data-action="exercise-do-now" data-exercise="${escapeHtml(d.exerciseId)}">Faire maintenant</button>` : ''}
+      <button class="${d.doNow ? 'ghost-button' : 'primary-button'}" data-action="exercise-sheet-close">Fermer</button>
     </div>
   </section>`;
 }

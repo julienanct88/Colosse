@@ -118,3 +118,24 @@ export function steppedValue(current, delta, minimum=0) {
   const base=Number.isFinite(parsed)?parsed:0;
   return Math.max(minimum,Math.round((base+Number(delta))*1000)/1000);
 }
+/**
+ * Démonstration : AUCUNE vidéo vérifiée n'existe dans le programme. On propose
+ * donc une RECHERCHE YouTube, nommée comme telle, construite à partir du nom du
+ * mouvement et de sa variante (jamais une URL inventée).
+ */
+export const DEMO_SEARCH_BASE = 'https://www.youtube.com/results?search_query=';
+/** Matériel en français ; jamais répété s'il figure déjà dans le nom de la variante. */
+export const EQUIPMENT_LABELS = { barbell: 'barre', cable: 'poulie', dumbbell: 'haltères', machine: 'machine', cardio: 'cardio' };
+export function variantDisplay(variant) {
+  if (!variant) return '';
+  const materiel = EQUIPMENT_LABELS[variant.equipment] ?? variant.equipment ?? '';
+  const deja = !materiel || normalizeSearch(variant.label).includes(normalizeSearch(materiel));
+  return deja ? String(variant.label) : `${variant.label} · ${materiel}`;
+}
+export function demoSearch({ name, variantLabel = '', context = 'technique musculation' }) {
+  const terms = [name, variantLabel && !String(name).toLowerCase().includes(String(variantLabel).toLowerCase()) ? variantLabel : '', context].filter(Boolean).join(' ');
+  return { url: DEMO_SEARCH_BASE + encodeURIComponent(terms), label: 'Rechercher une démonstration', hint: 'Recherche YouTube · ouvre un nouvel onglet', terms };
+}
+export function renderDemoButton(demo, cls = '') {
+  return `<a class="f-demo-button ${cls}" href="${escapeHtml(demo.url)}" target="_blank" rel="noopener noreferrer" data-demo-search="${escapeHtml(demo.terms)}">${icon('play')}<span><strong>${escapeHtml(demo.label)}</strong><small>${escapeHtml(demo.hint)}</small></span></a>`;
+}

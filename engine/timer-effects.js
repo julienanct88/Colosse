@@ -54,10 +54,14 @@ export function applyTimerOutcome(session, timer, now = Date.now()) {
     }
     else if (outcome.action === 'complete-general-warmup') {
         const warmup = normalizeWarmupState(next.warmup);
+        const equipment = warmup.general.equipment;
         // Arrivé au bout : accompli. Interrompu avant : passé, jamais "done".
         warmup.general = outcome.complete
             ? { done: true, skipped: false, durationSec: outcome.durationSec }
             : { done: false, skipped: true, durationSec: outcome.durationSec };
+        // Le matériel choisi (vélo / tapis) reste noté avec l'échauffement.
+        if (equipment)
+            warmup.general.equipment = equipment;
         next.warmup = warmup;
         if (!outcome.complete)
             message = `Échauffement interrompu à ${formatSeconds(outcome.durationSec)} — enregistré comme passé.`;

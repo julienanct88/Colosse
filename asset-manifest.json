@@ -1,6 +1,6 @@
 {
-  "version": "3.6.0",
-  "cacheVersion": "colosse-adaptive-v3-forge-360",
+  "version": "3.6.1",
+  "cacheVersion": "colosse-adaptive-v3-forge-361",
   "assets": [
     "./",
     "./app.js",
@@ -30,7 +30,8 @@
     "./engine/timer-effects.js",
     "./ui/execution.js",
     "./forge.css",
-    "./ui/forge.js"
+    "./ui/forge.js",
+    "./ui/drafts.js"
   ],
   "uiVersion": "forge-1.0.0"
 }

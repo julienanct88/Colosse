@@ -169,3 +169,36 @@ export function clearExerciseRamps(state, exerciseId) {
     delete warmup.ramps[exerciseId];
     return warmup;
 }
+
+/**
+ * Matériel de l'échauffement général. MÊME durée quel que soit le matériel :
+ * seul l'affichage change. Aucune équivalence calorique n'est calculée.
+ */
+export const WARMUP_EQUIPMENT = {
+    bike: {
+        id: 'bike', label: 'Vélo', name: 'Vélo', durationSec: GENERAL_WARMUP.durationSec,
+        details: ['Allure facile', 'Résistance légère'], cue: GENERAL_WARMUP.cue,
+        demoQuery: 'échauffement vélo d’appartement',
+    },
+    treadmill: {
+        id: 'treadmill', label: 'Tapis', name: GENERAL_WARMUP.name, durationSec: GENERAL_WARMUP.durationSec,
+        details: [`${GENERAL_WARMUP.speedKmh} km/h`, `inclinaison ${GENERAL_WARMUP.inclinePct} %`], cue: GENERAL_WARMUP.cue,
+        demoQuery: 'marche inclinée tapis échauffement',
+    },
+};
+/** Seul matériel qui existait avant ce choix : sert aux échauffements déjà faits. */
+export const DEFAULT_WARMUP_EQUIPMENT = 'treadmill';
+
+/**
+ * Matériel à afficher. Un échauffement déjà fait ou passé sans matériel noté
+ * reste « tapis » : on ne transforme jamais un ancien échauffement en vélo.
+ */
+export function resolveWarmupEquipment(general, preferred) {
+    if (general?.equipment && WARMUP_EQUIPMENT[general.equipment])
+        return general.equipment;
+    if (general?.done || general?.skipped)
+        return DEFAULT_WARMUP_EQUIPMENT;
+    if (preferred && WARMUP_EQUIPMENT[preferred])
+        return preferred;
+    return DEFAULT_WARMUP_EQUIPMENT;
+}

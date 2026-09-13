@@ -370,4 +370,55 @@ h3 { font-size:18px; }
 .session-actions .primary-button { flex:1 1 100%; }
 .toast { background:#263026; color:#dbebd5; border-color:#53684b; }
 .toast.error { background:#35221f; color:#ffd0c8; }
-.app-shell.is-executing .toast { top:calc(111px + var(--safe-top)); bottom:auto; }
+/* Le toast n'est qu'un message : il ne capte jamais un toucher et, en mode guidé, s'affiche sous l'en-tête (outils « Tous les exercices » / « Modifier l’ordre » dégagés). */
+.toast { pointer-events:none; }
+.app-shell.is-executing .toast { top:calc(176px + var(--safe-top)); bottom:auto; }
+
+/* ---------- Séance au centre : outils, fiches, démonstrations, échauffement (Forge) ---------- */
+.f-exec-tools { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px; }
+.f-exec-tool { display:flex; align-items:center; justify-content:center; gap:7px; min-height:46px; padding:9px 10px; border:1px solid #ff7b4a55; border-radius:13px; background:#ff7b4a12; color:#ffc3a8; font-size:12px; font-weight:700; }
+.f-exec-tool .f-icon { width:18px; height:18px; color:var(--forge); }
+.f-help-row { display:grid; grid-template-columns:1fr; gap:8px; margin:4px 0 2px; }
+.f-help-button { display:inline-flex; align-items:center; justify-content:center; gap:7px; min-height:44px; padding:9px 13px; border:1px solid var(--line); border-radius:12px; background:#ffffff08; color:var(--text); font-size:12px; font-weight:650; }
+.f-help-button .f-icon { width:17px; height:17px; color:var(--muted); }
+.f-demo-button { display:flex; align-items:center; gap:10px; min-height:48px; padding:8px 12px; border:1px solid #44423a; border-radius:12px; background:#262725; color:var(--text); text-decoration:none; }
+.f-demo-button .f-icon { width:18px; height:18px; color:var(--forge); }
+.f-demo-button strong { display:block; font-size:12px; font-weight:700; }
+.f-demo-button small { display:block; margin-top:2px; font-size:10px; color:var(--muted); }
+.f-demo-wide { margin:12px 0 4px; }
+.f-next-up { margin:2px 0; font-size:12px; color:var(--muted); }
+.f-next-up strong { color:var(--text); }
+.f-cue-visible { margin:2px 0 4px; padding:10px 12px; border-left:3px solid var(--forge); border-radius:4px; background:#ffffff05; color:#dcd8ce!important; }
+.f-equipment { display:grid; grid-template-columns:1fr 1fr; gap:8px; padding:4px; border:1px solid var(--line); border-radius:15px; background:#171a19; }
+.f-equipment-choice { min-height:48px; border:0; border-radius:11px; background:transparent; color:var(--muted); font-size:15px; font-weight:700; }
+.f-equipment-choice.is-selected { background:var(--forge); color:#221a13; }
+.f-equipment-note { display:flex; align-items:center; gap:6px; font-size:11px; color:var(--green); }
+.f-equipment-note .f-icon { width:15px; height:15px; }
+.f-equipment-remember { min-height:44px; padding:6px 0; color:#ffae8c!important; font-size:12px!important; text-align:left; text-decoration:underline; text-underline-offset:3px; }
+.f-card-summary { padding:0 14px 14px 48px; }
+.f-card-variant { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:6px 10px; margin-bottom:8px; font-size:12px; color:#dcd8ce; }
+.f-card-status { padding:4px 8px; border:1px solid #ffffff14; border-radius:8px; background:#ffffff08; color:var(--muted); font-size:10px; font-weight:650; white-space:nowrap; }
+.f-card-status.is-partial { color:#ffc3a8; border-color:#ff7b4a55; background:#ff7b4a10; }
+.f-card-status.is-done { color:var(--green); border-color:#85c8a544; }
+.f-card-status.is-skipped { color:#f3a0a0; border-color:#f3a0a044; }
+.f-card-cue { margin-bottom:10px; font-size:12px; line-height:1.55; color:var(--muted); }
+.f-card-actions { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+.f-card-actions > * { flex:1 1 140px; }
+.cardio-card .f-card-actions { padding:0 14px 10px; }
+.f-do-now { display:inline-flex; align-items:center; justify-content:center; gap:7px; min-height:44px; padding:9px 13px; border:1px solid var(--forge); border-radius:12px; background:var(--forge); color:#221a13; font-size:12px; font-weight:750; }
+.f-do-now .f-icon { width:15px; height:15px; }
+.f-session-tools { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:16px 0 10px; }
+.f-session-tools strong { display:block; font-size:17px; letter-spacing:-.3px; }
+.f-session-tools span { display:block; margin-top:3px; font-size:11px; color:var(--muted); }
+.f-session-tools .secondary-button { display:inline-flex; align-items:center; gap:6px; flex:0 0 auto; min-height:46px; }
+.f-session-tools .secondary-button .f-icon { width:17px; height:17px; color:var(--forge); }
+.exec-resume-banner { position:sticky; top:calc(78px + var(--safe-top)); z-index:35; min-height:50px; }
+.f-exercise-sheet { max-height:88vh; overflow-y:auto; }
+.f-sheet-title { margin:6px 0 4px; font-size:24px; }
+.f-sheet-status { margin:6px 0 10px; font-size:12px; color:#ffc3a8; }
+.f-sheet-block { margin-top:12px; padding:12px; border:1px solid var(--line); border-radius:13px; background:#ffffff05; }
+.f-sheet-block strong { display:block; margin-bottom:5px; font-size:12px; }
+.f-sheet-block p { font-size:13px; line-height:1.55; color:#dcd8ce; }
+.f-exercise-sheet .exec-meta { display:flex; flex-wrap:wrap; gap:6px; }
+.f-exercise-sheet .exec-meta span { padding:5px 8px; border-radius:8px; background:#ffffff0a; font-size:11px; }
+.f-select-row select { min-height:44px; max-width:46%; padding:8px 28px 8px 10px; }

@@ -1,5 +1,5 @@
 /* Colosse Adaptive — generated service worker */
-const CACHE_VERSION = 'colosse-adaptive-v3-forge-360';
+const CACHE_VERSION = 'colosse-adaptive-v3-forge-361';
 const CACHE_NAME = CACHE_VERSION;
 const PRECACHE_URLS = [
   "./",
@@ -29,6 +29,7 @@ const PRECACHE_URLS = [
   "./styles.css",
   "./forge.css",
   "./ui/forge.js",
+  "./ui/drafts.js",
   "./types.js",
   "./ui/templates.js"
 ];
