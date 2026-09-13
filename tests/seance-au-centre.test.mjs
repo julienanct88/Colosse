@@ -296,3 +296,144 @@ test('Variante affichée en français, sans répétition du matériel ni du nom'
         for (const ex of findDay(d).exercises)
             for (const v of ex.variants ?? []) assert.doesNotMatch(variantDisplay(v), /dumbbell|barbell|cable/, `${ex.id}/${v.id}`);
 });
+
+// ---------------------------------------------------------------- 3.6.2 : annuler une séance commencée
+
+test('Annuler une séance : elle redevient au programme, variantes/ordre/notes conservés, original intact', async () => {
+    const { cancelSession, cancelSessionSummary, cancelSessionMessage } = await import('../engine/session.js');
+    const { makeSet } = await import('../defaults.js');
+    const s = seance('legs-a', { setsFaits: { 'legs-a-hack': 2 } });
+    s.date = '2026-09-14'; s.startedAt = 1_000; s.status = 'INCOMPLETE'; s.notes = 'genou ok'; s.readiness = { energy: 4, fatigue: 1, sleepHours: 7 };
+    s.exercises['legs-a-press'].variantId = 'autre-variante'; s.exercises['legs-a-press'].skipped = true;
+    s.exercises['legs-a-bulgarian'].sets[0].sides = { left: { done: true, reps: 12 } };
+    s.warmup.ramps = { 'legs-a-hack': { referenceLoadKg: 100, done: [true] } };
+    s.exerciseOrder = [...s.exerciseOrder].reverse(); s.orderCustomized = true;
+    s.activeTimer = createTimer('work-rest', 120, { exerciseId: 'legs-a-hack', setIndex: 1, sessionId: s.id }, 0);
+    const avant = JSON.stringify(s);
+    const r = cancelSession(s, { now: 5_000, createSet: makeSet });
+    assert.equal(JSON.stringify(s), avant, 'la séance d’origine n’est pas modifiée');
+    assert.deepEqual([r.startedAt, r.endedAt, r.activeTimer, r.execution.active, 'status' in r], [null, null, null, false, false]);
+    assert.deepEqual(r.warmup, { general: { done: false, skipped: false, durationSec: 0 }, activation: {}, ramps: {} });
+    for (const [id, log] of Object.entries(r.exercises)) {
+        assert.equal(log.skipped, false, id);
+        assert.equal(log.sets.length, s.exercises[id].sets.length, id);
+        assert.ok(log.sets.every((set) => !set.done && set.reps === null && !set.sides && set.completedAt === null), id);
+    }
+    assert.deepEqual([r.id, r.date, r.dayId, r.notes, r.exercises['legs-a-press'].variantId, r.orderCustomized], [s.id, '2026-09-14', 'legs-a', 'genou ok', 'autre-variante', true]);
+    assert.deepEqual(r.readiness, s.readiness);
+    assert.deepEqual(r.exerciseOrder, s.exerciseOrder);
+    // Ce qui est annoncé avant confirmation
+    const sum = cancelSessionSummary(s);
+    assert.deepEqual([sum.sets, sum.sides, sum.skipped, sum.timer], [2, 1, 1, true]);
+    assert.match(cancelSessionMessage(sum, 'Legs A'), /2 séries validées ; 1 série commencée \(un côté\)/);
+    assert.match(cancelSessionMessage(sum, 'Legs A'), /« Terminer »/);
+    const vierge = (dayId) => { const v = seance(dayId); v.startedAt = 1; v.warmup = emptyWarmupState(); for (const log of Object.values(v.exercises)) log.sets.forEach((set) => { set.reps = null; set.rir = null; }); return v; };
+    const vide = vierge('pull-a');
+    assert.match(cancelSessionMessage(cancelSessionSummary(vide), 'Pull A'), /Rien n’a été fait/);
+    const saisie = vierge('pull-a'); saisie.exercises[saisie.exerciseOrder[0]].sets[0].reps = 9;
+    assert.match(cancelSessionMessage(cancelSessionSummary(saisie), 'Pull A'), /1 saisie non validée/);
+});
+
+test('Annuler une séance : seuls ses brouillons sont supprimés', async () => {
+    const { removeSessionDrafts } = await import('../ui/drafts.js');
+    const st = new Memoire();
+    const k = (sessionId, i) => draftKey({ sessionId, exerciseId: 'ex', variantId: 'v', setIndex: i, side: null });
+    saveDraft(st, k('2026-09-14:pull-a', 0), { fields: { reps: '8' } }, 1);
+    saveDraft(st, k('2026-09-14:pull-a', 1), { fields: { reps: '7' } }, 1);
+    saveDraft(st, k('2026-09-14:pull-ab', 0), { fields: { reps: '6' } }, 1);
+    saveDraft(st, k('2026-09-15:push-a', 0), { fields: { reps: '5' } }, 1);
+    assert.equal(removeSessionDrafts(st, '2026-09-14:pull-a'), true);
+    assert.equal(readDraft(st, k('2026-09-14:pull-a', 0)), null);
+    assert.equal(readDraft(st, k('2026-09-14:pull-a', 1)), null);
+    assert.equal(readDraft(st, k('2026-09-14:pull-ab', 0)).fields.reps, '6', 'préfixe voisin intact');
+    assert.equal(readDraft(st, k('2026-09-15:push-a', 0)).fields.reps, '5');
+    assert.equal(removeSessionDrafts(st, 'inexistante'), false);
+});
+
+test('Annuler une séance est proposé dans le menu du mode guidé', async () => {
+    const { renderExecMenu } = await import('../ui/execution.js');
+    assert.match(renderExecMenu({ canDefer: false, exerciseName: null }), /data-action="cancel-session"[^>]*>[^<]*Annuler la séance/);
+});
+
+
+test('Annuler : la confirmation annonce aussi échauffement, rampes, exercices passés et chrono en cours, avec la date', async () => {
+    const { cancelSessionSummary, cancelSessionMessage } = await import('../engine/session.js');
+    const base = () => { const v = seance('recovery'); v.startedAt = 1; v.warmup = emptyWarmupState(); for (const log of Object.values(v.exercises)) log.sets.forEach((set) => { set.reps = null; set.done = false; }); return v; };
+    const cas = [
+        [(v) => { v.activeTimer = createTimer('recovery', 2400, { exerciseId: Object.keys(v.exercises)[0], setIndex: 0, sessionId: v.id }, 0); }, /le chrono en cours \(Récup, 25:00\) : la durée déjà faite ne sera pas enregistrée/],
+        [(v) => { v.warmup.general = { done: true, skipped: false, durationSec: 480 }; }, /l’échauffement déjà fait/],
+        [(v) => { v.warmup.ramps = { a: { referenceLoadKg: 100, done: [true] }, b: { referenceLoadKg: 60, done: [] } }; }, /2 montées en charge/],
+        [(v) => { Object.values(v.exercises)[0].skipped = true; }, /1 exercice passé \(redeviendra à faire\)/],
+    ];
+    for (const [preparer, attendu] of cas) {
+        const v = base(); preparer(v);
+        const msg = cancelSessionMessage(cancelSessionSummary(v), 'Récupération', { dateLabel: 'lundi 14 septembre', timerLabel: v.activeTimer ? 'Récup, 25:00' : '' });
+        assert.doesNotMatch(msg, /Rien n’a été fait/, msg);
+        assert.match(msg, attendu, msg);
+        assert.match(msg, /du lundi 14 septembre/);
+        assert.match(msg, /« Terminer »/);
+    }
+});
+
+test('Annuler n’est jamais proposé sur une séance déjà enregistrée puis rouverte', async () => {
+    const { canCancelSession } = await import('../engine/session.js');
+    const { renderExecMenu } = await import('../ui/execution.js');
+    assert.equal(canCancelSession({ startedAt: 1, endedAt: null }), true);
+    assert.equal(canCancelSession({ startedAt: null, endedAt: null }), false, 'pas commencée');
+    assert.equal(canCancelSession({ startedAt: 1, endedAt: 2 }), false, 'terminée');
+    assert.equal(canCancelSession({ startedAt: 1, endedAt: null, status: 'COMPLETE' }), false, 'rouverte (statut conservé)');
+    assert.equal(canCancelSession({ startedAt: 1, endedAt: null, reopenedAt: 3 }), false, 'rouverte (ancienne séance sans statut)');
+    assert.equal(canCancelSession(null), false);
+    assert.doesNotMatch(renderExecMenu({ canDefer: true, exerciseName: 'X', canCancel: false }), /cancel-session/);
+});
+
+test('Annuler : durée du chrono exacte après pause/reprise ; anciennes séances rouvertes protégées', async () => {
+    const { canCancelSession, LEGACY_REOPEN_GUARD_MS } = await import('../engine/session.js');
+    const { pauseTimer, resumeTimer, elapsedSeconds } = await import('../engine/timer.js');
+    // Chrono : 12 min faites, pause 10 min, reprise, 5 s → 12:05 (et non 0:05)
+    let t = createTimer('cardio', 1200, {}, 0);
+    t = pauseTimer(t, 720_000); t = resumeTimer(t, 1_320_000);
+    assert.equal(elapsedSeconds(t, 1_325_000), 725);
+    // Garde des données anciennes
+    const fait = { a: { sets: [{ done: true }] } }, vierge = { a: { sets: [{ done: false }] } };
+    assert.equal(canCancelSession({ startedAt: LEGACY_REOPEN_GUARD_MS - 86_400_000, endedAt: null, exercises: fait }), false, 'ancienne séance avec séries : pas d’annulation');
+    assert.equal(canCancelSession({ startedAt: LEGACY_REOPEN_GUARD_MS - 86_400_000, endedAt: null, exercises: vierge }), true, 'ancienne séance vide : annulable');
+    assert.equal(canCancelSession({ startedAt: LEGACY_REOPEN_GUARD_MS + 36_000_000, endedAt: null, exercises: fait }), true, 'séance commencée aujourd’hui : annulable');
+});
+
+test('Pré-remplissage marqué par série : seules les séries jamais retouchées issues de la séance annulée sont recalculables', async () => {
+    const { seededSetIndices, legacySeededSetIndices, withoutSeedMark, cancelSession, resetExerciseLogForVariant } = await import('../engine/session.js');
+    const { makeSet } = await import('../defaults.js');
+    const T = '2026-09-14:pull-a';
+    const log = (weights, mark) => ({ variantId: 'v', sets: weights.map((w) => ({ ...makeSet(), weightKg: w })), ...(mark ? { autoSeed: mark } : {}) });
+    const marque = (sets = [0, 1, 2]) => ({ loadKg: 40, sources: ['2026-08-31:pull-a', T], sets });
+    assert.deepEqual(seededSetIndices(log([40, 40, 40], marque()), T), [0, 1, 2]);
+    assert.deepEqual(seededSetIndices(log([40, 40, 40], marque()), '2026-09-07:pull-a'), [], 'autre séance source');
+    assert.deepEqual(seededSetIndices(log([40, 40, 40]), T), [], 'sans marque');
+    assert.deepEqual(seededSetIndices(log([22.5, 40, 40], marque([1, 2])), T), [1, 2], 'série 0 choisie à la main : exclue, les autres restent');
+    const faite = log([40, 40, 40], marque()); faite.sets[2].done = true;
+    assert.deepEqual(seededSetIndices(faite, T), [0, 1]);
+    // Retirer une série de la marque
+    assert.deepEqual(withoutSeedMark(marque(), 0).sets, [1, 2]);
+    assert.deepEqual(withoutSeedMark(marque([1]), 1).sets, [], 'marque vide conservée : toutes les charges choisies à la main');
+    assert.deepEqual(withoutSeedMark(undefined, 0), { loadKg: 0, sources: [], sets: [] }, 'saisie manuelle sur données anciennes : marquée');
+    assert.deepEqual(legacySeededSetIndices(log([20, 20, 20], withoutSeedMark(undefined, 0)), 20, 85), [], 'saisie manuelle : jamais reprise par le repli');
+    // Données d'avant la marque
+    assert.deepEqual(legacySeededSetIndices(log([20, 20, 20]), 20, 85), [0, 1, 2]);
+    assert.deepEqual(legacySeededSetIndices(log([20, 20, 20]), 20, 20), [], 'la séance annulée ne change rien');
+    assert.deepEqual(legacySeededSetIndices(log([20, 25, 20]), 20, 85), [], 'une charge différente : saisie manuelle probable');
+    assert.deepEqual(legacySeededSetIndices(log([20, 20, 20], marque()), 20, 85), [], 'marqué : pas de repli');
+    const legacyFaite = log([20, 20, 20]); legacyFaite.sets[0].done = true;
+    assert.deepEqual(legacySeededSetIndices(legacyFaite, 20, 85), []);
+    // La marque disparaît quand le log repart de zéro
+    assert.equal('autoSeed' in resetExerciseLogForVariant(log([40], marque()), 'autre', 3, makeSet), false);
+    const s = seance('pull-a'); const id = s.exerciseOrder[0]; s.startedAt = 1; s.exercises[id].autoSeed = marque();
+    assert.equal('autoSeed' in cancelSession(s, { now: 2, createSet: makeSet }).exercises[id], false);
+});
+
+test('Annuler : la confirmation annonce le recalcul des charges pré-remplies de la semaine suivante', async () => {
+    const { cancelSessionMessage } = await import('../engine/session.js');
+    const msg = cancelSessionMessage({ sets: 2, sides: 0, entries: 0, skipped: 0, warmup: false, ramps: 0, timer: false }, 'Pull A', { dateLabel: 'lundi 14 septembre', recalcLabel: 'Pull A du lundi 21 septembre' });
+    assert.match(msg, /pré-remplies à partir de ces séries sur Pull A du lundi 21 septembre seront recalculées/);
+    assert.match(msg, /choisies toi-même ne changent pas/);
+});

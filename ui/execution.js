@@ -252,13 +252,14 @@ function renderComplete(ctx) {
 // ---------------------------------------------------------------------------
 
 /** Menu ⋯ du Mode Exécution. */
-export function renderExecMenu({ canDefer, exerciseName }) {
+export function renderExecMenu({ canDefer, exerciseName, canCancel = true }) {
     return `<div class="sheet-backdrop" data-action="exec-menu-close"></div>
   <section class="sheet exec-menu-sheet" role="dialog" aria-label="Options de la séance">
     <button class="sheet-item" data-action="exec-reorder">↕&nbsp;&nbsp;Réorganiser les exercices</button>
     ${canDefer ? `<button class="sheet-item" data-action="exec-defer">⏭&nbsp;&nbsp;Machine occupée — faire plus tard</button>` : ''}
     ${exerciseName ? `<button class="sheet-item sheet-item--danger" data-action="exec-skip">✕&nbsp;&nbsp;Passer ${escapeHtml(exerciseName)}</button>` : ''}
-    <button class="sheet-item sheet-item--muted" data-action="exec-menu-close">Annuler</button>
+    ${canCancel ? '<button class="sheet-item sheet-item--danger" data-action="cancel-session">↺&nbsp;&nbsp;Annuler la séance</button>' : ''}
+    <button class="sheet-item sheet-item--muted" data-action="exec-menu-close">Fermer</button>
   </section>`;
 }
 

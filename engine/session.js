@@ -160,12 +160,161 @@ export function closeSession(session, { now = Date.now(), status = 'INCOMPLETE' 
 }
 
 /**
+ * Ce qu'effacerait l'annulation d'une séance commencée (pour le message de
+ * confirmation). Compte tout ce qui a été réellement saisi ou validé.
+ */
+export function cancelSessionSummary(session) {
+    const summary = { sets: 0, sides: 0, entries: 0, skipped: 0, warmup: false, ramps: 0, timer: !!session?.activeTimer };
+    for (const log of Object.values(session?.exercises ?? {})) {
+        if (log?.skipped)
+            summary.skipped += 1;
+        for (const set of log?.sets ?? []) {
+            if (set?.done)
+                summary.sets += 1;
+            else if (set?.sides?.left?.done || set?.sides?.right?.done)
+                summary.sides += 1;
+            else if (Number(set?.reps) > 0)
+                summary.entries += 1; // répétitions ou durée saisies (ou cardio arrêté avant la fin), non validées
+        }
+    }
+    const warmup = session?.warmup ?? {};
+    summary.warmup = !!(warmup.general?.done || warmup.general?.skipped || Object.keys(warmup.activation ?? {}).length);
+    summary.ramps = Object.keys(warmup.ramps ?? {}).length;
+    return summary;
+}
+
+/** Message de confirmation : dit exactement ce qui sera perdu, et comment le garder. */
+export function cancelSessionMessage(summary, dayName, { dateLabel = '', timerLabel = '', recalcLabel = '' } = {}) {
+    const pluriel = (n, un, plusieurs) => `${n} ${n > 1 ? plusieurs : un}`;
+    const pertes = [];
+    if (summary.sets)
+        pertes.push(pluriel(summary.sets, 'série validée', 'séries validées'));
+    if (summary.sides)
+        pertes.push(`${pluriel(summary.sides, 'série commencée', 'séries commencées')} (un côté)`);
+    if (summary.entries)
+        pertes.push(`${pluriel(summary.entries, 'saisie non validée', 'saisies non validées')} (répétitions ou durée)`);
+    if (summary.timer)
+        pertes.push(`le chrono en cours${timerLabel ? ` (${timerLabel})` : ''} : la durée déjà faite ne sera pas enregistrée`);
+    if (summary.warmup)
+        pertes.push('l’échauffement déjà fait');
+    if (summary.ramps)
+        pertes.push(pluriel(summary.ramps, 'montée en charge (charge de référence)', 'montées en charge (charges de référence)'));
+    if (summary.skipped)
+        pertes.push(pluriel(summary.skipped, 'exercice passé (redeviendra à faire)', 'exercices passés (redeviendront à faire)'));
+    const quoi = `la séance ${dayName}${dateLabel ? ` du ${dateLabel}` : ''}`;
+    if (!pertes.length)
+        return `Annuler ${quoi} ? Rien n’a été fait : elle redevient « au programme », comme si tu ne l’avais pas démarrée.`;
+    const recalcul = recalcLabel ? ` Les charges pré-remplies à partir de ces séries sur ${recalcLabel} seront recalculées sans elles (les charges que tu as choisies toi-même ne changent pas).` : '';
+    return `Annuler ${quoi} ? Seront effacés : ${pertes.join(' ; ')}.${recalcul} Pour garder ce qui a été fait, choisis plutôt « Terminer ». Annuler quand même ?`;
+}
+
+/**
+ * Peut-on « annuler » cette séance ? Seulement si elle est commencée, pas
+ * terminée, et n'a JAMAIS été enregistrée : une séance terminée puis rouverte
+ * (« Reprendre ») fait partie de l'historique et ne doit pas être effacée ainsi.
+ */
+export function canCancelSession(session) {
+    if (!session?.startedAt || session.endedAt || session.status || session.reopenedAt)
+        return false;
+    // Données anciennes : avant 3.4.1 une séance terminée n'avait pas de `status`, et
+    // avant 3.6.2 « Reprendre » ne posait pas `reopenedAt`. Une séance ouverte AVANT
+    // ce jour qui contient déjà des séries validées peut donc être une séance
+    // enregistrée puis rouverte : on ne propose pas de l'effacer (« Terminer » reste).
+    const commenceeAvantGarde = Number(session.startedAt) < LEGACY_REOPEN_GUARD_MS;
+    const dejaFaite = Object.values(session.exercises ?? {}).some((log) => (log?.sets ?? []).some((set) => set?.done || set?.sides?.left?.done || set?.sides?.right?.done));
+    return !(commenceeAvantGarde && dejaFaite);
+}
+/** 13 septembre 2026, 00:00 (heure locale) : toutes les versions en service depuis la veille posent `status`. */
+export const LEGACY_REOPEN_GUARD_MS = new Date(2026, 8, 13).getTime();
+
+/**
+ * Pré-remplissage automatique des séances futures — marque PAR SÉRIE.
+ * `log.autoSeed = { loadKg, sources: [ids des séances de l'historique utilisé], sets: [indices] }`
+ * est posé quand l'app écrit la charge prescrite ; une série dont l'utilisateur
+ * CHANGE la charge sort de la marque. Ainsi, annuler une séance ne recalcule que
+ * des charges jamais choisies à la main.
+ */
+function serieLibre(set) {
+    return !!set && !set.done && !set.sides?.left?.done && !set.sides?.right?.done;
+}
+
+/** Séries encore pré-remplies automatiquement à partir de `sessionId`, jamais retouchées. */
+export function seededSetIndices(log, sessionId) {
+    const mark = log?.autoSeed;
+    if (!mark || !Array.isArray(mark.sources) || !mark.sources.includes(sessionId) || !(Number(mark.loadKg) > 0) || !Array.isArray(mark.sets))
+        return [];
+    return mark.sets.filter((index) => {
+        const set = log.sets?.[index];
+        return serieLibre(set) && Number(set.weightKg) === Number(mark.loadKg);
+    });
+}
+
+/**
+ * Données pré-remplies AVANT l'existence de la marque : reconnues seulement si
+ * aucune série n'est faite, que TOUTES les charges posées valent la prescription
+ * calculée avec la séance annulée, et que cette prescription change sans elle.
+ * Doit être annoncé dans la confirmation avant d'agir.
+ */
+export function legacySeededSetIndices(log, loadWithKg, loadWithoutKg) {
+    const sets = log?.sets ?? [];
+    if (log?.autoSeed || !(Number(loadWithKg) > 0) || Number(loadWithKg) === Number(loadWithoutKg) || sets.some((set) => !serieLibre(set)))
+        return [];
+    const poses = sets.map((set, index) => ({ set, index })).filter(({ set }) => set.weightKg !== null && set.weightKg !== undefined);
+    if (!poses.length || poses.some(({ set }) => Number(set.weightKg) !== Number(loadWithKg)))
+        return [];
+    return poses.map(({ index }) => index);
+}
+
+/**
+ * La charge de la série `setIndex` a été choisie par l'utilisateur : nouvelle marque
+ * sans cette série. Jamais supprimée : une marque vide dit « charges choisies à la
+ * main », ce qui empêche aussi le repli des données anciennes d'y toucher.
+ */
+export function withoutSeedMark(mark, setIndex) {
+    if (!mark || !Array.isArray(mark.sets))
+        return { loadKg: 0, sources: [], sets: [] };
+    return { ...mark, sets: mark.sets.filter((index) => index !== setIndex) };
+}
+
+/**
+ * Annuler une séance commencée : elle redevient « au programme », comme si elle
+ * n'avait jamais démarré (début, échauffement, rampes, séries, « passé »,
+ * chrono, mode guidé). Sont CONSERVÉS : variantes choisies, ordre, notes, état
+ * du jour. Renvoie une nouvelle session, ne modifie pas l'originale.
+ */
+export function cancelSession(session, { now = Date.now(), createSet }) {
+    if (!session)
+        return session;
+    const exercises = {};
+    for (const [id, log] of Object.entries(session.exercises ?? {})) {
+        const { autoSeed, ...resteLog } = log ?? {};
+        exercises[id] = {
+            ...resteLog,
+            skipped: false,
+            sets: Array.from({ length: (log?.sets ?? []).length }, () => createSet()),
+        };
+    }
+    const { status, ...rest } = session;
+    return {
+        ...rest,
+        startedAt: null,
+        endedAt: null,
+        warmup: { general: { done: false, skipped: false, durationSec: 0 }, activation: {}, ramps: {} },
+        execution: { active: false, stage: null, exerciseId: null, setIndex: null, side: null, stepKey: null, updatedAt: now },
+        activeTimer: null,
+        exercises,
+        updatedAt: now,
+    };
+}
+
+/**
  * Changement de variante : l'exercice repart de zéro. Les séries faites sur
  * l'ancienne machine ne sont jamais conservées (charges et incréments diffèrent).
  */
 export function resetExerciseLogForVariant(log, variantId, setCount, createSet) {
+    const { autoSeed, ...resteLog } = log ?? {};
     return {
-        ...(log ?? {}),
+        ...resteLog,
         variantId,
         skipped: false,
         sets: Array.from({ length: Math.max(0, Number(setCount) || 0) }, () => createSet()),

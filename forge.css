@@ -422,3 +422,7 @@ h3 { font-size:18px; }
 .f-exercise-sheet .exec-meta { display:flex; flex-wrap:wrap; gap:6px; }
 .f-exercise-sheet .exec-meta span { padding:5px 8px; border-radius:8px; background:#ffffff0a; font-size:11px; }
 .f-select-row select { min-height:44px; max-width:46%; padding:8px 28px 8px 10px; }
+
+/* ---------- Annuler une séance commencée (3.6.2) ---------- */
+.f-hero-cancel { width:100%; min-height:44px; margin-top:10px; border:1px solid var(--line, #3a3f3c); border-radius:13px; background:transparent; color:inherit; font-size:14px; font-weight:650; }
+.session-actions .f-cancel-session { min-height:44px; }
