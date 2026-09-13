@@ -245,13 +245,28 @@ export function onlyAutoSeeded(log, loadKg) {
         && (set?.weightKg === null || set?.weightKg === undefined || Number(set.weightKg) === Number(loadKg)));
 }
 
+/**
+ * Exercice d'une séance future dont les charges ont été pré-remplies
+ * automatiquement À PARTIR de la séance `sessionId` et jamais retouchées depuis.
+ * La marque `log.autoSeed` est posée au pré-remplissage et retirée dès que
+ * l'utilisateur fixe une charge : une saisie manuelle n'est jamais recalculée,
+ * même si elle a la même valeur. Sans marque (données anciennes) : non.
+ */
+export function seededFromSession(log, sessionId) {
+    const mark = log?.autoSeed;
+    if (!mark || !Array.isArray(mark.sources) || !mark.sources.includes(sessionId))
+        return false;
+    return onlyAutoSeeded(log, mark.loadKg);
+}
+
 export function cancelSession(session, { now = Date.now(), createSet }) {
     if (!session)
         return session;
     const exercises = {};
     for (const [id, log] of Object.entries(session.exercises ?? {})) {
+        const { autoSeed, ...resteLog } = log ?? {};
         exercises[id] = {
-            ...log,
+            ...resteLog,
             skipped: false,
             sets: Array.from({ length: (log?.sets ?? []).length }, () => createSet()),
         };
@@ -274,8 +289,9 @@ export function cancelSession(session, { now = Date.now(), createSet }) {
  * l'ancienne machine ne sont jamais conservées (charges et incréments diffèrent).
  */
 export function resetExerciseLogForVariant(log, variantId, setCount, createSet) {
+    const { autoSeed, ...resteLog } = log ?? {};
     return {
-        ...(log ?? {}),
+        ...resteLog,
         variantId,
         skipped: false,
         sets: Array.from({ length: Math.max(0, Number(setCount) || 0) }, () => createSet()),

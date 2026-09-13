@@ -6,7 +6,7 @@ import { clearAllData, deleteSession, loadSnapshot, saveAdjustment, saveDailyLog
 import { defaultDayForDate, findDay, findExercise, getExercisePlan, getTrainingPhase, TRAINING_DAYS, STRENGTH_DAYS } from './program.js';
 import { nextPrescription, prescriptionFromHistory, suggestNextSet, summarizeSession, } from './engine/progression.js';
 import { estimateSessionDuration, remainingSessionSeconds, } from './engine/duration.js';
-import { aggregateSides, currentSide, bothSidesDone, countSessionSets, isSessionComplete as isSessionCompletePure, countCompletedStrengthSessions, weekdayOffset, targetRirForSet, isSetValid, countsForHistory, finishStatus, formatSeconds, closeSession, cancelSessionSummary, cancelSessionMessage, cancelSession, canCancelSession, onlyAutoSeeded, resetExerciseLogForVariant, timedExerciseStatus, timedExerciseActions, timedStopRequest, } from './engine/session.js';
+import { aggregateSides, currentSide, bothSidesDone, countSessionSets, isSessionComplete as isSessionCompletePure, countCompletedStrengthSessions, weekdayOffset, targetRirForSet, isSetValid, countsForHistory, finishStatus, formatSeconds, closeSession, cancelSessionSummary, cancelSessionMessage, cancelSession, canCancelSession, seededFromSession, resetExerciseLogForVariant, timedExerciseStatus, timedExerciseActions, timedStopRequest, } from './engine/session.js';
 import { analyzeWeightTrend, macrosForCalories, targetWeight, weeklyTargets, } from './engine/weight.js';
 import { analyzeRecovery, analyzeStrengthTrend, } from './engine/recovery.js';
 import { activityGoalHelp, activityGoalLabel, activityModeLabel, activityProgress, activitySummary, } from './engine/activity.js';
@@ -207,6 +207,8 @@ export class ColosseApp {
             const prescription = prescriptionFromHistory(history, plan, exercise, variant.incrementKg, recoveryAlert);
             if (prescription.loadKg > 0) {
                 log.sets.slice(0, plan.sets).forEach((set) => { set.weightKg = prescription.loadKg; });
+                // Marque additive : d'où vient ce pré-remplissage (permet de le refaire si une de ces séances est annulée).
+                log.autoSeed = { loadKg: prescription.loadKg, sources: history.map((entry) => entry.sessionId).filter(Boolean) };
             }
         });
     }
@@ -223,6 +225,7 @@ export class ColosseApp {
             if (!log.sets.some((set) => countsForHistory(set, variantDef)))
                 return [];
             return [{
+                    sessionId: session.id,
                     date: session.date,
                     weekIndex: session.weekIndex,
                     sets: log.sets,
@@ -1632,18 +1635,9 @@ export class ColosseApp {
             return;
         // Séances futures du même jour déjà pré-remplies à partir de ces séries : on repère,
         // AVANT d'annuler, les exercices qui n'ont que la charge prescrite automatiquement.
-        const recoveryAlert = analyzeRecovery(this.snapshot.dailyLogs).alert;
         const aRecalculer = this.snapshot.sessions
             .filter((item) => item.id !== session.id && item.dayId === session.dayId && item.date > session.date && !item.startedAt)
-            .map((item) => ({ item, ids: context.day.exercises.filter((exercise) => {
-                const log = item.exercises?.[exercise.id];
-                if (!log)
-                    return false;
-                const variant = exercise.variants.find((v) => v.id === log.variantId) ?? exercise.variants[0];
-                const plan = getExercisePlan(exercise, item.weekIndex);
-                const prescription = prescriptionFromHistory(this.exerciseHistory(exercise.id, log.variantId, item.date, item.id), plan, exercise, variant.incrementKg, recoveryAlert);
-                return onlyAutoSeeded(log, prescription.loadKg);
-            }).map((exercise) => exercise.id) }))
+            .map((item) => ({ item, ids: Object.keys(item.exercises ?? {}).filter((id) => seededFromSession(item.exercises[id], session.id)) }))
             .filter((entry) => entry.ids.length);
         // Seul le chrono EN MÉMOIRE de cette séance est abandonné ; celui d'une autre séance continue.
         const ownTimer = !!this.timer && (this.timer.context?.sessionId ?? session.id) === session.id;
@@ -1659,8 +1653,10 @@ export class ColosseApp {
         this.seedSessionPrescriptions(cancelled, context.day, context.date, context.weekIndex);
         await saveSession(cancelled);
         for (const { item, ids } of aRecalculer) {
-            for (const id of ids)
+            for (const id of ids) {
                 item.exercises[id].sets.forEach((set) => { set.weightKg = null; });
+                delete item.exercises[id].autoSeed;
+            }
             this.seedSessionPrescriptions(item, context.day, item.date, item.weekIndex);
             item.updatedAt = Date.now();
             await saveSession(item);
@@ -1695,8 +1691,10 @@ export class ColosseApp {
         const set = context.session.exercises[exerciseId]?.sets[setIndex];
         if (!set)
             return;
-        if (field === 'weightKg')
+        if (field === 'weightKg') {
             set.weightKg = parseNumber(rawValue);
+            delete context.session.exercises[exerciseId].autoSeed; // charge choisie par l'utilisateur
+        }
         else if (field === 'reps')
             set.reps = parseInteger(rawValue);
         else if (field === 'rir')
@@ -1823,6 +1821,7 @@ export class ColosseApp {
         if (!set)
             return;
         set.weightKg = loadKg;
+        delete context.session.exercises[exerciseId].autoSeed; // charge choisie par l'utilisateur
         context.session.updatedAt = Date.now();
         await saveSession(context.session);
         this.render();

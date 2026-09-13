@@ -549,7 +549,7 @@ async function scenario(nom, fn) {
     return 'Push A annulée ; repos de Pull A toujours affiché et enregistré ; message « Pull A … est encore en cours »';
   });
 
-  await scenario('S16 Annuler un test ne laisse pas de charges « de test » sur la même séance de la semaine suivante', async ({ page }) => {
+  await scenario('S16 Annuler un test : charges « de test » de la semaine suivante recalculées, même si le test a continué ; saisie manuelle jamais écrasée', async ({ page }) => {
     // Historique réel de test : Pull A du 31 août, 80 kg sur les deux premiers exercices.
     await allerJour(page, 'pull-a');
     const ids = await page.evaluate(async () => {
@@ -564,31 +564,42 @@ async function scenario(nom, fn) {
       db.close(); return [a, b];
     });
     await page.reload({ waitUntil: 'load' }); await wait(2200);
-    // Test : Pull A de cette semaine, une série à 20 kg × 12 sur le 1er exercice
+    const passerRepos = async () => { await page.evaluate(() => document.querySelector('.timer-overlay [data-action="timer-skip"]')?.click()); await wait(400); };
+    // Test : Pull A de cette semaine, une série à 20 kg × 12 sur chacun des deux exercices
     await allerJour(page, 'pull-a'); await page.evaluate(() => window.scrollTo(0, 0)); await toucher(page, '[data-action="start-session"]');
-    await jusquASerie(page, { reference: '20' }); await saisirEtValider(page, { kg: 20, reps: 12 });
-    await page.evaluate(() => document.querySelector('.timer-overlay [data-action="timer-skip"]')?.click()); await wait(400);
+    await jusquASerie(page, { reference: '20' }); await saisirEtValider(page, { kg: 20, reps: 12 }); await passerRepos();
+    await toucher(page, '.f-exec-tools [data-action="exec-show-program"]');
+    await toucher(page, `[data-exercise-card="${ids[1]}"] [data-action="exercise-do-now"]`);
+    await jusquASerie(page, { reference: '20' }); await saisirEtValider(page, { kg: 20, reps: 12 }); await passerRepos();
     const test = await seanceDu(page, 'pull-a');
-    // Semaine suivante : Pull A pré-remplie à partir du test ; on tape une charge à la main sur le 2e exercice
+    // Semaine suivante : pré-remplie à partir du test
     await toucher(page, '.f-exec-tools [data-action="exec-show-program"]');
     await page.evaluate(() => window.scrollTo(0, 0)); await toucher(page, '[data-action="week-next"]');
     const sessions = async () => (await lireBase(page)).sessions;
     const futurId = (await sessions()).map((x) => x.id).filter((id) => id.endsWith(':pull-a') && id > test.id).sort()[0];
     attendu(futurId, 'séance de la semaine suivante non créée');
     let futur = (await sessions()).find((x) => x.id === futurId);
-    const avantCharges = futur.exercises[ids[0]].sets.map((x) => x.weightKg);
+    const avant0 = futur.exercises[ids[0]].sets.map((x) => x.weightKg), avant1 = futur.exercises[ids[1]].sets.map((x) => x.weightKg);
+    attendu(avant0[0] < 70 && avant1[0] < 70, 'pré-remplissage non issu du test : ' + JSON.stringify([avant0, avant1]));
+    // L'utilisateur tape lui-même, sur le 2e exercice, la MÊME valeur que la charge proposée
     await toucher(page, `[data-exercise-card="${ids[1]}"] details.f-exercise-detail > summary`);
-    await page.fill(`[data-set-row][data-exercise="${ids[1]}"][data-set="0"] [data-set-field="weightKg"]`, '33');
-    await page.evaluate((id) => { const el = document.querySelector(`[data-set-row][data-exercise="${id}"][data-set="0"] [data-set-field="weightKg"]`); el.dispatchEvent(new Event('change', { bubbles: true })); }, ids[1]); await wait(600);
-    // Retour à la semaine du test et annulation
+    const champ = `[data-set-row][data-exercise="${ids[1]}"][data-set="0"] [data-set-field="weightKg"]`;
+    await page.fill(champ, String(avant1[0]));
+    await page.evaluate((sel) => document.querySelector(sel).dispatchEvent(new Event('change', { bubbles: true })), champ); await wait(600);
+    // Le test continue APRÈS ce pré-remplissage : une 2e série sur le 1er exercice
     await page.evaluate(() => window.scrollTo(0, 0)); await toucher(page, '[data-action="week-prev"]');
+    await toucher(page, `[data-exercise-card="${ids[0]}"] [data-action="exercise-do-now"]`);
+    if (!(await page.evaluate(() => !!document.querySelector('.execution')))) { await page.evaluate(() => window.scrollTo(0, 0)); await toucher(page, '[data-action="exec-enter"]'); }
+    await jusquASerie(page, { reference: '20' }); await saisirEtValider(page, { kg: 20, reps: 12 }); await passerRepos();
+    attendu((await seanceDu(page, 'pull-a')).exercises[ids[0]].sets.filter((x) => x.done).length === 2, 'la 2e série du test n’a pas été validée');
+    // Annulation du test
+    await toucher(page, '.f-exec-tools [data-action="exec-show-program"]');
     await page.evaluate(() => window.scrollTo(0, 0)); await toucher(page, '.session-actions [data-action="cancel-session"]');
     futur = (await sessions()).find((x) => x.id === futurId);
-    const apres = futur.exercises[ids[0]].sets.map((x) => x.weightKg);
-    const manuel = futur.exercises[ids[1]].sets[0].weightKg;
-    attendu(apres.every((kg) => kg >= 70), `charges de la semaine suivante encore issues du test : avant ${JSON.stringify(avantCharges)} → après ${JSON.stringify(apres)}`);
-    attendu(manuel === 33, 'la charge tapée à la main a été écrasée : ' + manuel);
-    return `semaine suivante : ${JSON.stringify(avantCharges)} (issues du test) → ${JSON.stringify(apres)} (historique réel 80 kg) ; charge tapée à la main (33 kg) conservée`;
+    const apres0 = futur.exercises[ids[0]].sets.map((x) => x.weightKg), apres1 = futur.exercises[ids[1]].sets.map((x) => x.weightKg);
+    attendu(apres0.every((kg) => kg >= 70), `1er exercice : charges encore issues du test : ${JSON.stringify(avant0)} → ${JSON.stringify(apres0)}`);
+    attendu(apres1[0] === avant1[0], `2e exercice : la charge tapée à la main a été écrasée : ${JSON.stringify(avant1)} → ${JSON.stringify(apres1)}`);
+    return `1er exercice ${JSON.stringify(avant0)} → ${JSON.stringify(apres0)} (test poursuivi après le pré-remplissage) ; 2e exercice : saisie manuelle ${avant1[0]} kg conservée`;
   });
 
   console.log('\nRESUME ' + JSON.stringify({ total: resultats.length, ok: resultats.filter((r) => r.ok).length }));

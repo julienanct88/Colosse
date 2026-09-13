@@ -408,3 +408,20 @@ test('Annuler : durée du chrono exacte après pause/reprise ; anciennes séance
     assert.equal(onlyAutoSeeded(log([{ weightKg: 22.5, reps: null, done: true }]), 22.5), false, 'série faite');
     assert.equal(onlyAutoSeeded(log([{ weightKg: 22.5, reps: null, done: false }]), 0), false, 'pas de prescription');
 });
+
+test('Pré-remplissage marqué : recalculé seulement s’il vient de la séance annulée et n’a pas été retouché', async () => {
+    const { seededFromSession, cancelSession, resetExerciseLogForVariant } = await import('../engine/session.js');
+    const { makeSet } = await import('../defaults.js');
+    const log = (weights, extra = {}) => ({ variantId: 'v', sets: weights.map((w) => ({ ...makeSet(), weightKg: w })), ...extra });
+    const marque = { autoSeed: { loadKg: 40, sources: ['2026-08-31:pull-a', '2026-09-14:pull-a'] } };
+    assert.equal(seededFromSession(log([40, 40, 40], marque), '2026-09-14:pull-a'), true);
+    assert.equal(seededFromSession(log([40, 40, 40], marque), '2026-09-07:pull-a'), false, 'autre séance source');
+    assert.equal(seededFromSession(log([40, 40, 40]), '2026-09-14:pull-a'), false, 'sans marque (données anciennes ou saisie manuelle)');
+    assert.equal(seededFromSession(log([40, 42.5, 40], marque), '2026-09-14:pull-a'), false, 'charge modifiée');
+    const tape = log([40, 40, 40], marque); tape.sets[0].reps = 8;
+    assert.equal(seededFromSession(tape, '2026-09-14:pull-a'), false, 'répétitions saisies');
+    // La marque disparaît quand le log repart de zéro
+    assert.equal('autoSeed' in resetExerciseLogForVariant(log([40], marque), 'autre', 3, makeSet), false);
+    const s = seance('pull-a'); const id = s.exerciseOrder[0]; s.startedAt = 1; s.exercises[id].autoSeed = marque.autoSeed;
+    assert.equal('autoSeed' in cancelSession(s, { now: 2, createSet: makeSet }).exercises[id], false);
+});
