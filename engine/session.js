@@ -184,7 +184,7 @@ export function cancelSessionSummary(session) {
 }
 
 /** Message de confirmation : dit exactement ce qui sera perdu, et comment le garder. */
-export function cancelSessionMessage(summary, dayName, { dateLabel = '', timerLabel = '' } = {}) {
+export function cancelSessionMessage(summary, dayName, { dateLabel = '', timerLabel = '', recalcLabel = '' } = {}) {
     const pluriel = (n, un, plusieurs) => `${n} ${n > 1 ? plusieurs : un}`;
     const pertes = [];
     if (summary.sets)
@@ -204,7 +204,8 @@ export function cancelSessionMessage(summary, dayName, { dateLabel = '', timerLa
     const quoi = `la séance ${dayName}${dateLabel ? ` du ${dateLabel}` : ''}`;
     if (!pertes.length)
         return `Annuler ${quoi} ? Rien n’a été fait : elle redevient « au programme », comme si tu ne l’avais pas démarrée.`;
-    return `Annuler ${quoi} ? Seront effacés : ${pertes.join(' ; ')}. Pour garder ce qui a été fait, choisis plutôt « Terminer ». Annuler quand même ?`;
+    const recalcul = recalcLabel ? ` Les charges pré-remplies à partir de ces séries sur ${recalcLabel} seront recalculées sans elles (les charges que tu as choisies toi-même ne changent pas).` : '';
+    return `Annuler ${quoi} ? Seront effacés : ${pertes.join(' ; ')}.${recalcul} Pour garder ce qui a été fait, choisis plutôt « Terminer ». Annuler quand même ?`;
 }
 
 /**
@@ -227,38 +228,60 @@ export function canCancelSession(session) {
 export const LEGACY_REOPEN_GUARD_MS = new Date(2026, 8, 13).getTime();
 
 /**
+ * Pré-remplissage automatique des séances futures — marque PAR SÉRIE.
+ * `log.autoSeed = { loadKg, sources: [ids des séances de l'historique utilisé], sets: [indices] }`
+ * est posé quand l'app écrit la charge prescrite ; une série dont l'utilisateur
+ * CHANGE la charge sort de la marque. Ainsi, annuler une séance ne recalcule que
+ * des charges jamais choisies à la main.
+ */
+function serieLibre(set) {
+    return !!set && !set.done && !set.sides?.left?.done && !set.sides?.right?.done;
+}
+
+/** Séries encore pré-remplies automatiquement à partir de `sessionId`, jamais retouchées. */
+export function seededSetIndices(log, sessionId) {
+    const mark = log?.autoSeed;
+    if (!mark || !Array.isArray(mark.sources) || !mark.sources.includes(sessionId) || !(Number(mark.loadKg) > 0) || !Array.isArray(mark.sets))
+        return [];
+    return mark.sets.filter((index) => {
+        const set = log.sets?.[index];
+        return serieLibre(set) && Number(set.weightKg) === Number(mark.loadKg);
+    });
+}
+
+/**
+ * Données pré-remplies AVANT l'existence de la marque : reconnues seulement si
+ * aucune série n'est faite, que TOUTES les charges posées valent la prescription
+ * calculée avec la séance annulée, et que cette prescription change sans elle.
+ * Doit être annoncé dans la confirmation avant d'agir.
+ */
+export function legacySeededSetIndices(log, loadWithKg, loadWithoutKg) {
+    const sets = log?.sets ?? [];
+    if (log?.autoSeed || !(Number(loadWithKg) > 0) || Number(loadWithKg) === Number(loadWithoutKg) || sets.some((set) => !serieLibre(set)))
+        return [];
+    const poses = sets.map((set, index) => ({ set, index })).filter(({ set }) => set.weightKg !== null && set.weightKg !== undefined);
+    if (!poses.length || poses.some(({ set }) => Number(set.weightKg) !== Number(loadWithKg)))
+        return [];
+    return poses.map(({ index }) => index);
+}
+
+/**
+ * La charge de la série `setIndex` a été choisie par l'utilisateur : nouvelle marque
+ * sans cette série. Jamais supprimée : une marque vide dit « charges choisies à la
+ * main », ce qui empêche aussi le repli des données anciennes d'y toucher.
+ */
+export function withoutSeedMark(mark, setIndex) {
+    if (!mark || !Array.isArray(mark.sets))
+        return { loadKg: 0, sources: [], sets: [] };
+    return { ...mark, sets: mark.sets.filter((index) => index !== setIndex) };
+}
+
+/**
  * Annuler une séance commencée : elle redevient « au programme », comme si elle
  * n'avait jamais démarré (début, échauffement, rampes, séries, « passé »,
  * chrono, mode guidé). Sont CONSERVÉS : variantes choisies, ordre, notes, état
  * du jour. Renvoie une nouvelle session, ne modifie pas l'originale.
  */
-/**
- * Un exercice d'une séance FUTURE jamais démarrée n'a-t-il reçu que le
- * pré-remplissage automatique (charge prescrite `loadKg`) ? Si l'utilisateur a
- * tapé quoi que ce soit (autre charge, répétitions, série), la réponse est non.
- */
-export function onlyAutoSeeded(log, loadKg) {
-    const sets = log?.sets ?? [];
-    if (!(Number(loadKg) > 0) || !sets.some((set) => set?.weightKg !== null && set?.weightKg !== undefined))
-        return false;
-    return sets.every((set) => !set?.done && (set?.reps === null || set?.reps === undefined) && !set?.sides
-        && (set?.weightKg === null || set?.weightKg === undefined || Number(set.weightKg) === Number(loadKg)));
-}
-
-/**
- * Exercice d'une séance future dont les charges ont été pré-remplies
- * automatiquement À PARTIR de la séance `sessionId` et jamais retouchées depuis.
- * La marque `log.autoSeed` est posée au pré-remplissage et retirée dès que
- * l'utilisateur fixe une charge : une saisie manuelle n'est jamais recalculée,
- * même si elle a la même valeur. Sans marque (données anciennes) : non.
- */
-export function seededFromSession(log, sessionId) {
-    const mark = log?.autoSeed;
-    if (!mark || !Array.isArray(mark.sources) || !mark.sources.includes(sessionId))
-        return false;
-    return onlyAutoSeeded(log, mark.loadKg);
-}
-
 export function cancelSession(session, { now = Date.now(), createSet }) {
     if (!session)
         return session;

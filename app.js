@@ -6,7 +6,7 @@ import { clearAllData, deleteSession, loadSnapshot, saveAdjustment, saveDailyLog
 import { defaultDayForDate, findDay, findExercise, getExercisePlan, getTrainingPhase, TRAINING_DAYS, STRENGTH_DAYS } from './program.js';
 import { nextPrescription, prescriptionFromHistory, suggestNextSet, summarizeSession, } from './engine/progression.js';
 import { estimateSessionDuration, remainingSessionSeconds, } from './engine/duration.js';
-import { aggregateSides, currentSide, bothSidesDone, countSessionSets, isSessionComplete as isSessionCompletePure, countCompletedStrengthSessions, weekdayOffset, targetRirForSet, isSetValid, countsForHistory, finishStatus, formatSeconds, closeSession, cancelSessionSummary, cancelSessionMessage, cancelSession, canCancelSession, seededFromSession, resetExerciseLogForVariant, timedExerciseStatus, timedExerciseActions, timedStopRequest, } from './engine/session.js';
+import { aggregateSides, currentSide, bothSidesDone, countSessionSets, isSessionComplete as isSessionCompletePure, countCompletedStrengthSessions, weekdayOffset, targetRirForSet, isSetValid, countsForHistory, finishStatus, formatSeconds, closeSession, cancelSessionSummary, cancelSessionMessage, cancelSession, canCancelSession, seededSetIndices, legacySeededSetIndices, withoutSeedMark, resetExerciseLogForVariant, timedExerciseStatus, timedExerciseActions, timedStopRequest, } from './engine/session.js';
 import { analyzeWeightTrend, macrosForCalories, targetWeight, weeklyTargets, } from './engine/weight.js';
 import { analyzeRecovery, analyzeStrengthTrend, } from './engine/recovery.js';
 import { activityGoalHelp, activityGoalLabel, activityModeLabel, activityProgress, activitySummary, } from './engine/activity.js';
@@ -208,7 +208,7 @@ export class ColosseApp {
             if (prescription.loadKg > 0) {
                 log.sets.slice(0, plan.sets).forEach((set) => { set.weightKg = prescription.loadKg; });
                 // Marque additive : d'où vient ce pré-remplissage (permet de le refaire si une de ces séances est annulée).
-                log.autoSeed = { loadKg: prescription.loadKg, sources: history.map((entry) => entry.sessionId).filter(Boolean) };
+                log.autoSeed = { loadKg: prescription.loadKg, sources: history.map((entry) => entry.sessionId).filter(Boolean), sets: log.sets.slice(0, plan.sets).map((_, index) => index) };
             }
         });
     }
@@ -1631,14 +1631,12 @@ export class ColosseApp {
         }
         const dateLabel = formatDateFr(context.date, { weekday: 'long', day: 'numeric', month: 'long' });
         const chronoLabel = session.activeTimer ? `${session.activeTimer.label ?? 'chrono'}, ${formatClock(elapsedSeconds(session.activeTimer, Date.now()))} déjà faites${session.activeTimer.paused ? ', en pause' : ''}` : '';
-        if (!confirm(cancelSessionMessage(cancelSessionSummary(session), context.day.name, { dateLabel, timerLabel: chronoLabel })))
+        // Séances futures du même jour pré-remplies à partir de ces séries : repérées AVANT
+        // d'annuler (l'historique contient encore la séance) et annoncées dans la confirmation.
+        const aRecalculer = this.futureSeedsFrom(session, context.day);
+        const recalcLabel = aRecalculer.map(({ item }) => `${context.day.name} du ${formatDateFr(item.date, { weekday: 'long', day: 'numeric', month: 'long' })}`).join(', ');
+        if (!confirm(cancelSessionMessage(cancelSessionSummary(session), context.day.name, { dateLabel, timerLabel: chronoLabel, recalcLabel })))
             return;
-        // Séances futures du même jour déjà pré-remplies à partir de ces séries : on repère,
-        // AVANT d'annuler, les exercices qui n'ont que la charge prescrite automatiquement.
-        const aRecalculer = this.snapshot.sessions
-            .filter((item) => item.id !== session.id && item.dayId === session.dayId && item.date > session.date && !item.startedAt)
-            .map((item) => ({ item, ids: Object.keys(item.exercises ?? {}).filter((id) => seededFromSession(item.exercises[id], session.id)) }))
-            .filter((entry) => entry.ids.length);
         // Seul le chrono EN MÉMOIRE de cette séance est abandonné ; celui d'une autre séance continue.
         const ownTimer = !!this.timer && (this.timer.context?.sessionId ?? session.id) === session.id;
         const cancelled = cancelSession(session, { now: Date.now(), createSet: makeSet });
@@ -1652,12 +1650,9 @@ export class ColosseApp {
         // Charges prescrites remises comme pour une séance jamais démarrée.
         this.seedSessionPrescriptions(cancelled, context.day, context.date, context.weekIndex);
         await saveSession(cancelled);
-        for (const { item, ids } of aRecalculer) {
-            for (const id of ids) {
-                item.exercises[id].sets.forEach((set) => { set.weightKg = null; });
-                delete item.exercises[id].autoSeed;
-            }
-            this.seedSessionPrescriptions(item, context.day, item.date, item.weekIndex);
+        for (const { item, exercices } of aRecalculer) {
+            for (const { id, indices } of exercices)
+                this.reseedFutureSets(item, context.day, id, indices);
             item.updatedAt = Date.now();
             await saveSession(item);
         }
@@ -1678,22 +1673,83 @@ export class ColosseApp {
             ? `Séance ${context.day.name} annulée. Attention : ${findDay(autre.dayId)?.name ?? 'une autre séance'} du ${formatDateFr(autre.date, { weekday: 'long', day: 'numeric', month: 'long' })} est encore en cours.`
             : `Séance ${context.day.name} annulée : elle redevient au programme.`, autre ? 'info' : 'success', autre ? 8000 : 5000);
     }
+    unmarkSeededSet(log, setIndex) {
+        if (log)
+            log.autoSeed = withoutSeedMark(log.autoSeed, setIndex);
+    }
+    /** Séances futures du même jour pré-remplies à partir de la séance `session` (avant annulation). */
+    futureSeedsFrom(session, day) {
+        const recoveryAlert = analyzeRecovery(this.snapshot.dailyLogs).alert;
+        return this.snapshot.sessions
+            .filter((item) => item.id !== session.id && item.dayId === session.dayId && item.date > session.date && !item.startedAt)
+            .map((item) => {
+            const exercices = [];
+            let anciens = false;
+            for (const exercise of day.exercises) {
+                const log = item.exercises?.[exercise.id];
+                if (!log)
+                    continue;
+                const marquees = seededSetIndices(log, session.id);
+                if (marquees.length) {
+                    exercices.push({ id: exercise.id, indices: marquees });
+                    continue;
+                }
+                if (log.autoSeed)
+                    continue;
+                const variant = exercise.variants.find((v) => v.id === log.variantId) ?? exercise.variants[0];
+                const plan = getExercisePlan(exercise, item.weekIndex);
+                const avec = this.exerciseHistory(exercise.id, log.variantId, item.date, item.id);
+                if (!avec.some((entry) => entry.sessionId === session.id))
+                    continue;
+                const sans = avec.filter((entry) => entry.sessionId !== session.id);
+                const indices = legacySeededSetIndices(log,
+                    prescriptionFromHistory(avec, plan, exercise, variant.incrementKg, recoveryAlert).loadKg,
+                    prescriptionFromHistory(sans, plan, exercise, variant.incrementKg, recoveryAlert).loadKg);
+                if (indices.length) {
+                    exercices.push({ id: exercise.id, indices });
+                    anciens = true;
+                }
+            }
+            return { item, exercices, anciens };
+        })
+            .filter((entry) => entry.exercices.length);
+    }
+    /** Recalcule, SANS la séance annulée, uniquement les séries repérées. */
+    reseedFutureSets(item, day, exerciseId, indices) {
+        const exercise = day.exercises.find((ex) => ex.id === exerciseId);
+        const log = item.exercises?.[exerciseId];
+        if (!exercise || !log)
+            return;
+        const variant = exercise.variants.find((v) => v.id === log.variantId) ?? exercise.variants[0];
+        const plan = getExercisePlan(exercise, item.weekIndex);
+        const history = this.exerciseHistory(exerciseId, log.variantId, item.date, item.id);
+        const prescription = prescriptionFromHistory(history, plan, exercise, variant.incrementKg, analyzeRecovery(this.snapshot.dailyLogs).alert);
+        indices.forEach((index) => { if (log.sets[index]) log.sets[index].weightKg = prescription.loadKg > 0 ? prescription.loadKg : null; });
+        log.autoSeed = prescription.loadKg > 0
+            ? { loadKg: prescription.loadKg, sources: history.map((entry) => entry.sessionId).filter(Boolean), sets: [...indices] }
+            : { loadKg: 0, sources: [], sets: [] };
+    }
     readSetRow(exerciseId, setIndex) {
         const row = this.root.querySelector(`[data-set-row][data-exercise="${CSS.escape(exerciseId)}"][data-set="${setIndex}"]`);
         if (!row)
             return;
         row.querySelectorAll('[data-set-field]').forEach((field) => {
-            this.updateSetField(exerciseId, setIndex, field.dataset.setField, field.value);
+            this.updateSetField(exerciseId, setIndex, field.dataset.setField, field.value, { explicit: false });
         });
     }
-    updateSetField(exerciseId, setIndex, field, rawValue) {
+    /** `explicit` : saisie de l'utilisateur dans le champ ; false quand l'app relit les valeurs affichées (validation). */
+    updateSetField(exerciseId, setIndex, field, rawValue, { explicit = true } = {}) {
         const context = this.currentContext();
         const set = context.session.exercises[exerciseId]?.sets[setIndex];
         if (!set)
             return;
         if (field === 'weightKg') {
-            set.weightKg = parseNumber(rawValue);
-            delete context.session.exercises[exerciseId].autoSeed; // charge choisie par l'utilisateur
+            const value = parseNumber(rawValue);
+            // Charge choisie par l'utilisateur (même valeur retapée) : plus jamais recalculée.
+            // Une simple relecture de la valeur affichée ne compte pas comme un choix.
+            if (explicit || value !== set.weightKg)
+                this.unmarkSeededSet(context.session.exercises[exerciseId], setIndex);
+            set.weightKg = value;
         }
         else if (field === 'reps')
             set.reps = parseInteger(rawValue);
@@ -1820,8 +1876,9 @@ export class ColosseApp {
         const set = context.session.exercises[exerciseId]?.sets[setIndex];
         if (!set)
             return;
+        if (set.weightKg !== loadKg)
+            this.unmarkSeededSet(context.session.exercises[exerciseId], setIndex); // charge choisie par l'utilisateur
         set.weightKg = loadKg;
-        delete context.session.exercises[exerciseId].autoSeed; // charge choisie par l'utilisateur
         context.session.updatedAt = Date.now();
         await saveSession(context.session);
         this.render();

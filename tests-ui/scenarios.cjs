@@ -549,7 +549,7 @@ async function scenario(nom, fn) {
     return 'Push A annulée ; repos de Pull A toujours affiché et enregistré ; message « Pull A … est encore en cours »';
   });
 
-  await scenario('S16 Annuler un test : charges « de test » de la semaine suivante recalculées, même si le test a continué ; saisie manuelle jamais écrasée', async ({ page }) => {
+  await scenario('S16 Annuler un test : charges « de test » de la semaine suivante recalculées série par série ; saisie manuelle jamais écrasée', async ({ page }) => {
     // Historique réel de test : Pull A du 31 août, 80 kg sur les deux premiers exercices.
     await allerJour(page, 'pull-a');
     const ids = await page.evaluate(async () => {
@@ -586,6 +586,10 @@ async function scenario(nom, fn) {
     const champ = `[data-set-row][data-exercise="${ids[1]}"][data-set="0"] [data-set-field="weightKg"]`;
     await page.fill(champ, String(avant1[0]));
     await page.evaluate((sel) => document.querySelector(sel).dispatchEvent(new Event('change', { bubbles: true })), champ); await wait(600);
+    // Sur le 1er exercice de la semaine suivante : « Valider » sans répétitions (refusé, charge inchangée)
+    await toucher(page, `[data-exercise-card="${ids[0]}"] details.f-exercise-detail > summary`);
+    await toucher(page, `[data-action="toggle-set"][data-exercise="${ids[0]}"][data-set="0"]`);
+    attendu(!(await sessions()).find((x) => x.id === futurId).startedAt, '« Valider » sans répétitions a démarré la séance future');
     // Le test continue APRÈS ce pré-remplissage : une 2e série sur le 1er exercice
     await page.evaluate(() => window.scrollTo(0, 0)); await toucher(page, '[data-action="week-prev"]');
     await toucher(page, `[data-exercise-card="${ids[0]}"] [data-action="exercise-do-now"]`);
@@ -599,7 +603,51 @@ async function scenario(nom, fn) {
     const apres0 = futur.exercises[ids[0]].sets.map((x) => x.weightKg), apres1 = futur.exercises[ids[1]].sets.map((x) => x.weightKg);
     attendu(apres0.every((kg) => kg >= 70), `1er exercice : charges encore issues du test : ${JSON.stringify(avant0)} → ${JSON.stringify(apres0)}`);
     attendu(apres1[0] === avant1[0], `2e exercice : la charge tapée à la main a été écrasée : ${JSON.stringify(avant1)} → ${JSON.stringify(apres1)}`);
-    return `1er exercice ${JSON.stringify(avant0)} → ${JSON.stringify(apres0)} (test poursuivi après le pré-remplissage) ; 2e exercice : saisie manuelle ${avant1[0]} kg conservée`;
+    attendu(apres1.slice(1).every((kg) => kg >= 70), `2e exercice : les séries non retouchées gardent la charge du test : ${JSON.stringify(apres1)}`);
+    return `1er exercice ${JSON.stringify(avant0)} → ${JSON.stringify(apres0)} (test poursuivi, « Valider » sans reps) ; 2e exercice ${JSON.stringify(avant1)} → ${JSON.stringify(apres1)} (série 1 choisie à la main conservée)`;
+  });
+
+  await scenario('S17 Pré-remplissage fait avant la mise à jour (sans marque) : annoncé dans la confirmation puis recalculé', async ({ page, dialoguesVus }) => {
+    await allerJour(page, 'pull-a');
+    const premier = await page.evaluate(async () => {
+      const db = await new Promise((res) => { const x = indexedDB.open('colosse-adaptive-db'); x.onsuccess = () => res(x.result); });
+      const tous = await new Promise((r) => { const g = db.transaction('sessions').objectStore('sessions').getAll(); g.onsuccess = () => r(g.result); });
+      const passe = JSON.parse(JSON.stringify(tous.find((x) => x.dayId === 'pull-a')));
+      passe.id = '2026-08-31:pull-a'; passe.date = '2026-08-31'; passe.startedAt = Date.parse('2026-08-31T18:00:00'); passe.endedAt = passe.startedAt + 3600e3; passe.status = 'COMPLETE';
+      const a = passe.exerciseOrder[0];
+      passe.exercises[a].sets.forEach((set) => Object.assign(set, { done: true, weightKg: 80, reps: 8, rir: 2, technique: 'good', pain: 0, completedAt: passe.startedAt + 600e3 }));
+      await new Promise((r) => { const t = db.transaction('sessions', 'readwrite'); t.objectStore('sessions').put(passe); t.oncomplete = r; });
+      db.close(); return a;
+    });
+    await page.reload({ waitUntil: 'load' }); await wait(2200);
+    await allerJour(page, 'pull-a'); await page.evaluate(() => window.scrollTo(0, 0)); await toucher(page, '[data-action="start-session"]');
+    await jusquASerie(page, { reference: '20' }); await saisirEtValider(page, { kg: 20, reps: 12 });
+    await page.evaluate(() => document.querySelector('.timer-overlay [data-action="timer-skip"]')?.click()); await wait(400);
+    const test = await seanceDu(page, 'pull-a');
+    await toucher(page, '.f-exec-tools [data-action="exec-show-program"]');
+    await page.evaluate(() => window.scrollTo(0, 0)); await toucher(page, '[data-action="week-next"]');
+    // Simule une séance pré-remplie par la version précédente : on retire la marque en base
+    const futurId = await page.evaluate(async (testId) => {
+      const db = await new Promise((res) => { const x = indexedDB.open('colosse-adaptive-db'); x.onsuccess = () => res(x.result); });
+      const tous = await new Promise((r) => { const g = db.transaction('sessions').objectStore('sessions').getAll(); g.onsuccess = () => r(g.result); });
+      const futur = tous.filter((x) => x.dayId === 'pull-a' && x.id > testId).sort((a, b) => a.id.localeCompare(b.id))[0];
+      for (const log of Object.values(futur.exercises)) delete log.autoSeed;
+      await new Promise((r) => { const t = db.transaction('sessions', 'readwrite'); t.objectStore('sessions').put(futur); t.oncomplete = r; });
+      db.close(); return futur.id;
+    }, test.id);
+    await page.reload({ waitUntil: 'load' }); await wait(2500);
+    let futur = (await lireBase(page)).sessions.find((x) => x.id === futurId);
+    const avant = futur.exercises[premier].sets.map((x) => x.weightKg);
+    attendu(avant[0] < 70 && !futur.exercises[premier].autoSeed, 'état ancien non reproduit : ' + JSON.stringify(avant));
+    await allerJour(page, 'pull-a');
+    await page.evaluate(() => window.scrollTo(0, 0));
+    if (await page.evaluate((id) => !document.querySelector('.session-actions [data-action="cancel-session"]'), null)) await toucher(page, '[data-action="week-prev"]');
+    await page.evaluate(() => window.scrollTo(0, 0)); await toucher(page, '.session-actions [data-action="cancel-session"]');
+    attendu(/seront recalculées/.test(dialoguesVus.at(-1) ?? ''), 'recalcul non annoncé : ' + dialoguesVus.at(-1));
+    futur = (await lireBase(page)).sessions.find((x) => x.id === futurId);
+    const apres = futur.exercises[premier].sets.map((x) => x.weightKg);
+    attendu(apres.every((kg) => kg >= 70), `charges anciennes non recalculées : ${JSON.stringify(avant)} → ${JSON.stringify(apres)}`);
+    return `sans marque : ${JSON.stringify(avant)} → ${JSON.stringify(apres)}, recalcul annoncé dans la confirmation`;
   });
 
   console.log('\nRESUME ' + JSON.stringify({ total: resultats.length, ok: resultats.filter((r) => r.ok).length }));
