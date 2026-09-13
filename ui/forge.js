@@ -74,6 +74,7 @@ export function renderForgeHome(app) {
       <h2>${escapeHtml(day.name)}</h2><p>${escapeHtml(day.focus)}</p>
       <div class="f-hero-metrics"><span>${icon('clock')} ${escapeHtml(plan.targetLabel??`${plan.minutes} min`)}</span><span>${icon('barbell')} ${day.exercises.length} exercices</span></div>
       <button class="f-cta" data-action="${active?'forge-resume':'forge-open'}" ${active?'':'data-tab="training"'}><span>${active?'Reprendre la séance':session.endedAt?'Voir ma séance':'Préparer ma séance'}</span>${icon('arrow')}</button>
+      ${active?'<button class="f-hero-cancel" data-action="cancel-session">↺ Annuler cette séance</button>':''}
       <div class="f-hero-foot"><span>Semaine ${weekIndex} <b>·</b> ${escapeHtml(phase.name)}</span>${sets.done?`<span>${sets.done}/${sets.total} séries</span>`:''}</div>
     </section>
     ${renderForgeWeek(app,c)}

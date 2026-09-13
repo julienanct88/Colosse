@@ -72,3 +72,13 @@ export function pruneStoredDrafts(storage, liveSessionIds, now = Date.now()) {
         ecrire(storage, apres);
     return apres;
 }
+
+/** Supprime tous les brouillons d'UNE séance (annulation) ; les autres séances sont intactes. */
+export function removeSessionDrafts(storage, sessionId) {
+    const map = lire(storage);
+    const prefixe = `${sessionId}:`;
+    const restants = Object.fromEntries(Object.entries(map).filter(([key]) => !key.startsWith(prefixe)));
+    if (Object.keys(restants).length === Object.keys(map).length)
+        return false;
+    return ecrire(storage, restants);
+}

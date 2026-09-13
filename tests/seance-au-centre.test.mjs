@@ -296,3 +296,61 @@ test('Variante affichée en français, sans répétition du matériel ni du nom'
         for (const ex of findDay(d).exercises)
             for (const v of ex.variants ?? []) assert.doesNotMatch(variantDisplay(v), /dumbbell|barbell|cable/, `${ex.id}/${v.id}`);
 });
+
+// ---------------------------------------------------------------- 3.6.2 : annuler une séance commencée
+
+test('Annuler une séance : elle redevient au programme, variantes/ordre/notes conservés, original intact', async () => {
+    const { cancelSession, cancelSessionSummary, cancelSessionMessage } = await import('../engine/session.js');
+    const { makeSet } = await import('../defaults.js');
+    const s = seance('legs-a', { setsFaits: { 'legs-a-hack': 2 } });
+    s.date = '2026-09-14'; s.startedAt = 1_000; s.status = 'INCOMPLETE'; s.notes = 'genou ok'; s.readiness = { energy: 4, fatigue: 1, sleepHours: 7 };
+    s.exercises['legs-a-press'].variantId = 'autre-variante'; s.exercises['legs-a-press'].skipped = true;
+    s.exercises['legs-a-bulgarian'].sets[0].sides = { left: { done: true, reps: 12 } };
+    s.warmup.ramps = { 'legs-a-hack': { referenceLoadKg: 100, done: [true] } };
+    s.exerciseOrder = [...s.exerciseOrder].reverse(); s.orderCustomized = true;
+    s.activeTimer = createTimer('work-rest', 120, { exerciseId: 'legs-a-hack', setIndex: 1, sessionId: s.id }, 0);
+    const avant = JSON.stringify(s);
+    const r = cancelSession(s, { now: 5_000, createSet: makeSet });
+    assert.equal(JSON.stringify(s), avant, 'la séance d’origine n’est pas modifiée');
+    assert.deepEqual([r.startedAt, r.endedAt, r.activeTimer, r.execution.active, 'status' in r], [null, null, null, false, false]);
+    assert.deepEqual(r.warmup, { general: { done: false, skipped: false, durationSec: 0 }, activation: {}, ramps: {} });
+    for (const [id, log] of Object.entries(r.exercises)) {
+        assert.equal(log.skipped, false, id);
+        assert.equal(log.sets.length, s.exercises[id].sets.length, id);
+        assert.ok(log.sets.every((set) => !set.done && set.reps === null && !set.sides && set.completedAt === null), id);
+    }
+    assert.deepEqual([r.id, r.date, r.dayId, r.notes, r.exercises['legs-a-press'].variantId, r.orderCustomized], [s.id, '2026-09-14', 'legs-a', 'genou ok', 'autre-variante', true]);
+    assert.deepEqual(r.readiness, s.readiness);
+    assert.deepEqual(r.exerciseOrder, s.exerciseOrder);
+    // Ce qui est annoncé avant confirmation
+    const sum = cancelSessionSummary(s);
+    assert.deepEqual([sum.sets, sum.sides, sum.skipped, sum.timer], [2, 1, 1, true]);
+    assert.match(cancelSessionMessage(sum, 'Legs A'), /2 séries validées, 1 série commencée \(un côté\)/);
+    assert.match(cancelSessionMessage(sum, 'Legs A'), /« Terminer »/);
+    const vierge = (dayId) => { const v = seance(dayId); v.startedAt = 1; for (const log of Object.values(v.exercises)) log.sets.forEach((set) => { set.reps = null; set.rir = null; }); return v; };
+    const vide = vierge('pull-a');
+    assert.match(cancelSessionMessage(cancelSessionSummary(vide), 'Pull A'), /Rien n’a été validé/);
+    const saisie = vierge('pull-a'); saisie.exercises[saisie.exerciseOrder[0]].sets[0].reps = 9;
+    assert.match(cancelSessionMessage(cancelSessionSummary(saisie), 'Pull A'), /1 saisie non validée/);
+});
+
+test('Annuler une séance : seuls ses brouillons sont supprimés', async () => {
+    const { removeSessionDrafts } = await import('../ui/drafts.js');
+    const st = new Memoire();
+    const k = (sessionId, i) => draftKey({ sessionId, exerciseId: 'ex', variantId: 'v', setIndex: i, side: null });
+    saveDraft(st, k('2026-09-14:pull-a', 0), { fields: { reps: '8' } }, 1);
+    saveDraft(st, k('2026-09-14:pull-a', 1), { fields: { reps: '7' } }, 1);
+    saveDraft(st, k('2026-09-14:pull-ab', 0), { fields: { reps: '6' } }, 1);
+    saveDraft(st, k('2026-09-15:push-a', 0), { fields: { reps: '5' } }, 1);
+    assert.equal(removeSessionDrafts(st, '2026-09-14:pull-a'), true);
+    assert.equal(readDraft(st, k('2026-09-14:pull-a', 0)), null);
+    assert.equal(readDraft(st, k('2026-09-14:pull-a', 1)), null);
+    assert.equal(readDraft(st, k('2026-09-14:pull-ab', 0)).fields.reps, '6', 'préfixe voisin intact');
+    assert.equal(readDraft(st, k('2026-09-15:push-a', 0)).fields.reps, '5');
+    assert.equal(removeSessionDrafts(st, 'inexistante'), false);
+});
+
+test('Annuler une séance est proposé dans le menu du mode guidé', async () => {
+    const { renderExecMenu } = await import('../ui/execution.js');
+    assert.match(renderExecMenu({ canDefer: false, exerciseName: null }), /data-action="cancel-session"[^>]*>[^<]*Annuler la séance/);
+});

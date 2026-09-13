@@ -1,10 +1,14 @@
-// Mise à jour réelle forge-360 (production actuelle) → forge-361, même origine, puis hors ligne.
+// Mise à jour réelle : version en ligne précédente → nouvelle version, même origine, puis hors ligne.
 // ÉMULATION iPhone 15 dans Chrome headless — pas un vrai iPhone. Données de test uniquement.
 const { serveur, lancer, toucher, wait } = require('./banc.cjs');
 const { execSync } = require('child_process'); const crypto = require('crypto');
 // Usage : node tests-ui/maj.cjs <dossier version en ligne actuelle> <dossier nouvelle version>
 const ANCIENNE = process.argv[2], NOUVELLE = process.argv[3];
 if (!ANCIENNE || !NOUVELLE) { console.log('usage : node tests-ui/maj.cjs <ancienne> <nouvelle>'); process.exit(1); }
+const fsx = require('fs');
+const lireCache = (dir) => fsx.readFileSync(dir + '/sw.js', 'utf8').match(/CACHE_VERSION = '([^']+)'/)[1];
+const ANCIEN_CACHE = lireCache(ANCIENNE), NOUVEAU_CACHE = lireCache(NOUVELLE);
+const NOUVELLE_VERSION = fsx.readFileSync(NOUVELLE + '/defaults.js', 'utf8').match(/APP_VERSION = '([^']+)'/)[1];
 const B = require('os').tmpdir(), SITE = B + '/colosse-site-maj', PORT = 8870, URL = `http://127.0.0.1:${PORT}/colosse-app.html`;
 setTimeout(() => { console.log('WATCHDOG'); process.exit(2); }, 400000);
 const etapes = []; const note = (ok, t) => { etapes.push({ ok, t }); console.log((ok ? 'OK ' : 'KO ') + t); if (!ok) throw new Error(t); };
@@ -23,7 +27,7 @@ const h = (s) => crypto.createHash('sha256').update(s).digest('hex').slice(0, 16
     await page.goto(URL, { waitUntil: 'load' }); await wait(2500);
     await page.reload({ waitUntil: 'load' }); await wait(2000);
     const avantCaches = await page.evaluate(async () => ({ caches: await caches.keys(), ctrl: !!navigator.serviceWorker.controller }));
-    note(avantCaches.ctrl && avantCaches.caches.includes('colosse-adaptive-v3-forge-360'), 'version en ligne actuelle installée (forge-360, service worker actif) : ' + avantCaches.caches.join(','));
+    note(avantCaches.ctrl && avantCaches.caches.includes(ANCIEN_CACHE), `version précédente installée (${ANCIEN_CACHE}, service worker actif) : ` + avantCaches.caches.join(','));
     // Données de test dans l'ancienne version : check-in + séance commencée avec une série validée
     await toucher(page, '.bottom-nav [data-tab="training"]');
     await toucher(page, '[data-action="select-day"][data-day="push-a"]');
@@ -41,7 +45,7 @@ const h = (s) => crypto.createHash('sha256').update(s).digest('hex').slice(0, 16
     await page.evaluate(() => document.querySelector('[data-action="exec-validate-set"]').click()); await wait(700);
     await page.evaluate(() => document.querySelector('.timer-overlay [data-action="timer-skip"]')?.click()); await wait(700);
     const e1 = await empreinte(page); const d1 = JSON.parse(e1);
-    note(d1.sessions.some((s) => s.exercises['push-a-incline-smith'].sets[0].done), `données de test créées dans forge-360 (empreinte ${h(e1)})`);
+    note(d1.sessions.some((s) => s.exercises['push-a-incline-smith'].sets[0].done), `données de test créées dans la version précédente (empreinte ${h(e1)})`);
     // Publication simulée de la nouvelle version sur la MÊME adresse
     execSync(`rsync -a --delete --exclude .git "${NOUVELLE}/" "${SITE}/" && find "${SITE}" -type f -exec touch {} +`);
     await page.evaluate(async () => { const r = await navigator.serviceWorker.getRegistration(); await r.update(); });
@@ -53,8 +57,8 @@ const h = (s) => crypto.createHash('sha256').update(s).digest('hex').slice(0, 16
     await toucher(page, '#update-banner [data-action="reload-update"]');
     await nav; await wait(3000);
     const apres = await page.evaluate(async () => ({ caches: await caches.keys(), version: (await (await fetch('./defaults.js')).text()).match(/APP_VERSION = '([^']+)'/)?.[1], drafts: (await fetch('./ui/drafts.js')).ok, outils: !!document.querySelector('.f-exec-tools [data-action="exec-show-program"]'), serie: document.body.innerText.match(/Série \d+ sur \d+/)?.[0] }));
-    note(apres.caches.length === 1 && apres.caches[0] === 'colosse-adaptive-v3-forge-361', 'ancien cache supprimé, nouveau cache seul : ' + apres.caches.join(','));
-    note(apres.version === '3.6.1' && apres.drafts, 'fichiers servis = nouvelle version 3.6.1 (ui/drafts.js présent)');
+    note(apres.caches.length === 1 && apres.caches[0] === NOUVEAU_CACHE, 'ancien cache supprimé, nouveau cache seul : ' + apres.caches.join(','));
+    note(apres.version === NOUVELLE_VERSION && apres.drafts, `fichiers servis = nouvelle version ${NOUVELLE_VERSION}`);
     note(apres.outils && apres.serie === 'Série 2 sur 4', `séance reprise dans la nouvelle interface au bon endroit (${apres.serie}, « Tous les exercices » présent)`);
     const e3 = await empreinte(page); note(e1 === e3, `données strictement identiques après mise à jour (empreinte ${h(e3)})`);
     // Hors ligne : serveur arrêté + réseau coupé

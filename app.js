@@ -1,12 +1,12 @@
 import './pwa.js';
 import { renderForgeHeader, renderForgeNav, renderForgeHome, renderForgeTools, normalizeSearch, steppedValue, icon, demoSearch, variantDisplay } from './ui/forge.js';
-import { draftKey, readDraft, saveDraft, removeDraft, pruneStoredDrafts } from './ui/drafts.js';
+import { draftKey, readDraft, saveDraft, removeDraft, pruneStoredDrafts, removeSessionDrafts } from './ui/drafts.js';
 import { APP_VERSION, defaultSnapshot, emptyDailyLog, makeExerciseLog, makeSession, makeSet, } from './defaults.js';
 import { clearAllData, deleteSession, loadSnapshot, saveAdjustment, saveDailyLog, saveProfile, saveSession, saveSettings, saveSnapshot, storageMode, } from './data/database.js';
 import { defaultDayForDate, findDay, findExercise, getExercisePlan, getTrainingPhase, TRAINING_DAYS, STRENGTH_DAYS } from './program.js';
 import { nextPrescription, prescriptionFromHistory, suggestNextSet, summarizeSession, } from './engine/progression.js';
 import { estimateSessionDuration, remainingSessionSeconds, } from './engine/duration.js';
-import { aggregateSides, currentSide, bothSidesDone, countSessionSets, isSessionComplete as isSessionCompletePure, countCompletedStrengthSessions, weekdayOffset, targetRirForSet, isSetValid, countsForHistory, finishStatus, formatSeconds, closeSession, resetExerciseLogForVariant, timedExerciseStatus, timedExerciseActions, timedStopRequest, } from './engine/session.js';
+import { aggregateSides, currentSide, bothSidesDone, countSessionSets, isSessionComplete as isSessionCompletePure, countCompletedStrengthSessions, weekdayOffset, targetRirForSet, isSetValid, countsForHistory, finishStatus, formatSeconds, closeSession, cancelSessionSummary, cancelSessionMessage, cancelSession, resetExerciseLogForVariant, timedExerciseStatus, timedExerciseActions, timedStopRequest, } from './engine/session.js';
 import { analyzeWeightTrend, macrosForCalories, targetWeight, weeklyTargets, } from './engine/weight.js';
 import { analyzeRecovery, analyzeStrengthTrend, } from './engine/recovery.js';
 import { activityGoalHelp, activityGoalLabel, activityModeLabel, activityProgress, activitySummary, } from './engine/activity.js';
@@ -491,7 +491,7 @@ export class ColosseApp {
           <div class="${planned.targetMaxMinutes && projected > planned.targetMaxMinutes * 60 ? 'over-target' : ''}"><span>Durée estimée</span><strong id="session-projected">${formatClock(projected)}</strong></div>
         </div>
         <div class="session-actions">
-          ${!context.session.startedAt ? '<button class="primary-button" data-action="start-session">▶ Démarrer la séance</button>' : !context.session.endedAt ? `${executing ? '' : '<button class="primary-button" data-action="exec-enter">▶ Mode guidé</button>'}<button class="secondary-button" data-action="finish-session">■ Terminer</button>` : '<button class="secondary-button" data-action="resume-session">↻ Reprendre</button>'}
+          ${!context.session.startedAt ? '<button class="primary-button" data-action="start-session">▶ Démarrer la séance</button>' : !context.session.endedAt ? `${executing ? '' : '<button class="primary-button" data-action="exec-enter">▶ Mode guidé</button>'}<button class="secondary-button" data-action="finish-session">■ Terminer</button><button class="ghost-button f-cancel-session" data-action="cancel-session">↺ Annuler la séance</button>` : '<button class="secondary-button" data-action="resume-session">↻ Reprendre</button>'}
           <a class="ghost-button" href="${YOUTUBE_SEARCH}${encodeURIComponent(context.day.focus + ' échauffement musculation')}" target="_blank" rel="noopener">Échauffement</a>
         </div>
         ${complete ? '<div class="complete-banner">Séance validée. La prochaine prescription est déjà calculée.</div>' : ''}
@@ -1051,6 +1051,9 @@ export class ColosseApp {
             case 'finish-session':
                 await this.finishSession();
                 break;
+            case 'cancel-session':
+                await this.cancelCurrentSession();
+                break;
             case 'resume-session': {
                 const context = this.currentContext();
                 context.session.endedAt = null;
@@ -1604,6 +1607,39 @@ export class ColosseApp {
         await this.releaseWakeLock();
         this.showToast(outcome.message, outcome.status === 'COMPLETE' ? 'success' : 'info', 6000);
         this.render();
+    }
+    /**
+     * Annuler la séance affichée (commencée, pas terminée) : elle redevient « au
+     * programme ». Confirmation qui détaille ce qui serait effacé ; rien n'est
+     * enregistré dans l'historique ; variantes, ordre, notes et état du jour restent.
+     */
+    async cancelCurrentSession() {
+        const context = this.currentContext();
+        const session = context.session;
+        if (!session.startedAt || session.endedAt) {
+            this.showToast('Cette séance n’est pas en cours : rien à annuler.', 'info');
+            return;
+        }
+        if (!confirm(cancelSessionMessage(cancelSessionSummary(session), context.day.name)))
+            return;
+        // Le chrono de CETTE séance est abandonné sans effet ; celui d'une autre séance n'est pas touché.
+        const ownTimer = !!session.activeTimer || this.timer?.context?.sessionId === session.id;
+        const cancelled = cancelSession(session, { now: Date.now(), createSet: makeSet });
+        this.replaceSession(cancelled);
+        if (ownTimer)
+            this.timer = null;
+        this.execMenuOpen = false;
+        this.reorderOpen = false;
+        this.exerciseSheet = null;
+        this.programViewOverride = false;
+        // Charges prescrites remises comme pour une séance jamais démarrée.
+        this.seedSessionPrescriptions(cancelled, context.day, context.date, context.weekIndex);
+        await saveSession(cancelled);
+        removeSessionDrafts(this.draftStorage(), session.id);
+        if (!this.snapshot.sessions.some((item) => item.execution?.active && !item.endedAt))
+            await this.releaseWakeLock();
+        this.render();
+        this.showToast(`Séance ${context.day.name} annulée : elle redevient au programme.`, 'success', 5000);
     }
     readSetRow(exerciseId, setIndex) {
         const row = this.root.querySelector(`[data-set-row][data-exercise="${CSS.escape(exerciseId)}"][data-set="${setIndex}"]`);

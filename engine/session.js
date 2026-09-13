@@ -160,6 +160,74 @@ export function closeSession(session, { now = Date.now(), status = 'INCOMPLETE' 
 }
 
 /**
+ * Ce qu'effacerait l'annulation d'une séance commencée (pour le message de
+ * confirmation). Compte tout ce qui a été réellement saisi ou validé.
+ */
+export function cancelSessionSummary(session) {
+    const summary = { sets: 0, sides: 0, entries: 0, skipped: 0, warmup: false, ramps: 0, timer: !!session?.activeTimer };
+    for (const log of Object.values(session?.exercises ?? {})) {
+        if (log?.skipped)
+            summary.skipped += 1;
+        for (const set of log?.sets ?? []) {
+            if (set?.done)
+                summary.sets += 1;
+            else if (set?.sides?.left?.done || set?.sides?.right?.done)
+                summary.sides += 1;
+            else if (Number(set?.reps) > 0)
+                summary.entries += 1; // répétitions ou durée saisies (ou cardio arrêté avant la fin), non validées
+        }
+    }
+    const warmup = session?.warmup ?? {};
+    summary.warmup = !!(warmup.general?.done || warmup.general?.skipped || Object.keys(warmup.activation ?? {}).length);
+    summary.ramps = Object.keys(warmup.ramps ?? {}).length;
+    return summary;
+}
+
+/** Message de confirmation : dit exactement ce qui sera perdu, et comment le garder. */
+export function cancelSessionMessage(summary, dayName) {
+    const pertes = [];
+    if (summary.sets)
+        pertes.push(`${summary.sets} série${summary.sets > 1 ? 's' : ''} validée${summary.sets > 1 ? 's' : ''}`);
+    if (summary.sides)
+        pertes.push(`${summary.sides} série${summary.sides > 1 ? 's' : ''} commencée${summary.sides > 1 ? 's' : ''} (un côté)`);
+    if (summary.entries)
+        pertes.push(`${summary.entries} saisie${summary.entries > 1 ? 's' : ''} non validée${summary.entries > 1 ? 's' : ''} (répétitions ou durée)`);
+    if (!pertes.length)
+        return `Annuler la séance ${dayName} ? Rien n’a été validé : elle redevient « au programme », comme si tu ne l’avais pas démarrée.`;
+    return `Annuler la séance ${dayName} ? Seront effacés : ${pertes.join(', ')}, ainsi que l’échauffement et le chrono de cette séance. Pour les garder, choisis plutôt « Terminer ». Annuler quand même ?`;
+}
+
+/**
+ * Annuler une séance commencée : elle redevient « au programme », comme si elle
+ * n'avait jamais démarré (début, échauffement, rampes, séries, « passé »,
+ * chrono, mode guidé). Sont CONSERVÉS : variantes choisies, ordre, notes, état
+ * du jour. Renvoie une nouvelle session, ne modifie pas l'originale.
+ */
+export function cancelSession(session, { now = Date.now(), createSet }) {
+    if (!session)
+        return session;
+    const exercises = {};
+    for (const [id, log] of Object.entries(session.exercises ?? {})) {
+        exercises[id] = {
+            ...log,
+            skipped: false,
+            sets: Array.from({ length: (log?.sets ?? []).length }, () => createSet()),
+        };
+    }
+    const { status, ...rest } = session;
+    return {
+        ...rest,
+        startedAt: null,
+        endedAt: null,
+        warmup: { general: { done: false, skipped: false, durationSec: 0 }, activation: {}, ramps: {} },
+        execution: { active: false, stage: null, exerciseId: null, setIndex: null, side: null, stepKey: null, updatedAt: now },
+        activeTimer: null,
+        exercises,
+        updatedAt: now,
+    };
+}
+
+/**
  * Changement de variante : l'exercice repart de zéro. Les séries faites sur
  * l'ancienne machine ne sont jamais conservées (charges et incréments diffèrent).
  */

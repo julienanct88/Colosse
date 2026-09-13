@@ -258,7 +258,8 @@ export function renderExecMenu({ canDefer, exerciseName }) {
     <button class="sheet-item" data-action="exec-reorder">↕&nbsp;&nbsp;Réorganiser les exercices</button>
     ${canDefer ? `<button class="sheet-item" data-action="exec-defer">⏭&nbsp;&nbsp;Machine occupée — faire plus tard</button>` : ''}
     ${exerciseName ? `<button class="sheet-item sheet-item--danger" data-action="exec-skip">✕&nbsp;&nbsp;Passer ${escapeHtml(exerciseName)}</button>` : ''}
-    <button class="sheet-item sheet-item--muted" data-action="exec-menu-close">Annuler</button>
+    <button class="sheet-item sheet-item--danger" data-action="cancel-session">↺&nbsp;&nbsp;Annuler la séance</button>
+    <button class="sheet-item sheet-item--muted" data-action="exec-menu-close">Fermer</button>
   </section>`;
 }
 

@@ -404,6 +404,87 @@ async function scenario(nom, fn) {
     return 'barre : « 100 kg × 8 » ; après passage aux haltères : aucune exposition barre reprise ; séance passée intacte';
   });
 
+  // ---------------------------------------------------------------- 3.6.2 : ANNULER UNE SÉANCE
+  await scenario('S10 Cas réel : dimanche, séance de lundi démarrée pour tester, annulée depuis l’accueil', async ({ page, dialoguesVus }) => {
+    const aujourdHui = await page.evaluate(() => new Date().getDay());
+    await toucher(page, '.f-week-nav [data-action="week-next"], [data-action="week-next"]');
+    await toucher(page, '[data-action="select-day"][data-day="pull-a"]');
+    await allerJour(page, 'pull-a');
+    await page.evaluate(() => window.scrollTo(0, 0)); await toucher(page, '[data-action="start-session"]');
+    attendu(await page.evaluate(() => !!document.querySelector('.execution')), 'mode guidé non ouvert');
+    const autres = (await lireBase(page)).sessions.filter((x) => x.dayId !== 'pull-a').map((x) => JSON.stringify(x));
+    // Retour à l'accueil : bloqué « En séance »
+    await toucher(page, '.f-exec-tools [data-action="exec-show-program"]');
+    await toucher(page, '.bottom-nav [data-tab="home"]');
+    let h = await page.evaluate(() => ({ statut: document.querySelector('.f-top-status')?.textContent.trim(), pill: document.querySelector('.f-session-hero .f-pill')?.textContent }));
+    attendu(/En séance/.test(h.statut) && h.pill === 'En cours', 'état de départ non reproduit : ' + JSON.stringify(h));
+    await toucher(page, '.f-session-hero [data-action="cancel-session"]');
+    attendu(/Rien n’a été validé/.test(dialoguesVus.at(-1) ?? ''), 'confirmation absente ou inexacte : ' + dialoguesVus.at(-1));
+    h = await page.evaluate(() => ({ statut: document.querySelector('.f-top-status')?.textContent.trim(), pill: document.querySelector('.f-session-hero .f-pill')?.textContent, cta: document.querySelector('.f-session-hero .f-cta')?.textContent.trim(), annuler: !!document.querySelector('[data-action="cancel-session"]') }));
+    attendu(!/En séance/.test(h.statut) && h.pill === 'Au programme' && /Préparer ma séance/.test(h.cta) && !h.annuler, 'toujours en séance : ' + JSON.stringify(h));
+    let s = await seanceDu(page, 'pull-a');
+    const isoJour = await page.evaluate(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; });
+    attendu(s.date > isoJour, `la séance testée n’est pas dans le futur (${s.date} / ${isoJour})`);
+    attendu(s.startedAt === null && s.endedAt === null && s.execution.active === false && !s.status, 'séance non remise au programme : ' + JSON.stringify({ startedAt: s.startedAt, endedAt: s.endedAt, execution: s.execution }));
+    await page.reload({ waitUntil: 'load' }); await wait(2200);
+    h = await page.evaluate(() => ({ statut: document.querySelector('.f-top-status')?.textContent.trim(), guide: !!document.querySelector('.execution') }));
+    attendu(!/En séance/.test(h.statut) && !h.guide, 'après rechargement, de nouveau en séance : ' + JSON.stringify(h));
+    const apres = (await lireBase(page)).sessions.filter((x) => x.dayId !== 'pull-a').map((x) => JSON.stringify(x));
+    attendu(JSON.stringify(apres) === JSON.stringify(autres), 'une autre séance a été modifiée');
+    return `jour réel ${aujourdHui} (0 = dimanche) ; lundi Pull A démarré → « Annuler cette séance » sur l’accueil → Au programme, plus « En séance », même après rechargement`;
+  });
+
+  await scenario('S11 Annuler pendant un repos avec séries validées (menu Options) : refus = rien, accord = tout remis, aucun chrono fantôme', async ({ page, setDialogues, dialoguesVus }) => {
+    await demarrer(page, 'push-a'); await jusquASerie(page);
+    await saisirEtValider(page, { kg: 80, reps: 8 });
+    await page.fill('[data-exec-field="reps"]', '7').catch(() => {});
+    let s = await seanceDu(page, 'push-a');
+    attendu(s.activeTimer?.kind === 'work-rest', 'repos non lancé');
+    const avant = JSON.stringify(s);
+    await page.evaluate(() => document.querySelector('.timer-overlay [data-action="forge-timer-toggle"]')?.click()); await wait(300);
+    await toucher(page, '.exec-secondary [data-action="exec-menu"]');
+    setDialogues('refuser');
+    await toucher(page, '.sheet [data-action="cancel-session"]');
+    attendu(/1 série validée/.test(dialoguesVus.at(-1) ?? '') && /« Terminer »/.test(dialoguesVus.at(-1)), 'confirmation sans détail : ' + dialoguesVus.at(-1));
+    attendu(JSON.stringify(await seanceDu(page, 'push-a')) === avant, 'refuser l’annulation a modifié la séance');
+    setDialogues('accepter');
+    if (!(await page.evaluate(() => !!document.querySelector('.sheet [data-action="cancel-session"]')))) await toucher(page, '.exec-secondary [data-action="exec-menu"]');
+    await toucher(page, '.sheet [data-action="cancel-session"]');
+    s = await seanceDu(page, 'push-a');
+    const smith = s.exercises['push-a-incline-smith'];
+    attendu(s.startedAt === null && s.activeTimer === null && smith.sets.every((x) => !x.done && x.reps === null), 'séance non remise à zéro');
+    attendu(Object.keys(s.warmup.ramps).length === 0 && !s.warmup.general.skipped, 'échauffement/rampes conservés');
+    const ecran = await page.evaluate(() => ({ overlay: !!document.querySelector('.timer-overlay'), guide: !!document.querySelector('.execution'), demarrer: !!document.querySelector('[data-action="start-session"]'), brouillons: Object.keys(JSON.parse(localStorage.getItem('colosse-brouillons-v1') || '{}')).filter((k) => k.startsWith('2026') && k.includes(':push-a:')).length }));
+    attendu(!ecran.overlay && !ecran.guide && ecran.demarrer && ecran.brouillons === 0, 'écran après annulation : ' + JSON.stringify(ecran));
+    await wait(1500);
+    await page.reload({ waitUntil: 'load' }); await wait(2500);
+    const fantome = await page.evaluate(() => ({ overlay: !!document.querySelector('.timer-overlay'), statut: document.querySelector('.f-top-status')?.textContent.trim() ?? '' }));
+    attendu(!fantome.overlay && !/En séance/.test(fantome.statut), 'chrono ou séance fantôme après rechargement : ' + JSON.stringify(fantome));
+    // On peut redémarrer normalement : l'échauffement recommence
+    await allerJour(page, 'push-a'); await page.evaluate(() => window.scrollTo(0, 0)); await toucher(page, '[data-action="start-session"]');
+    attendu(/ÉCHAUFFEMENT/.test(await page.evaluate(() => document.querySelector('.exec-eyebrow')?.textContent ?? '')), 'redémarrage : pas de retour à l’échauffement');
+    return 'refus → séance identique ; accord → 0 série, pas de repos, pas de brouillon, écran « Démarrer » ; rechargement sans fantôme ; redémarrage à l’échauffement';
+  });
+
+  await scenario('S12 « Annuler la séance » depuis la liste Séance ; « Terminer » garde toujours l’historique', async ({ page }) => {
+    await demarrer(page, 'legs-b');
+    await toucher(page, '.f-exec-tools [data-action="exec-show-program"]');
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await toucher(page, '.session-actions [data-action="cancel-session"]');
+    let s = await seanceDu(page, 'legs-b');
+    attendu(s.startedAt === null && !(await page.evaluate(() => !!document.querySelector('.session-actions [data-action="cancel-session"]'))), 'annulation depuis la liste inopérante');
+    await page.evaluate(() => window.scrollTo(0, 0)); await toucher(page, '[data-action="start-session"]');
+    await passerActivations(page);
+    await page.evaluate(() => document.querySelector('[data-action="exec-skip-general-warmup"]')?.click()); await wait(400);
+    await toucher(page, '.f-exec-tools [data-action="exec-show-program"]');
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await toucher(page, '.session-actions [data-action="finish-session"]');
+    s = await seanceDu(page, 'legs-b');
+    attendu(s.startedAt !== null && s.endedAt !== null && s.status === 'INCOMPLETE', '« Terminer » ne fonctionne plus comme avant');
+    attendu(!(await page.evaluate(() => !!document.querySelector('[data-action="cancel-session"]'))), '« Annuler » proposé sur une séance terminée');
+    return 'annulée depuis la liste ; « Terminer » enregistre toujours la séance (INCOMPLETE), pas d’annulation proposée ensuite';
+  });
+
   console.log('\nRESUME ' + JSON.stringify({ total: resultats.length, ok: resultats.filter((r) => r.ok).length }));
   srv.kill(); process.exit(resultats.every((r) => r.ok) ? 0 : 1);
 })().catch((e) => { console.log('ECHEC', e.stack?.slice(0, 600)); process.exit(1); });
