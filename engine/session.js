@@ -213,8 +213,18 @@ export function cancelSessionMessage(summary, dayName, { dateLabel = '', timerLa
  * (« Reprendre ») fait partie de l'historique et ne doit pas être effacée ainsi.
  */
 export function canCancelSession(session) {
-    return !!session?.startedAt && !session.endedAt && !session.status && !session.reopenedAt;
+    if (!session?.startedAt || session.endedAt || session.status || session.reopenedAt)
+        return false;
+    // Données anciennes : avant 3.4.1 une séance terminée n'avait pas de `status`, et
+    // avant 3.6.2 « Reprendre » ne posait pas `reopenedAt`. Une séance ouverte AVANT
+    // ce jour qui contient déjà des séries validées peut donc être une séance
+    // enregistrée puis rouverte : on ne propose pas de l'effacer (« Terminer » reste).
+    const commenceeAvantGarde = Number(session.startedAt) < LEGACY_REOPEN_GUARD_MS;
+    const dejaFaite = Object.values(session.exercises ?? {}).some((log) => (log?.sets ?? []).some((set) => set?.done || set?.sides?.left?.done || set?.sides?.right?.done));
+    return !(commenceeAvantGarde && dejaFaite);
 }
+/** 13 septembre 2026, 00:00 (heure locale) : toutes les versions en service depuis la veille posent `status`. */
+export const LEGACY_REOPEN_GUARD_MS = new Date(2026, 8, 13).getTime();
 
 /**
  * Annuler une séance commencée : elle redevient « au programme », comme si elle
@@ -222,6 +232,19 @@ export function canCancelSession(session) {
  * chrono, mode guidé). Sont CONSERVÉS : variantes choisies, ordre, notes, état
  * du jour. Renvoie une nouvelle session, ne modifie pas l'originale.
  */
+/**
+ * Un exercice d'une séance FUTURE jamais démarrée n'a-t-il reçu que le
+ * pré-remplissage automatique (charge prescrite `loadKg`) ? Si l'utilisateur a
+ * tapé quoi que ce soit (autre charge, répétitions, série), la réponse est non.
+ */
+export function onlyAutoSeeded(log, loadKg) {
+    const sets = log?.sets ?? [];
+    if (!(Number(loadKg) > 0) || !sets.some((set) => set?.weightKg !== null && set?.weightKg !== undefined))
+        return false;
+    return sets.every((set) => !set?.done && (set?.reps === null || set?.reps === undefined) && !set?.sides
+        && (set?.weightKg === null || set?.weightKg === undefined || Number(set.weightKg) === Number(loadKg)));
+}
+
 export function cancelSession(session, { now = Date.now(), createSet }) {
     if (!session)
         return session;

@@ -386,3 +386,25 @@ test('Annuler n’est jamais proposé sur une séance déjà enregistrée puis r
     assert.equal(canCancelSession(null), false);
     assert.doesNotMatch(renderExecMenu({ canDefer: true, exerciseName: 'X', canCancel: false }), /cancel-session/);
 });
+
+test('Annuler : durée du chrono exacte après pause/reprise ; anciennes séances rouvertes protégées ; pré-remplissage automatique reconnu', async () => {
+    const { canCancelSession, onlyAutoSeeded, LEGACY_REOPEN_GUARD_MS } = await import('../engine/session.js');
+    const { pauseTimer, resumeTimer, elapsedSeconds } = await import('../engine/timer.js');
+    // Chrono : 12 min faites, pause 10 min, reprise, 5 s → 12:05 (et non 0:05)
+    let t = createTimer('cardio', 1200, {}, 0);
+    t = pauseTimer(t, 720_000); t = resumeTimer(t, 1_320_000);
+    assert.equal(elapsedSeconds(t, 1_325_000), 725);
+    // Garde des données anciennes
+    const fait = { a: { sets: [{ done: true }] } }, vierge = { a: { sets: [{ done: false }] } };
+    assert.equal(canCancelSession({ startedAt: LEGACY_REOPEN_GUARD_MS - 86_400_000, endedAt: null, exercises: fait }), false, 'ancienne séance avec séries : pas d’annulation');
+    assert.equal(canCancelSession({ startedAt: LEGACY_REOPEN_GUARD_MS - 86_400_000, endedAt: null, exercises: vierge }), true, 'ancienne séance vide : annulable');
+    assert.equal(canCancelSession({ startedAt: LEGACY_REOPEN_GUARD_MS + 36_000_000, endedAt: null, exercises: fait }), true, 'séance commencée aujourd’hui : annulable');
+    // Pré-remplissage automatique
+    const log = (sets) => ({ sets });
+    assert.equal(onlyAutoSeeded(log([{ weightKg: 22.5, reps: null, done: false }, { weightKg: 22.5, reps: null, done: false }]), 22.5), true);
+    assert.equal(onlyAutoSeeded(log([{ weightKg: 22.5, reps: null, done: false }, { weightKg: 30, reps: null, done: false }]), 22.5), false, 'charge tapée à la main');
+    assert.equal(onlyAutoSeeded(log([{ weightKg: 22.5, reps: 10, done: false }]), 22.5), false, 'répétitions saisies');
+    assert.equal(onlyAutoSeeded(log([{ weightKg: null, reps: null, done: false }]), 22.5), false, 'rien de pré-rempli');
+    assert.equal(onlyAutoSeeded(log([{ weightKg: 22.5, reps: null, done: true }]), 22.5), false, 'série faite');
+    assert.equal(onlyAutoSeeded(log([{ weightKg: 22.5, reps: null, done: false }]), 0), false, 'pas de prescription');
+});

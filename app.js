@@ -6,13 +6,13 @@ import { clearAllData, deleteSession, loadSnapshot, saveAdjustment, saveDailyLog
 import { defaultDayForDate, findDay, findExercise, getExercisePlan, getTrainingPhase, TRAINING_DAYS, STRENGTH_DAYS } from './program.js';
 import { nextPrescription, prescriptionFromHistory, suggestNextSet, summarizeSession, } from './engine/progression.js';
 import { estimateSessionDuration, remainingSessionSeconds, } from './engine/duration.js';
-import { aggregateSides, currentSide, bothSidesDone, countSessionSets, isSessionComplete as isSessionCompletePure, countCompletedStrengthSessions, weekdayOffset, targetRirForSet, isSetValid, countsForHistory, finishStatus, formatSeconds, closeSession, cancelSessionSummary, cancelSessionMessage, cancelSession, canCancelSession, resetExerciseLogForVariant, timedExerciseStatus, timedExerciseActions, timedStopRequest, } from './engine/session.js';
+import { aggregateSides, currentSide, bothSidesDone, countSessionSets, isSessionComplete as isSessionCompletePure, countCompletedStrengthSessions, weekdayOffset, targetRirForSet, isSetValid, countsForHistory, finishStatus, formatSeconds, closeSession, cancelSessionSummary, cancelSessionMessage, cancelSession, canCancelSession, onlyAutoSeeded, resetExerciseLogForVariant, timedExerciseStatus, timedExerciseActions, timedStopRequest, } from './engine/session.js';
 import { analyzeWeightTrend, macrosForCalories, targetWeight, weeklyTargets, } from './engine/weight.js';
 import { analyzeRecovery, analyzeStrengthTrend, } from './engine/recovery.js';
 import { activityGoalHelp, activityGoalLabel, activityModeLabel, activityProgress, activitySummary, } from './engine/activity.js';
 import { addDays, isoDate, startOfWeek, uid, weekIndexFromStart, } from './engine/math.js';
 import { computeExecutionStep, executionProgress, normalizeExecutionState, STAGES, canReorder, programOrder, normalizeOrder, pickSessionOrder, moveInOrder, deferExercise, isExercisePending, bringToFront, executionChangeDecision, halfDoneUnilateral, } from './engine/execution.js';
-import { createTimer, remainingSeconds as timerRemaining, isExpired as timerExpired, pauseTimer, resumeTimer, adjustTimer as adjustTimerState, timerLabel, timerControls, canShortenTimer, timerEndMessage, } from './engine/timer.js';
+import { createTimer, elapsedSeconds, remainingSeconds as timerRemaining, isExpired as timerExpired, pauseTimer, resumeTimer, adjustTimer as adjustTimerState, timerLabel, timerControls, canShortenTimer, timerEndMessage, } from './engine/timer.js';
 import { applyTimerOutcome, createTimerResolutionQueue, startTimerDecision, timerOwnerSession } from './engine/timer-effects.js';
 import { computeRampSets, normalizeWarmupState, resolveReferenceLoad, clearExerciseRamps, GENERAL_WARMUP, WARMUP_EQUIPMENT, resolveWarmupEquipment, activationSteps, } from './engine/warmup.js';
 import { renderExecution, renderExecMenu, renderReorderPanel, renderExerciseSheet } from './ui/execution.js';
@@ -1627,9 +1627,24 @@ export class ColosseApp {
             return;
         }
         const dateLabel = formatDateFr(context.date, { weekday: 'long', day: 'numeric', month: 'long' });
-        const timerLabel = session.activeTimer ? `${session.activeTimer.label ?? 'chrono'}, ${formatClock(Math.max(0, Math.round((Date.now() - session.activeTimer.startedAt) / 1000)))}` : '';
-        if (!confirm(cancelSessionMessage(cancelSessionSummary(session), context.day.name, { dateLabel, timerLabel })))
+        const chronoLabel = session.activeTimer ? `${session.activeTimer.label ?? 'chrono'}, ${formatClock(elapsedSeconds(session.activeTimer, Date.now()))} déjà faites${session.activeTimer.paused ? ', en pause' : ''}` : '';
+        if (!confirm(cancelSessionMessage(cancelSessionSummary(session), context.day.name, { dateLabel, timerLabel: chronoLabel })))
             return;
+        // Séances futures du même jour déjà pré-remplies à partir de ces séries : on repère,
+        // AVANT d'annuler, les exercices qui n'ont que la charge prescrite automatiquement.
+        const recoveryAlert = analyzeRecovery(this.snapshot.dailyLogs).alert;
+        const aRecalculer = this.snapshot.sessions
+            .filter((item) => item.id !== session.id && item.dayId === session.dayId && item.date > session.date && !item.startedAt)
+            .map((item) => ({ item, ids: context.day.exercises.filter((exercise) => {
+                const log = item.exercises?.[exercise.id];
+                if (!log)
+                    return false;
+                const variant = exercise.variants.find((v) => v.id === log.variantId) ?? exercise.variants[0];
+                const plan = getExercisePlan(exercise, item.weekIndex);
+                const prescription = prescriptionFromHistory(this.exerciseHistory(exercise.id, log.variantId, item.date, item.id), plan, exercise, variant.incrementKg, recoveryAlert);
+                return onlyAutoSeeded(log, prescription.loadKg);
+            }).map((exercise) => exercise.id) }))
+            .filter((entry) => entry.ids.length);
         // Seul le chrono EN MÉMOIRE de cette séance est abandonné ; celui d'une autre séance continue.
         const ownTimer = !!this.timer && (this.timer.context?.sessionId ?? session.id) === session.id;
         const cancelled = cancelSession(session, { now: Date.now(), createSet: makeSet });
@@ -1643,6 +1658,13 @@ export class ColosseApp {
         // Charges prescrites remises comme pour une séance jamais démarrée.
         this.seedSessionPrescriptions(cancelled, context.day, context.date, context.weekIndex);
         await saveSession(cancelled);
+        for (const { item, ids } of aRecalculer) {
+            for (const id of ids)
+                item.exercises[id].sets.forEach((set) => { set.weightKg = null; });
+            this.seedSessionPrescriptions(item, context.day, item.date, item.weekIndex);
+            item.updatedAt = Date.now();
+            await saveSession(item);
+        }
         // Saisies non validées : effacées du stockage ET de la mémoire, et le formulaire
         // encore affiché n'est pas recapturé par le rendu suivant.
         removeSessionDrafts(this.draftStorage(), session.id);

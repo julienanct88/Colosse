@@ -549,6 +549,48 @@ async function scenario(nom, fn) {
     return 'Push A annulée ; repos de Pull A toujours affiché et enregistré ; message « Pull A … est encore en cours »';
   });
 
+  await scenario('S16 Annuler un test ne laisse pas de charges « de test » sur la même séance de la semaine suivante', async ({ page }) => {
+    // Historique réel de test : Pull A du 31 août, 80 kg sur les deux premiers exercices.
+    await allerJour(page, 'pull-a');
+    const ids = await page.evaluate(async () => {
+      const db = await new Promise((res) => { const x = indexedDB.open('colosse-adaptive-db'); x.onsuccess = () => res(x.result); });
+      const tous = await new Promise((r) => { const g = db.transaction('sessions').objectStore('sessions').getAll(); g.onsuccess = () => r(g.result); });
+      const modele = tous.find((x) => x.dayId === 'pull-a');
+      const passe = JSON.parse(JSON.stringify(modele));
+      passe.id = '2026-08-31:pull-a'; passe.date = '2026-08-31'; passe.startedAt = Date.parse('2026-08-31T18:00:00'); passe.endedAt = passe.startedAt + 3600e3; passe.status = 'COMPLETE';
+      const [a, b] = passe.exerciseOrder;
+      for (const id of [a, b]) passe.exercises[id].sets.forEach((set) => Object.assign(set, { done: true, weightKg: 80, reps: 8, rir: 2, technique: 'good', pain: 0, completedAt: passe.startedAt + 600e3 }));
+      await new Promise((r) => { const t = db.transaction('sessions', 'readwrite'); t.objectStore('sessions').put(passe); t.oncomplete = r; });
+      db.close(); return [a, b];
+    });
+    await page.reload({ waitUntil: 'load' }); await wait(2200);
+    // Test : Pull A de cette semaine, une série à 20 kg × 12 sur le 1er exercice
+    await allerJour(page, 'pull-a'); await page.evaluate(() => window.scrollTo(0, 0)); await toucher(page, '[data-action="start-session"]');
+    await jusquASerie(page, { reference: '20' }); await saisirEtValider(page, { kg: 20, reps: 12 });
+    await page.evaluate(() => document.querySelector('.timer-overlay [data-action="timer-skip"]')?.click()); await wait(400);
+    const test = await seanceDu(page, 'pull-a');
+    // Semaine suivante : Pull A pré-remplie à partir du test ; on tape une charge à la main sur le 2e exercice
+    await toucher(page, '.f-exec-tools [data-action="exec-show-program"]');
+    await page.evaluate(() => window.scrollTo(0, 0)); await toucher(page, '[data-action="week-next"]');
+    const sessions = async () => (await lireBase(page)).sessions;
+    const futurId = (await sessions()).map((x) => x.id).filter((id) => id.endsWith(':pull-a') && id > test.id).sort()[0];
+    attendu(futurId, 'séance de la semaine suivante non créée');
+    let futur = (await sessions()).find((x) => x.id === futurId);
+    const avantCharges = futur.exercises[ids[0]].sets.map((x) => x.weightKg);
+    await toucher(page, `[data-exercise-card="${ids[1]}"] details.f-exercise-detail > summary`);
+    await page.fill(`[data-set-row][data-exercise="${ids[1]}"][data-set="0"] [data-set-field="weightKg"]`, '33');
+    await page.evaluate((id) => { const el = document.querySelector(`[data-set-row][data-exercise="${id}"][data-set="0"] [data-set-field="weightKg"]`); el.dispatchEvent(new Event('change', { bubbles: true })); }, ids[1]); await wait(600);
+    // Retour à la semaine du test et annulation
+    await page.evaluate(() => window.scrollTo(0, 0)); await toucher(page, '[data-action="week-prev"]');
+    await page.evaluate(() => window.scrollTo(0, 0)); await toucher(page, '.session-actions [data-action="cancel-session"]');
+    futur = (await sessions()).find((x) => x.id === futurId);
+    const apres = futur.exercises[ids[0]].sets.map((x) => x.weightKg);
+    const manuel = futur.exercises[ids[1]].sets[0].weightKg;
+    attendu(apres.every((kg) => kg >= 70), `charges de la semaine suivante encore issues du test : avant ${JSON.stringify(avantCharges)} → après ${JSON.stringify(apres)}`);
+    attendu(manuel === 33, 'la charge tapée à la main a été écrasée : ' + manuel);
+    return `semaine suivante : ${JSON.stringify(avantCharges)} (issues du test) → ${JSON.stringify(apres)} (historique réel 80 kg) ; charge tapée à la main (33 kg) conservée`;
+  });
+
   console.log('\nRESUME ' + JSON.stringify({ total: resultats.length, ok: resultats.filter((r) => r.ok).length }));
   srv.kill(); process.exit(resultats.every((r) => r.ok) ? 0 : 1);
 })().catch((e) => { console.log('ECHEC', e.stack?.slice(0, 600)); process.exit(1); });
