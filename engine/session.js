@@ -28,6 +28,11 @@ export function sessionWeekIndex(session, profile) {
     return trainingWeekIndex(profile, session?.date);
 }
 
+/** Au moins une série (ou un côté) réellement validée dans la séance. */
+export function hasValidatedWork(session) {
+    return Object.values(session?.exercises ?? {}).some((log) => (log?.sets ?? []).some((set) => set?.done || set?.sides?.left?.done || set?.sides?.right?.done));
+}
+
 /**
  * Migration additive (3.6.3) : ajoute `profile.programStartDate`.
  * - Les séances TERMINÉES sont figées sur leur semaine actuelle (rien ne change pour l'historique).
@@ -47,7 +52,9 @@ export function migrateProgramStart(profile, sessions = []) {
     const nextSessions = sessions.map((session) => {
         if (!session)
             return session;
-        if (session.endedAt) {
+        // Séance terminée OU déjà commencée avec du travail validé : elle garde la semaine avec
+        // laquelle ce travail a été fait (une décharge faite reste une décharge dans l'historique).
+        if (session.endedAt || hasValidatedWork(session)) {
             if (Number.isFinite(Number(session.planWeekIndex)) && Number(session.planWeekIndex) >= 1)
                 return session;
             const week = Number.isFinite(Number(session.weekIndex)) && Number(session.weekIndex) >= 1
@@ -177,7 +184,8 @@ export function aggregateSides(set) {
     const sides = set?.sides;
     if (!sides || !sides.left?.done || !sides.right?.done)
         return null;
-    const num = (v, fallback = null) => (Number.isFinite(Number(v)) ? Number(v) : fallback);
+    // null / vide = « je ne sais pas » : jamais converti en 0 (un RIR 0 signifierait l'échec).
+    const num = (v, fallback = null) => (v === null || v === undefined || v === '' ? fallback : Number.isFinite(Number(v)) ? Number(v) : fallback);
     const lr = num(sides.left.reps), rr = num(sides.right.reps);
     const lRir = num(sides.left.rir), rRir = num(sides.right.rir);
     const lPain = num(sides.left.pain, 0), rPain = num(sides.right.pain, 0);

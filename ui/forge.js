@@ -40,7 +40,7 @@ export function icon(name, cls = '') {
   return `<svg class="f-icon ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${paths[name] ?? paths.grid}</svg>`;
 }
 export function renderForgeHeader(app) {
-  const running = app.snapshot.sessions.some(s => s.execution?.active && !s.endedAt);
+  const running = app.snapshot.sessions.some(s => s.execution?.active && !s.endedAt && !(app.isStaleSession?.(s)));
   return `<header class="topbar forge-topbar">
     <button class="f-brand" data-action="tab" data-tab="home" aria-label="Colosse, accueil"><span class="f-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>COLOSSE<span class="f-brand-edition">ADAPTIVE / FORGE</span></span></button>
     <button class="f-top-status" data-action="${running ? 'forge-resume' : 'forge-open'}" ${running ? '' : 'data-tab="settings" data-section="forge-data"'}>${running ? '<i class="f-live-dot"></i> En séance' : `${icon('shield')} Sur cet appareil`}</button>
@@ -62,7 +62,7 @@ export function renderForgeWeek(app, context) {
 export function renderForgeHome(app) {
   const c=app.currentContext(), {day, session, weekIndex}=c;
   const phase=getTrainingPhase(weekIndex), plan=estimateSessionDuration(day, ex=>getExercisePlan(ex,weekIndex));
-  const sets=app.activeSetCount(session,day), running=app.snapshot.sessions.find(s=>s.execution?.active&&!s.endedAt);
+  const sets=app.activeSetCount(session,day), running=app.snapshot.sessions.find(s=>s.execution?.active&&!s.endedAt&&!(app.isStaleSession?.(s)));
   const completed=app.completedWeekSessions(), lastLog=[...app.snapshot.dailyLogs].filter(l=>Number.isFinite(l.weightKg)&&l.weightKg>0).sort((a,b)=>b.date.localeCompare(a.date))[0];
   const todayLog=app.snapshot.dailyLogs.find(l=>l.date===isoDate()), activity=activityProgress(todayLog??{},app.snapshot.profile);
   const active=!!(session.execution?.active&&!session.endedAt);

@@ -37,6 +37,10 @@ function workSetsDone(log, plan) {
     return (log?.sets ?? []).slice(0, plan.sets).filter((set) => set.done).length;
 }
 
+function workStarted(session) {
+    return Object.values(session?.exercises ?? {}).some((log) => (log?.sets ?? []).some((set) => set?.done || set?.sides?.left?.done));
+}
+
 /** Ordre d'exécution : respecte l'ordre mémorisé de la séance. */
 export function orderedExercises(day, session) {
     const byId = new Map(day.exercises.map((ex) => [ex.id, ex]));
@@ -69,10 +73,13 @@ export function computeExecutionStep({ day, session, resolvePlan }) {
         return { stage: STAGES.SESSION_COMPLETE, stepKey: 'complete' };
     }
 
-    if (!isGeneralWarmupDone(warmup))
+    // Une fois le travail commencé (séries validées, ou exercice choisi avec « Faire maintenant »),
+    // l'échauffement général et les activations ne s'imposent plus : ils restent faisables, jamais bloquants.
+    const warmupDeferred = session?.execution?.warmupDeferred === true || workStarted(session);
+    if (!warmupDeferred && !isGeneralWarmupDone(warmup))
         return { stage: STAGES.GENERAL_WARMUP, stepKey: 'general-warmup', exercise: null, exerciseId: null, setIndex: null, side: null };
 
-    if (!isActivationComplete(warmup, day)) {
+    if (!warmupDeferred && !isActivationComplete(warmup, day)) {
         const step = nextActivationStep(warmup, day);
         return { stage: STAGES.ACTIVATION, activation: step, stepKey: `activation:${step.key}`,
                  exercise: null, exerciseId: null, setIndex: null, side: step.side };
@@ -102,8 +109,10 @@ export function computeExecutionStep({ day, session, resolvePlan }) {
         if (exercise.warmupProtocol && done === 0) {
             const protocol = getRampProtocol(exercise) ?? [];
             if (rampsRequested(warmup, exercise.id, protocol.length)) {
+                const demandee = warmup.ramps[exercise.id];
+                // Charge indiquée au moment de demander l'échauffement : prioritaire sur le pré-remplissage.
                 const reference = resolveReferenceLoad({
-                    firstWorkSetLoadKg: log.sets?.[0]?.weightKg,
+                    firstWorkSetLoadKg: demandee?.requested === true && Number(demandee.referenceLoadKg) > 0 ? demandee.referenceLoadKg : log.sets?.[0]?.weightKg,
                     prescriptionLoadKg: log.prescription?.loadKg,
                     storedReferenceKg: warmup.ramps[exercise.id]?.referenceLoadKg,
                 });

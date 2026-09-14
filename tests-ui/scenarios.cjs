@@ -683,37 +683,52 @@ async function scenario(nom, fn) {
   });
 
   // ================================================================ 3.6.3 — SÉANCE RÉELLE DU 14/09
-  await scenario('S18 Ta séance : profil commencé début août → plus de décharge, 3 séries, séries déjà faites gardées, historique figé', async ({ page }) => {
+  await scenario('S18 Ta séance : profil commencé début août → séance faite en décharge gardée telle quelle, séances suivantes à 3 séries et charges normales, historique figé', async ({ page }) => {
     const jour = await aujourdHuiIso(page);
+    const JOURS = { 1: 'pull-a', 2: 'push-a', 3: 'legs-a', 4: 'pull-b', 5: 'push-b', 6: 'legs-b' };
+    const futur = await page.evaluate(() => { const d = new Date(); do { d.setDate(d.getDate() + 1); } while (d.getDay() === 0); return { date: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`, dow: d.getDay() }; });
+    const futurDay = JOURS[futur.dow];
     const modele = await modeleSeance(page, 'pull-a');
     const ex = modele.exerciseOrder[0];
-    // État « téléphone avant mise à jour » : pas de début de programme, séance du jour en semaine 7 avec 2 séries faites, une séance terminée en semaine 5.
+    const modeleFutur = await modeleSeance(page, futurDay);
+    const exF = modeleFutur.exerciseOrder[0];
+    // Séance du jour : 2 séries faites en décharge (semaine 7).
     const enCours = JSON.parse(JSON.stringify(modele));
     Object.assign(enCours, { id: `${jour}:pull-a`, date: jour, weekIndex: 7, startedAt: Date.now() - 1800e3, endedAt: null, updatedAt: Date.now(), execution: { ...(enCours.execution ?? {}), active: false } });
-    enCours.exercises[ex].sets = [0, 1].map(() => ({ id: 'x' + Math.random(), done: true, weightKg: 50, reps: 8, rir: 2, technique: 'good', pain: 0, restActualSec: 120, completedAt: Date.now() - 600e3 }));
+    enCours.exercises[ex].sets = [0, 1].map(() => ({ id: 'x' + Math.random(), done: true, weightKg: 60, reps: 8, rir: 4, technique: 'good', pain: 0, restActualSec: 120, completedAt: Date.now() - 600e3 }));
+    // Séance terminée le 01/09 (semaine 5) à 70 kg — référence normale.
     const ancienne = JSON.parse(JSON.stringify(modele));
     Object.assign(ancienne, { id: '2026-09-01:pull-a', date: '2026-09-01', weekIndex: 5, startedAt: Date.parse('2026-09-01T18:00:00'), endedAt: Date.parse('2026-09-01T19:20:00'), status: 'COMPLETE' });
-    ancienne.exercises[ex].sets = [0, 1, 2].map(() => ({ id: 'y' + Math.random(), done: true, weightKg: 45, reps: 8, rir: 2, technique: 'good', pain: 0, restActualSec: 120, completedAt: Date.parse('2026-09-01T18:30:00') }));
-    await ecrireBase(page, { profil: { startDate: '2026-08-05', programVersion: 'transformation-12s' }, supprimerChampsProfil: ['programStartDate'], sessions: [enCours, ancienne] });
+    ancienne.exercises[ex].sets = [0, 1, 2].map(() => ({ id: 'y' + Math.random(), done: true, weightKg: 70, reps: 8, rir: 1, technique: 'good', pain: 0, restActualSec: 120, completedAt: Date.parse('2026-09-01T18:30:00') }));
+    // Séance à venir déjà créée par 3.6.2 en décharge : 2 séries pré-remplies à 87,5 % (52,5 kg sur 60).
+    const passeFutur = JSON.parse(JSON.stringify(modeleFutur));
+    Object.assign(passeFutur, { id: `2026-09-02:${futurDay}`, date: '2026-09-02', weekIndex: 5, startedAt: Date.parse('2026-09-02T18:00:00'), endedAt: Date.parse('2026-09-02T19:00:00'), status: 'COMPLETE' });
+    passeFutur.exercises[exF].sets = passeFutur.exercises[exF].sets.map(() => ({ id: 'z' + Math.random(), done: true, weightKg: 60, reps: 8, rir: 2, technique: 'good', pain: 0, completedAt: Date.parse('2026-09-02T18:30:00') }));
+    const aVenir = JSON.parse(JSON.stringify(modeleFutur));
+    Object.assign(aVenir, { id: `${futur.date}:${futurDay}`, date: futur.date, weekIndex: 7, startedAt: null, endedAt: null });
+    aVenir.exercises[exF].sets = [0, 1].map(() => ({ id: 'w' + Math.random(), done: false, weightKg: 52.5, reps: null, rir: null, technique: 'good', pain: 0, restActualSec: null, completedAt: null }));
+    aVenir.exercises[exF].autoSeed = { loadKg: 52.5, sources: [passeFutur.id], sets: [0, 1] };
+    await ecrireBase(page, { profil: { startDate: '2026-08-05', programVersion: 'transformation-12s' }, supprimerChampsProfil: ['programStartDate'], sessions: [enCours, ancienne, passeFutur, aVenir] });
     await page.reload({ waitUntil: 'load' }); await wait(2500);
     const profil = await lireProfil(page);
     attendu(profil.programStartDate === '2026-09-07' && profil.startDate === '2026-08-05', 'migration du début de programme incorrecte : ' + JSON.stringify({ p: profil.programStartDate, s: profil.startDate }));
-    await toucher(page, '.bottom-nav [data-tab="home"]');
-    const foot = await page.evaluate(() => document.querySelector('.f-hero-foot')?.textContent.replace(/\s+/g, ' ') ?? '');
-    attendu(/Semaine 2/.test(foot) && !/Décharge/.test(foot), 'accueil encore en décharge : ' + foot);
-    await allerJour(page, 'pull-a');
-    const carte = await page.evaluate((id) => ({ plan: document.querySelector(`[data-exercise-card="${id}"] .exercise-plan`)?.textContent.replace(/\s+/g, ' '), statut: document.querySelector(`[data-exercise-card="${id}"] .f-card-status`)?.textContent, banniere: !!document.querySelector('.f-deload-banner') }), ex);
-    attendu(/^3 ×/.test(carte.plan) && /2\/3/.test(carte.statut) && !carte.banniere, 'carte incorrecte : ' + JSON.stringify(carte));
     const base = await lireBase(page);
-    const a = base.sessions.find((x) => x.id === '2026-09-01:pull-a'), c = base.sessions.find((x) => x.id === `${jour}:pull-a`);
-    attendu(a.planWeekIndex === 5 && a.weekIndex === 5 && a.exercises[ex].sets.every((x) => x.done && x.weightKg === 45), 'séance terminée modifiée : ' + JSON.stringify({ w: a.weekIndex, p: a.planWeekIndex }));
-    attendu(c.weekIndex === 2 && c.exercises[ex].sets.filter((x) => x.done).length === 2 && c.exercises[ex].sets.length >= 3, 'séance du jour : ' + JSON.stringify({ w: c.weekIndex, n: c.exercises[ex].sets.length }));
+    const a = base.sessions.find((x) => x.id === '2026-09-01:pull-a'), c = base.sessions.find((x) => x.id === `${jour}:pull-a`), f = base.sessions.find((x) => x.id === aVenir.id);
+    attendu(a.planWeekIndex === 5 && a.exercises[ex].sets.every((x) => x.done && x.weightKg === 70), 'séance terminée modifiée');
+    attendu(c.planWeekIndex === 7 && c.weekIndex === 7 && c.exercises[ex].sets.filter((x) => x.done).length === 2, 'la séance faite en décharge a été réinterprétée : ' + JSON.stringify({ w: c.weekIndex, p: c.planWeekIndex }));
+    const chargesF = f.exercises[exF].sets.map((x) => x.weightKg);
+    const semaineF = f.weekIndex;
+    attendu(semaineF <= 3 && chargesF.length >= 3 && chargesF.every((kg) => kg >= 60), `séance à venir : semaine ${semaineF}, charges ${JSON.stringify(chargesF)} (décharge non recalculée)`);
+    // Accueil et liste du jour à venir
+    await allerJour(page, futurDay);
+    const carte = await page.evaluate((id) => ({ plan: document.querySelector(`[data-exercise-card="${id}"] .exercise-plan`)?.textContent.replace(/\s+/g, ' '), banniere: !!document.querySelector('.f-deload-banner') }), exF);
+    attendu(!/décharge/.test(carte.plan ?? '') && !carte.banniere, 'le jour à venir est encore présenté en décharge : ' + JSON.stringify(carte));
     // Réglages : le début du programme est visible et expliqué
     await toucher(page, '.bottom-nav [data-tab="tools"]');
     await toucher(page, '.f-tool[data-action="forge-open"][data-section="forge-profile"]');
     const reglage = await page.evaluate(() => ({ v: document.querySelector('[data-profile-field="programStartDate"]')?.value, aide: document.querySelector('.f-program-start-help')?.textContent }));
-    attendu(reglage.v === '2026-09-07' && /semaine 2/.test(reglage.aide ?? '') && /décharge/.test(reglage.aide ?? ''), 'réglage absent : ' + JSON.stringify(reglage));
-    return `début du programme ${profil.programStartDate} ; aujourd’hui semaine 2 ; carte « ${carte.plan.slice(0, 22)} » ${carte.statut} ; séance du 01/09 figée en semaine 5`;
+    attendu(reglage.v === '2026-09-07' && /semaine/.test(reglage.aide ?? '') && /décharge/.test(reglage.aide ?? ''), 'réglage absent : ' + JSON.stringify(reglage));
+    return `début du programme 2026-09-07 ; séance du jour (2 séries en décharge) gardée en semaine 7 ; ${futurDay} du ${futur.date} : semaine ${semaineF}, ${JSON.stringify(chargesF)} au lieu de [52.5, 52.5] ; 01/09 figée en semaine 5`;
   });
 
   await scenario('S19 « Faire maintenant » sur un exercice lourd : la série 1 directement, titre visible, échauffement seulement proposé', async ({ page }) => {
@@ -907,6 +922,142 @@ async function scenario(nom, fn) {
     const t = base.sessions.find((x) => x.id === '2026-08-31:pull-a'), c = base.sessions.find((x) => x.id === `${jour}:pull-a`);
     attendu(t.weekIndex === 3 && t.planWeekIndex === 3 && c.weekIndex === 1, 'réglage : ' + JSON.stringify({ t: t.weekIndex, c: c?.weekIndex }));
     return 'bandeau « Semaine 7 du programme · Décharge », carte « 2 × (décharge, au lieu de 3) », mode guidé « 2 séries au lieu de 3 » ; début changé → séance du jour semaine 1, séance terminée toujours semaine 3';
+  });
+
+  // ================================================================ 3.6.3 — défauts trouvés par la relecture
+  async function seanceGuideeAvecTravail(page, dayId, faits) {
+    const jour = await aujourdHuiIso(page);
+    const modele = await modeleSeance(page, dayId);
+    const s0 = JSON.parse(JSON.stringify(modele));
+    s0.startedAt = Date.now() - 3600e3; s0.updatedAt = Date.now(); s0.endedAt = null;
+    s0.execution = { ...(s0.execution ?? {}), active: true };
+    for (const [id, n] of Object.entries(faits))
+      s0.exercises[id].sets = s0.exercises[id].sets.map((set, k) => k < n ? { ...set, done: true, weightKg: 20, reps: 12, rir: 2, technique: 'good', pain: 0, completedAt: Date.now() - 1800e3 } : set);
+    await ecrireBase(page, { sessions: [s0] });
+    await page.reload({ waitUntil: 'load' }); await wait(2500);
+    return { jour, modele: s0 };
+  }
+
+  await scenario('S25 Après la dernière série du dernier exercice : le cardio démarre (le repos avant l’exercice suivant ne bloque pas)', async ({ page }) => {
+    const day = 'pull-a';
+    const modele = await modeleSeance(page, day);
+    const faits = {};
+    for (const id of modele.exerciseOrder) if (id !== 'pull-a-incline-walk') faits[id] = modele.exercises[id].sets.length;
+    faits['pull-a-hammer'] = modele.exercises['pull-a-hammer'].sets.length - 1;
+    await seanceGuideeAvecTravail(page, day, faits);
+    await allerJour(page, day); await page.evaluate(() => window.scrollTo(0, 0));
+    if (await page.evaluate(() => !!document.querySelector('[data-action="exec-enter"]'))) await toucher(page, '[data-action="exec-enter"]');
+    if (await page.evaluate(() => !!document.querySelector('[data-action="exec-resume"]'))) await toucher(page, '[data-action="exec-resume"]');
+    let e = await etape(page);
+    attendu(/Curl marteau/.test(e.titre ?? ''), 'pas sur la dernière série du curl marteau : ' + JSON.stringify(e));
+    await saisirEtValider(page, { kg: 12, reps: 12 });
+    let s = await seanceDu(page, day);
+    attendu(s.activeTimer?.kind === 'transition', 'pas de repos avant le cardio : ' + JSON.stringify(s.activeTimer));
+    await toucher(page, '[data-action="exec-start-cardio"]');
+    s = await seanceDu(page, day);
+    const toast = await page.evaluate(() => document.getElementById('toast')?.textContent ?? '');
+    attendu(s.activeTimer?.kind === 'cardio' && !/déjà en cours/.test(toast), 'cardio refusé : ' + JSON.stringify({ t: s.activeTimer?.kind, toast }));
+    return 'dernière série du curl marteau → repos avant l’exercice suivant → « DÉMARRER » le cardio : le repos est clos, le cardio tourne';
+  });
+
+  await scenario('S26 Séance menée depuis la liste, « Faire maintenant » : la série de l’exercice choisi, pas l’échauffement général ni les activations', async ({ page }) => {
+    await seanceGuideeAvecTravail(page, 'pull-a', { 'pull-a-lat-pronation': 2 });
+    await ecrireBase(page, {});
+    await page.evaluate(async () => {
+      const db = await new Promise((res) => { const x = indexedDB.open('colosse-adaptive-db'); x.onsuccess = () => res(x.result); });
+      const t = db.transaction('sessions', 'readwrite'); const st = t.objectStore('sessions');
+      const all = await new Promise((r) => { const g = st.getAll(); g.onsuccess = () => r(g.result); });
+      for (const x of all) if (x.startedAt && !x.endedAt) { x.execution = { ...(x.execution ?? {}), active: false }; st.put(x); }
+      await new Promise((r) => { t.oncomplete = r; }); db.close();
+    });
+    await page.reload({ waitUntil: 'load' }); await wait(2500);
+    await allerJour(page, 'pull-a');
+    await toucher(page, '[data-exercise-card="pull-a-reverse-pecdeck"] [data-action="exercise-do-now"]');
+    const e = await etape(page);
+    const s = await seanceDu(page, 'pull-a');
+    attendu(e.guide && /Reverse pec-deck/.test(e.titre ?? '') && e.serie === 'Série 1 sur 3', 'écran après Faire maintenant : ' + JSON.stringify(e));
+    attendu(s.warmup.general.skipped !== true && s.warmup.general.done !== true, 'l’échauffement a été marqué passé à la place de l’utilisateur');
+    return 'séance commencée dans la liste → Faire maintenant Reverse pec-deck → « Série 1 sur 3 » directement, échauffement non marqué';
+  });
+
+  await scenario('S27 Échauffement demandé pendant le repos avant l’exercice suivant : la montée avance ; charge tapée prioritaire sur le pré-remplissage', async ({ page }) => {
+    // Historique : rowing appuyé 50 kg le 01/09 → pré-remplissage à 50 kg.
+    const modele = await modeleSeance(page, 'pull-a');
+    const passe = JSON.parse(JSON.stringify(modele));
+    Object.assign(passe, { id: '2026-09-01:pull-a', date: '2026-09-01', startedAt: Date.parse('2026-09-01T18:00:00'), endedAt: Date.parse('2026-09-01T19:00:00'), status: 'COMPLETE', weekIndex: 1, planWeekIndex: 1 });
+    passe.exercises['pull-a-chest-row'].sets = passe.exercises['pull-a-chest-row'].sets.map(() => ({ id: 'p' + Math.random(), done: true, weightKg: 50, reps: 8, rir: 2, technique: 'good', pain: 0, completedAt: Date.parse('2026-09-01T18:30:00') }));
+    await ecrireBase(page, { sessions: [passe] });
+    await page.reload({ waitUntil: 'load' }); await wait(2200);
+    await demarrer(page, 'pull-a');
+    await page.evaluate(() => document.querySelector('[data-action="exec-skip-general-warmup"]').click()); await wait(450);
+    await passerActivations(page);
+    // Terminer le tirage pronation → repos avant l'exercice suivant (rowing)
+    await toucher(page, '.f-exec-tools [data-action="exec-show-program"]');
+    await toucher(page, '[data-exercise-card="pull-a-lat-pronation"] [data-action="exercise-do-now"]');
+    for (let k = 0; k < 3; k++) { await saisirEtValider(page, { kg: 60, reps: 8 }); if (k < 2) await page.evaluate(() => document.querySelector('.timer-overlay [data-action="timer-skip"]')?.click()); await wait(300); }
+    let s = await seanceDu(page, 'pull-a');
+    attendu(s.activeTimer?.kind === 'transition', 'pas de repos avant l’exercice suivant');
+    let e = await etape(page);
+    if (!/Rowing poitrine/.test(e.titre ?? '')) { await toucher(page, '.f-exec-tools [data-action="exec-show-program"]'); await toucher(page, '[data-exercise-card="pull-a-chest-row"] [data-action="exercise-do-now"]'); }
+    const prerempli = await page.evaluate(() => document.querySelector('[data-exec-field="weightKg"]').value);
+    await page.fill('[data-exec-field="weightKg"]', '70');
+    await toucher(page, '.exec-work [data-action="exec-start-ramps"]');
+    const rampeA = await page.evaluate(() => document.querySelector('.exec-ramp .exec-huge')?.textContent);
+    attendu(/35 kg/.test(rampeA ?? ''), `montée calculée sur le pré-remplissage (${prerempli}) au lieu de 70 kg : ${rampeA}`);
+    await toucher(page, '.exec-ramp [data-action="exec-validate-ramp"]');
+    s = await seanceDu(page, 'pull-a');
+    const toast = await page.evaluate(() => document.getElementById('toast')?.textContent ?? '');
+    attendu(s.activeTimer?.kind === 'ramp-rest' && !/déjà en cours/.test(toast), 'repos de montée refusé : ' + JSON.stringify({ t: s.activeTimer?.kind, toast }));
+    await toucher(page, '.timer-overlay [data-action="timer-skip"]');
+    const rampeB = await page.evaluate(() => document.querySelector('.exec-ramp .exec-huge')?.textContent);
+    attendu(/50 kg|49/.test(rampeB ?? ''), 'étape B non affichée : ' + rampeB);
+    return `pré-rempli ${prerempli} kg, tapé 70 → montée A ${rampeA}, B ${rampeB} ; « SÉRIE FAITE » pendant le repos avant l’exercice suivant : repos de montée lancé`;
+  });
+
+  await scenario('S28 Séance du jour en cours + ancienne séance restée ouverte : « En séance » et « Reprendre » mènent à la séance du jour, chrono conservé', async ({ page }) => {
+    const modele = await modeleSeance(page, 'pull-a');
+    const ex = modele.exerciseOrder[0];
+    const lundiPasse = await page.evaluate(() => { const d = new Date(); const recul = ((d.getDay() + 6) % 7) || 7; d.setDate(d.getDate() - recul); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; });
+    const ouverte = JSON.parse(JSON.stringify(modele));
+    Object.assign(ouverte, { id: `${lundiPasse}:pull-a`, date: lundiPasse, startedAt: Date.now() - 170 * 3600e3, updatedAt: Date.now() - 168 * 3600e3, endedAt: null, execution: { active: true } });
+    ouverte.exercises[ex].sets[0] = { ...ouverte.exercises[ex].sets[0], done: true, weightKg: 50, reps: 8, rir: 2, technique: 'good', pain: 0 };
+    await ecrireBase(page, { sessions: [ouverte] });
+    await page.reload({ waitUntil: 'load' }); await wait(2200);
+    await demarrer(page, 'push-a'); await jusquASerie(page); await saisirEtValider(page, { kg: 80, reps: 8 });
+    const avant = (await seanceDu(page, 'push-a')).activeTimer;
+    attendu(avant?.kind === 'work-rest', 'pas de repos sur la séance du jour');
+    await toucher(page, '.f-exec-tools [data-action="exec-show-program"]');
+    await toucher(page, '.bottom-nav [data-tab="home"]');
+    const statut = await page.evaluate(() => document.querySelector('.f-top-status')?.textContent.trim());
+    await toucher(page, '.f-top-status');
+    const e = await etape(page);
+    const push = await seanceDu(page, 'push-a');
+    const old = (await lireBase(page)).sessions.find((x) => x.id === ouverte.id);
+    attendu(/En séance/.test(statut) && e.guide && /Développé incliné Smith/.test(e.titre ?? ''), '« En séance » mène ailleurs : ' + JSON.stringify({ statut, e }));
+    attendu(push.activeTimer?.kind === 'work-rest' && push.activeTimer.startedAt === avant.startedAt, 'chrono du jour perdu');
+    attendu(old.exercises[ex].sets.filter((x) => x.done).length === 1 && !old.endedAt, 'ancienne séance modifiée');
+    return '« En séance » → séance du jour (Smith), repos conservé ; ancienne séance intacte';
+  });
+
+  await scenario('S29 Liste unilatérale : ressenti du côté droit laissé à « Je ne sais pas » → la série garde le RIR connu, jamais 0', async ({ page }) => {
+    await demarrer(page, 'pull-a');
+    await page.evaluate(() => document.querySelector('[data-action="exec-skip-general-warmup"]').click()); await wait(450);
+    await passerActivations(page);
+    await toucher(page, '.f-exec-tools [data-action="exec-show-program"]');
+    const carte = '[data-exercise-card="pull-a-unilateral"]';
+    await toucher(page, `${carte} details.f-exercise-detail > summary`);
+    const ligne = `${carte} [data-set-row][data-set="0"]`;
+    await page.fill(`${ligne} [data-set-field="weightKg"]`, '12'); await page.fill(`${ligne} [data-set-field="reps"]`, '12');
+    await page.selectOption(`${ligne} [data-set-field="rir"]`, '2');
+    await toucher(page, `${ligne} [data-action="toggle-set"]`);
+    await page.evaluate(() => document.querySelector('.timer-overlay [data-action="timer-skip"]')?.click()); await wait(400);
+    if (await page.evaluate(() => !!document.querySelector('.execution'))) await toucher(page, '.f-exec-tools [data-action="exec-show-program"]');
+    if (!(await page.evaluate((c) => document.querySelector(`${c} details.f-exercise-detail`)?.open, carte))) await toucher(page, `${carte} details.f-exercise-detail > summary`);
+    await page.fill(`${ligne} [data-set-field="reps"]`, '11');
+    await toucher(page, `${ligne} [data-action="toggle-set"]`);
+    const set = (await seanceDu(page, 'pull-a')).exercises['pull-a-unilateral'].sets[0];
+    attendu(set.done && set.rir === 2 && set.sides.right.rir === null, 'RIR enregistré : ' + JSON.stringify({ rir: set.rir, droite: set.sides?.right?.rir }));
+    return 'gauche RIR 2, droite « Je ne sais pas » → série RIR 2 (et non 0)';
   });
 
   console.log('\nRESUME ' + JSON.stringify({ total: resultats.length, ok: resultats.filter((r) => r.ok).length }));

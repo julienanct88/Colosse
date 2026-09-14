@@ -69,7 +69,7 @@ const h = (s) => crypto.createHash('sha256').update(s).digest('hex').slice(0, 16
     const apres = await page.evaluate(async () => ({ caches: await caches.keys(), version: (await (await fetch('./defaults.js')).text()).match(/APP_VERSION = '([^']+)'/)?.[1], drafts: (await fetch('./ui/drafts.js')).ok, outils: !!document.querySelector('.f-exec-tools [data-action="exec-show-program"]'), serie: document.body.innerText.match(/Série \d+ sur \d+/)?.[0] }));
     note(apres.caches.length === 1 && apres.caches[0] === NOUVEAU_CACHE, 'ancien cache supprimé, nouveau cache seul : ' + apres.caches.join(','));
     note(apres.version === NOUVELLE_VERSION && apres.drafts, `fichiers servis = nouvelle version ${NOUVELLE_VERSION}`);
-    note(apres.outils && apres.serie === 'Série 2 sur 4', `séance reprise dans la nouvelle interface au bon endroit (${apres.serie}, « Tous les exercices » présent)`);
+    note(apres.outils && apres.serie === 'Série 2 sur 2', `séance reprise dans la nouvelle interface au bon endroit (${apres.serie}, « Tous les exercices » présent)`);
     const e3 = await empreinte(page);
     // Seuls changements permis : ajouts de la migration 3.6.3 (début du programme, semaine figée/recalculée,
     // séries vides ajoutées quand le plan redevient complet). Aucune valeur saisie ne doit bouger.
@@ -81,13 +81,13 @@ const h = (s) => crypto.createHash('sha256').update(s).digest('hex').slice(0, 16
     note(interdits.length === 0, `données d’origine intactes après mise à jour (${ecartsMaj.length} ajout(s) de migration${interdits.length ? ' ; INTERDITS : ' + interdits.join(' | ') : ''})`);
     const d3 = JSON.parse(e3);
     const seance = d3.sessions.find((x) => x.exercises['push-a-incline-smith']?.sets?.[0]?.done);
-    note(d3.profile[0].value.programStartDate === '2026-09-07' && d3.profile[0].value.startDate === '2026-08-05' && seance.exercises['push-a-incline-smith'].sets[0].weightKg === 80, `migration : début du programme 2026-09-07, date de départ inchangée, série 80 kg intacte (semaine ${seance.weekIndex})`);
+    note(d3.profile[0].value.programStartDate === '2026-09-07' && d3.profile[0].value.startDate === '2026-08-05' && seance.exercises['push-a-incline-smith'].sets[0].weightKg === 80 && seance.planWeekIndex === 7, `migration : début du programme 2026-09-07, date de départ inchangée, séance commencée gardée dans sa semaine (${seance.weekIndex}), série 80 kg intacte`);
     // Hors ligne : serveur arrêté + réseau coupé
     await page.fill('[data-exec-field="reps"]', '7');
     srv.kill(); await ctx.setOffline(true); await wait(500);
     await page.reload({ waitUntil: 'load' }); await wait(3000);
     const hl = await page.evaluate(() => ({ serie: document.body.innerText.match(/Série \d+ sur \d+/)?.[0], reps: document.querySelector('[data-exec-field="reps"]')?.value }));
-    note(hl.serie === 'Série 2 sur 4' && hl.reps === '7', `hors ligne : l’app s’ouvre, séance au bon endroit, saisie non validée récupérée (${JSON.stringify(hl)})`);
+    note(hl.serie === 'Série 2 sur 2' && hl.reps === '7', `hors ligne : l’app s’ouvre, séance au bon endroit, saisie non validée récupérée (${JSON.stringify(hl)})`);
     await toucher(page, '.f-exec-tools [data-action="exec-show-program"]');
     await toucher(page, '[data-exercise-card="push-a-lateral"] [data-action="exercise-view"]');
     await toucher(page, '.f-exercise-sheet [data-action="exercise-sheet-close"]');

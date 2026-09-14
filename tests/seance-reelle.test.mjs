@@ -28,29 +28,67 @@ test('Semaine du programme : le 14/09 n’est plus une décharge (3 séries, pas
     assert.equal(getTrainingPhase(trainingWeekIndex(profile, '2026-10-19')).name, 'Décharge', 'la décharge revient en semaine 7 du programme');
 });
 
-test('Migration : séances terminées figées, séance en cours recalculée, idempotente, rien de supprimé', () => {
+test('Migration : travail déjà fait = semaine figée (terminé ou non) ; séance sans série validée = nouveau compte ; idempotente', () => {
     const terminee = { id: '2026-09-01:pull-a', date: '2026-09-01', dayId: 'pull-a', weekIndex: 5, startedAt: 1, endedAt: 2, status: 'COMPLETE', exercises: { a: { sets: [{ done: true, weightKg: 60, reps: 8 }] } } };
-    const enCours = { id: '2026-09-14:pull-a', date: '2026-09-14', dayId: 'pull-a', weekIndex: 7, startedAt: 3, endedAt: null, exercises: { a: { sets: [{ done: true, weightKg: 12, reps: 20 }, { done: false }] } } };
-    const avant = JSON.stringify([terminee, enCours]);
-    const r = migrateProgramStart(julien, [terminee, enCours]);
-    assert.equal(JSON.stringify([terminee, enCours]), avant, 'objets reçus non modifiés');
-    assert.equal(r.changed, true);
-    const [t, c] = r.sessions;
-    assert.deepEqual([t.planWeekIndex, t.weekIndex], [5, 5], 'l’historique garde sa semaine');
-    assert.equal(c.weekIndex, 2, 'la séance en cours suit le programme');
-    assert.equal(c.planWeekIndex, undefined);
-    assert.deepEqual(c.exercises, enCours.exercises, 'séries intactes');
-    assert.equal(sessionWeekIndex(t, r.profile), 5);
-    assert.equal(sessionWeekIndex(c, r.profile), 2);
-    const encore = migrateProgramStart(r.profile, r.sessions);
-    assert.equal(encore.changed, false, 'idempotente');
-    // Nouveau profil créé après l’installation : le programme démarre avec lui.
+    const faiteEnDecharge = { id: '2026-09-14:pull-a', date: '2026-09-14', dayId: 'pull-a', weekIndex: 7, startedAt: 3, endedAt: null, exercises: { a: { sets: [{ done: true, weightKg: 60, reps: 8 }, { done: false }] } } };
+    const aVenir = { id: '2026-09-15:push-a', date: '2026-09-15', dayId: 'push-a', weekIndex: 7, startedAt: null, endedAt: null, exercises: { b: { sets: [{ done: false, weightKg: 52.5 }] } } };
+    const unCote = { id: '2026-09-16:legs-a', date: '2026-09-16', dayId: 'legs-a', weekIndex: 7, startedAt: 4, endedAt: null, exercises: { c: { sets: [{ done: false, sides: { left: { done: true, reps: 10 } } }] } } };
+    const avant = JSON.stringify([terminee, faiteEnDecharge, aVenir, unCote]);
+    const r = migrateProgramStart(julien, [terminee, faiteEnDecharge, aVenir, unCote]);
+    assert.equal(JSON.stringify([terminee, faiteEnDecharge, aVenir, unCote]), avant, 'objets reçus non modifiés');
+    const [t, f, v, u] = r.sessions;
+    assert.deepEqual([t.planWeekIndex, t.weekIndex], [5, 5], 'terminée : figée');
+    assert.deepEqual([f.planWeekIndex, f.weekIndex], [7, 7], 'commencée avec des séries validées en décharge : reste une décharge');
+    assert.deepEqual([u.planWeekIndex, u.weekIndex], [7, 7], 'un côté validé compte comme du travail fait');
+    assert.deepEqual([v.planWeekIndex, v.weekIndex], [undefined, 2], 'sans série validée : suit le programme');
+    assert.deepEqual(f.exercises, faiteEnDecharge.exercises, 'séries intactes');
+    assert.equal(sessionWeekIndex(f, r.profile), 7);
+    assert.equal(sessionWeekIndex(v, r.profile), 2);
+    assert.equal(migrateProgramStart(r.profile, r.sessions).changed, false, 'idempotente');
     assert.equal(migrateProgramStart({ startDate: '2026-09-21', programVersion: 'transformation-12s' }, []).profile.programStartDate, '2026-09-21');
-    // Clôturer une séance fige sa semaine ; changer le début du programme ne la touche plus.
-    const close = closeSession({ ...c }, { now: 9 });
+    const close = closeSession({ ...v, weekIndex: 2 }, { now: 9 });
     assert.equal(close.planWeekIndex, 2);
     assert.equal(sessionWeekIndex(close, { programStartDate: '2026-09-14' }), 2);
-    assert.equal(sessionWeekIndex({ date: '2026-09-21' }, { programStartDate: '2026-09-14' }), 2);
+    // La vraie séance du 14/09 faite en décharge ne bloque pas la progression suivante.
+    const ex = findExercise('pull-a-lat-pronation');
+    const serie = (kg, reps, rir) => ({ done: true, weightKg: kg, reps, rir, technique: 'good', pain: 0 });
+    const s01 = { date: '2026-09-01', plan: getExercisePlan(ex, 5), sets: [serie(70, 8, 1), serie(70, 8, 1), serie(70, 8, 1)] };
+    const s14 = { date: '2026-09-14', plan: getExercisePlan(ex, sessionWeekIndex(f, r.profile)), sets: [serie(60, 8, 4), serie(60, 8, 4)] };
+    const suivante = prescriptionFromHistory([s01, s14], getExercisePlan(ex, 3), ex, ex.variants[0].incrementKg);
+    assert.notEqual(suivante.decision, 'HOLD_INCOMPLETE');
+    assert.ok(suivante.loadKg >= 70, `référence = charge habituelle, pas la décharge (${suivante.loadKg} kg)`);
+});
+
+test('Unilatéral : ressenti « je ne sais pas » d’un côté n’est jamais enregistré comme un échec (RIR 0)', async () => {
+    const { aggregateSides } = await import('../engine/session.js');
+    const set = { sides: { left: { done: true, reps: 12, rir: 2, pain: 0, technique: 'good' }, right: { done: true, reps: 11, rir: null, pain: null, technique: 'good' } } };
+    const merged = aggregateSides(set);
+    assert.equal(merged.rir, 2, 'RIR connu du gauche, pas 0');
+    assert.equal(merged.reps, 11);
+    assert.equal(merged.pain, 0);
+    assert.equal(aggregateSides({ sides: { left: { done: true, reps: 10, rir: null }, right: { done: true, reps: 10, rir: null } } }).rir, null);
+    assert.equal(aggregateSides({ sides: { left: { done: true, reps: 10, rir: 0 }, right: { done: true, reps: 10, rir: 3 } } }).rir, 0, 'un vrai 0 reste 0');
+});
+
+test('Échauffement demandé : calculé sur la charge indiquée, pas sur le pré-remplissage ; travail commencé = échauffement non imposé', () => {
+    const day = findDay('pull-a');
+    const exercises = {};
+    for (const ex of day.exercises)
+        exercises[ex.id] = { variantId: ex.variants[0].id, skipped: false, sets: Array.from({ length: getExercisePlan(ex, 2).sets }, () => ({ done: false, weightKg: 50, reps: null })) };
+    const warmup = emptyWarmupState();
+    warmup.ramps['pull-a-chest-row'] = { referenceLoadKg: 70, done: [], requested: true };
+    const session = { exercises, warmup, execution: { active: true, warmupDeferred: true }, exerciseOrder: ['pull-a-chest-row', ...day.exercises.map((e) => e.id).filter((id) => id !== 'pull-a-chest-row')] };
+    const step = computeExecutionStep({ day, session, resolvePlan: (ex) => getExercisePlan(ex, 2) });
+    assert.equal(step.stage, STAGES.RAMP_SET, 'échauffement choisi avec « Faire maintenant » : plus d’échauffement général imposé');
+    assert.equal(step.referenceLoadKg, 70);
+    assert.equal(step.ramp.loadKg, 35);
+    // Séance menée depuis la liste (séries validées, échauffement jamais fait) : pas d'échauffement général imposé.
+    const liste = { exercises: JSON.parse(JSON.stringify(exercises)), warmup: emptyWarmupState(), execution: { active: true }, exerciseOrder: day.exercises.map((e) => e.id) };
+    liste.exercises['pull-a-lat-pronation'].sets[0].done = true;
+    assert.equal(computeExecutionStep({ day, session: liste, resolvePlan: (ex) => getExercisePlan(ex, 2) }).stage, STAGES.WORK_SET);
+    // Rien de fait et pas de « Faire maintenant » : l'échauffement général reste la première étape.
+    const neuve = { ...liste, exercises: JSON.parse(JSON.stringify(exercises)) };
+    assert.equal(computeExecutionStep({ day, session: neuve, resolvePlan: (ex) => getExercisePlan(ex, 2) }).stage, STAGES.GENERAL_WARMUP);
 });
 
 test('Repos après une série : entre séries, puis AVANT L’EXERCICE SUIVANT après la dernière', () => {
