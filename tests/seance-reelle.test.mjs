@@ -8,7 +8,7 @@ import {
     TRANSFORMATION_INSTALL_WEEK, trainingWeekIndex, sessionWeekIndex, migrateProgramStart, closeSession,
 } from '../engine/session.js';
 import { restAfterSetDecision, executionChangeDecision, computeExecutionStep, STAGES } from '../engine/execution.js';
-import { createTimer, timerLabel, timerEndMessage, timerControls } from '../engine/timer.js';
+import { createTimer, timerLabel, timerEndMessage, timerControls, timerOutcome } from '../engine/timer.js';
 import { applyTimerOutcome } from '../engine/timer-effects.js';
 import { prescriptionFromHistory } from '../engine/progression.js';
 import { emptyWarmupState, activationSteps, rampsRequested } from '../engine/warmup.js';
@@ -73,6 +73,7 @@ test('Repos avant l’exercice suivant : libellé, message, contrôles, et jamai
     const session = { id: 's', exercises: { x: { sets: [{ done: true, restActualSec: null }] } }, activeTimer: null };
     const timer = createTimer('transition', 90, { exerciseId: 'x', setIndex: 0, sessionId: 's', nextName: 'Y' }, 0);
     session.activeTimer = timer;
+    assert.equal(timerOutcome(timer, 60_000).action, 'none', 'aucun effet métier : ce n’est pas un repos entre séries');
     const r = applyTimerOutcome(session, timer, 60_000);
     assert.equal(r.session.activeTimer, null);
     assert.equal(r.session.exercises.x.sets[0].restActualSec, null);
@@ -102,6 +103,13 @@ test('« Faire maintenant » sur un exercice lourd : la série 1 tout de suite, 
     assert.equal(step.totalSets, 3);
     assert.deepEqual(step.rampOffer, { count: 2 });
     assert.equal(rampsRequested(warmup, 'pull-a-chest-row', 2), false);
+    // Même avec une charge déjà connue (pré-remplie), la montée en charge n'est jamais imposée.
+    exercises['pull-a-chest-row'].sets.forEach((set) => { set.weightKg = 50; });
+    const avecCharge = computeExecutionStep({ day, session, resolvePlan: (ex) => getExercisePlan(ex, 2) });
+    assert.equal(avecCharge.stage, STAGES.WORK_SET);
+    assert.deepEqual(avecCharge.rampOffer, { count: 2 });
+    session.warmup.ramps['pull-a-chest-row'] = { referenceLoadKg: 50, done: [], requested: true };
+    assert.equal(computeExecutionStep({ day, session, resolvePlan: (ex) => getExercisePlan(ex, 2) }).stage, STAGES.RAMP_SET, 'demandée : elle s’affiche');
 });
 
 test('Après une décharge, la progression repart de la charge habituelle (plus de « séance trop incomplète »)', () => {
@@ -113,6 +121,9 @@ test('Après une décharge, la progression repart de la charge habituelle (plus 
     const s8 = prescriptionFromHistory([s6, s7], getExercisePlan(ex, 8), ex, ex.variants[0].incrementKg);
     assert.notEqual(s8.decision, 'HOLD_INCOMPLETE');
     assert.ok(s8.loadKg >= 70, `charge de reprise ${s8.loadKg} kg, pas la charge allégée`);
+    // Seule exposition connue = la décharge (2/2) : complète pour ce qu'elle prévoyait.
+    const seule = prescriptionFromHistory([s7], getExercisePlan(ex, 8), ex, ex.variants[0].incrementKg);
+    assert.notEqual(seule.decision, 'HOLD_INCOMPLETE', 'une décharge faite en entier n’est pas une séance incomplète');
     // Une vraie séance incomplète reste signalée.
     const incomplete = { ...s6, sets: [serie(70, 8, 1)] };
     assert.equal(prescriptionFromHistory([incomplete], getExercisePlan(ex, 6), ex, ex.variants[0].incrementKg).decision, 'HOLD_INCOMPLETE');

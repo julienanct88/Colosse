@@ -760,7 +760,7 @@ async function scenario(nom, fn) {
     attendu(s.activeTimer?.kind === 'side-switch', 'pas de changement de côté');
     await toucher(page, '.timer-overlay [data-action="timer-skip"]');
     const droite = await page.evaluate(() => ({ cote: document.querySelector('.exec-side')?.textContent, rir: document.querySelector('[data-exec-group="rir"] .chip-choice.selected')?.dataset.value ?? null, rappel: document.querySelector('.exec-work .f-side-summary')?.textContent }));
-    attendu(droite.cote === 'CÔTÉ DROIT' && droite.rir === null && /Gauche fait : 12 kg × 12/.test(droite.rappel ?? ''), 'côté droit : ' + JSON.stringify(droite));
+    attendu(droite.cote === 'CÔTÉ DROIT' && droite.rir === null && /Gauche fait\s: 12 kg × 12/.test(droite.rappel ?? ''), 'côté droit : ' + JSON.stringify(droite));
     await faireCote(11, 1);
     s = await seanceDu(page, 'pull-a');
     attendu(s.activeTimer?.kind === 'work-rest' && s.activeTimer.totalSec === 90, 'repos 90 s après les deux côtés absent : ' + JSON.stringify(s.activeTimer));
@@ -801,7 +801,7 @@ async function scenario(nom, fn) {
     let s = await seanceDu(page, 'pull-a');
     attendu(s.activeTimer?.kind === 'side-switch', 'pas de changement de côté');
     const vue = await page.evaluate(({ carte, ligne }) => ({ resume: document.querySelector(`${ligne} .f-side-summary`)?.textContent, statut: document.querySelector(`${carte} .f-card-status`)?.textContent, rir: document.querySelector(`${ligne} [data-set-field="rir"]`)?.value, douleur: document.querySelector(`${ligne} [data-set-field="pain"]`)?.value, badge: document.querySelector(`${ligne} .side-badge`)?.textContent }), { carte, ligne });
-    attendu(/Gauche fait : 12 kg × 20/.test(vue.resume ?? '') && /gauche fait, droite à faire/.test(vue.statut ?? '') && vue.rir === '' && vue.douleur === '' && vue.badge === 'CÔTÉ DROIT', 'vue liste : ' + JSON.stringify(vue));
+    attendu(/Gauche fait\s: 12 kg × 20/.test(vue.resume ?? '') && /gauche fait, droite à faire/.test(vue.statut ?? '') && vue.rir === '' && vue.douleur === '' && vue.badge === 'CÔTÉ DROIT', 'vue liste : ' + JSON.stringify(vue));
     // Faire maintenant sur CE même exercice pendant les 15 s : retour au côté droit en mode guidé, chrono conservé
     await toucher(page, `${carte} [data-action="exercise-do-now"]`);
     const e = await etape(page);

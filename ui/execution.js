@@ -175,9 +175,9 @@ function renderWorkSet(step, ctx) {
     ${exercise.coachingCue ? `<p class="exec-cue f-cue-visible">${escapeHtml(exercise.coachingCue)}</p>` : ''}
     ${exerciseHelp(ctx, exercise)}
     ${plan.deload && Number(exercise.sets) > totalSets ? `<p class="f-deload-inline">Semaine de décharge : ${totalSets} série${totalSets > 1 ? 's' : ''} au lieu de ${exercise.sets}, charges allégées.</p>` : ''}
-    ${step.rampOffer ? `<div class="f-ramp-offer"><span>Échauffement conseillé : ${step.rampOffer.count} séries légères, calculées sur ta charge.</span><button type="button" class="ghost-button" data-action="exec-start-ramps" data-exercise="${exercise.id}">Faire l’échauffement</button></div>` : ''}
+    ${step.rampOffer ? `<div class="f-ramp-offer"><span>Échauffement conseillé\u00a0: ${step.rampOffer.count} séries légères, calculées sur ta charge.</span><button type="button" class="ghost-button" data-action="exec-start-ramps" data-exercise="${exercise.id}">Faire l’échauffement</button></div>` : ''}
     ${side ? `<div class="exec-side ${side}">${side === 'left' ? 'CÔTÉ GAUCHE' : 'CÔTÉ DROIT'}</div>` : ''}
-    ${side === 'right' && log?.sets?.[setIndex]?.sides?.left?.done ? `<p class="f-side-summary">✓ Gauche fait : ${escapeHtml(String(log.sets[setIndex].sides.left.weightKg ?? 0))} kg × ${escapeHtml(String(log.sets[setIndex].sides.left.reps ?? '?'))}</p>` : ''}
+    ${side === 'right' && log?.sets?.[setIndex]?.sides?.left?.done ? `<p class="f-side-summary">✓ Gauche fait\u00a0: ${escapeHtml(String(log.sets[setIndex].sides.left.weightKg ?? 0))} kg × ${escapeHtml(String(log.sets[setIndex].sides.left.reps ?? '?'))}</p>` : ''}
     <div class="f-set-dots" aria-hidden="true">${Array.from({length:totalSets},(_,i)=>`<span class="${log.sets[i]?.done?'is-done':i===setIndex?'is-current':''}"></span>`).join('')}</div>
     <div class="f-work-panel">
       <div class="f-set-caption">Série ${setIndex + 1} sur ${totalSets}<span>À toi de jouer</span></div>

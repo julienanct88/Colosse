@@ -729,7 +729,7 @@ export class ColosseApp {
             : set.done && set.sides?.left?.done && set.sides?.right?.done
                 ? `<span class="f-side-summary is-done">✓ Gauche ${cote(set.sides.left)} · ✓ Droite ${cote(set.sides.right)}</span>`
                 : set.sides?.left?.done
-                    ? `<span class="f-side-summary">✓ Gauche fait : ${cote(set.sides.left)}${set.sides.left.rir !== null && set.sides.left.rir !== undefined ? ` · RIR ${set.sides.left.rir}` : ''} — <b>droite à faire</b></span>`
+                    ? `<span class="f-side-summary">✓ Gauche fait\u00a0: ${cote(set.sides.left)}${set.sides.left.rir !== null && set.sides.left.rir !== undefined ? ` · RIR ${set.sides.left.rir}` : ''} — <b>droite à faire</b></span>`
                     : '';
         const hit = set.done
             && Number(set.reps) >= plan.repMin
@@ -737,10 +737,10 @@ export class ColosseApp {
             && set.technique === 'good'
             && Number(set.pain ?? 0) <= 3;
         return `<div class="set-row ${set.done ? 'done' : ''} ${hit ? 'hit' : ''}" data-set-row data-exercise="${exercise.id}" data-set="${setIndex}">
+      ${sideSummary}
       <div class="set-primary">
         <span class="set-number"><small>${isSeconds ? 'Bloc' : 'Série'}</small>${setIndex + 1}</span>
         ${plan.perSide && !set.done ? `<span class="side-badge ${sideState}">${sideLabel}</span>` : ''}
-        ${sideSummary}
         ${needsLoadInput ? `<label><span>Charge (kg)</span><input type="number" inputmode="decimal" min="0" step="0.25" data-set-field="weightKg" value="${numberInputValue(suggestedWeight)}" placeholder="0" aria-label="Charge série ${setIndex + 1}"/></label>` : ''}
         ${isSeconds
             ? `<label><span>Durée (s)</span><input type="number" inputmode="numeric" min="0" step="5" data-set-field="reps" value="${numberInputValue(set.reps)}" placeholder="${plan.repMin}" aria-label="Durée en secondes du bloc ${setIndex + 1}"/><small class="set-hint">objectif ${formatSeconds(plan.repMin)}${plan.repMax !== plan.repMin ? `\u2013${formatSeconds(plan.repMax)}` : ''}</small></label>`
