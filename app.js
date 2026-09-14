@@ -152,7 +152,9 @@ export class ColosseApp {
             const newPlan = getExercisePlan(exercise, session.weekIndex);
             if (oldPlan.deload === newPlan.deload && oldPlan.sets === newPlan.sets)
                 continue;
-            const libre = (set) => set && !set.done && !set.sides?.left?.done && !set.sides?.right?.done;
+            // Série « libre » = jamais utilisée : ni validée, ni côté fait, ni répétitions ou ressenti saisis.
+            const libre = (set) => set && !set.done && !set.sides?.left?.done && !set.sides?.right?.done
+                && (set.reps === null || set.reps === undefined) && (set.rir === null || set.rir === undefined);
             let indices = [];
             if (log.autoSeed && Array.isArray(log.autoSeed.sets)) {
                 const mark = log.autoSeed;
@@ -1985,6 +1987,8 @@ export class ColosseApp {
             set.restActualSec = null;
             set.side = 'left';
             set.sides = undefined;
+            // La charge de cette série a été réellement soulevée : plus jamais recalculée automatiquement.
+            this.unmarkSeededSet(log, setIndex);
             this.unfreezeWeekIfNoWork(context.session);
             context.session.updatedAt = Date.now();
             await saveSession(context.session);
@@ -2058,6 +2062,7 @@ export class ColosseApp {
         }
         set.done = true;
         set.completedAt = Date.now();
+        this.unmarkSeededSet(log, setIndex);
         context.session.updatedAt = Date.now();
         removeDraft(this.draftStorage(), draftKey({ sessionId: context.session.id, exerciseId: exercise.id, variantId: log.variantId, setIndex, side: planSide.perSide ? 'right' : null }));
         const plan = getExercisePlan(exercise, context.weekIndex);
