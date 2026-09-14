@@ -193,7 +193,13 @@ export function prescriptionFromHistory(history, plan, exercise, incrementKg, re
             repDropPct: 0,
         };
     }
-    const last = model.last.summary;
+    // Après une semaine de décharge, la progression repart de la dernière exposition
+    // NORMALE (charge habituelle), pas des charges volontairement allégées.
+    const lastIsDeload = !!model.last.item?.plan?.deload;
+    const reference = !plan.deload && lastIsDeload
+        ? ([...model.sessions].reverse().find((entry) => !entry.item?.plan?.deload && entry.summary.lastWeightKg > 0) ?? model.last)
+        : model.last;
+    const last = reference.summary;
     const current = last.lastWeightKg || last.averageWeightKg;
     const increment = Math.max(incrementKg, 0.25);
     // Section 14 : en semaine de décharge, la charge est imposée à 87,5 % de la
@@ -231,7 +237,8 @@ export function prescriptionFromHistory(history, plan, exercise, incrementKg, re
         decision = 'HOLD_TECHNIQUE';
         reason = 'Technique dégradée : charge maintenue jusqu’à exécution propre.';
     }
-    else if (last.completedSets < Math.ceil(plan.sets * 0.67)) {
+    // Complétude jugée sur le nombre de séries PRÉVUES pour cette séance-là (une décharge à 2/2 est complète).
+    else if (last.completedSets < Math.ceil(last.targetSets * 0.67)) {
         decision = 'HOLD_INCOMPLETE';
         reason = 'Séance trop incomplète pour recalculer la charge avec confiance.';
     }

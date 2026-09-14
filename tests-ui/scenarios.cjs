@@ -48,6 +48,33 @@ async function jusquASerie(page, { reference = '80' } = {}) {
   }
   throw new Error('série de travail non atteinte');
 }
+
+// ---- 3.6.3 : outils pour rejouer des données « comme sur le téléphone » (profil jetable)
+const aujourdHuiIso = (page) => page.evaluate(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; });
+async function ecrireBase(page, { profil = null, sessions = [], supprimerChampsProfil = [] } = {}) {
+  await page.evaluate(async ({ profil, sessions, supprimerChampsProfil }) => {
+    const db = await new Promise((res) => { const x = indexedDB.open('colosse-adaptive-db'); x.onsuccess = () => res(x.result); });
+    const t = db.transaction(['profile', 'sessions'], 'readwrite');
+    const store = t.objectStore('profile');
+    const actuel = await new Promise((r) => { const g = store.get('profile'); g.onsuccess = () => r(g.result); });
+    const value = { ...(actuel?.value ?? {}), ...(profil ?? {}) };
+    for (const champ of supprimerChampsProfil) delete value[champ];
+    store.put({ id: 'profile', value });
+    for (const session of sessions) t.objectStore('sessions').put(session);
+    await new Promise((r) => { t.oncomplete = r; });
+    db.close();
+  }, { profil, sessions, supprimerChampsProfil });
+}
+const lireProfil = (page) => page.evaluate(async () => {
+  const db = await new Promise((res) => { const x = indexedDB.open('colosse-adaptive-db'); x.onsuccess = () => res(x.result); });
+  const v = await new Promise((r) => { const g = db.transaction('profile').objectStore('profile').get('profile'); g.onsuccess = () => r(g.result?.value); });
+  db.close(); return v;
+});
+/** Séance de test construite à partir de la séance que l'app crée elle-même pour ce jour. */
+async function modeleSeance(page, dayId) {
+  await allerJour(page, dayId);
+  return (await lireBase(page)).sessions.filter((x) => x.dayId === dayId).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))[0];
+}
 async function passerActivations(page) {
   for (let i = 0; i < 30; i++) {
     if (await page.evaluate(() => !!document.querySelector('.timer-overlay [data-action="timer-skip"]'))) { await page.evaluate(() => document.querySelector('.timer-overlay [data-action="timer-skip"]').click()); await wait(350); continue; }
@@ -140,14 +167,18 @@ async function scenario(nom, fn) {
     const fa = await verifierFiche('.exec-card [data-action="activation-view"]');
     attendu(/ACTIVATION/.test(fa.texte), 'fiche activation incorrecte');
     for (let i = 0; i < 20; i++) { if (await page.evaluate(() => !!document.querySelector('.timer-overlay [data-action="timer-skip"]'))) { await page.evaluate(() => document.querySelector('.timer-overlay [data-action="timer-skip"]').click()); await wait(300); continue; } if (await page.evaluate(() => !!document.querySelector('[data-action="exec-validate-activation"]'))) { await page.evaluate(() => document.querySelector('[data-action="exec-validate-activation"]').click()); await wait(350); continue; } break; }
-    // charge de référence
-    const fr = await verifierFiche('.exec-card [data-action="exercise-view"]', 'Développé incliné Smith');
+    // 3.6.3 : directement la série 1 (plus d'écran « charge de référence »), échauffement proposé
+    attendu(await page.evaluate(() => !document.querySelector('#exec-reference-load') && !!document.querySelector('.exec-work [data-exec-field="reps"]')), 'la série 1 n’est pas affichée directement');
+    const fr = await verifierFiche('.exec-work [data-action="exercise-view"]', 'Développé incliné Smith');
     attendu(/Consignes essentielles/.test(fr.texte) && /Banc à 20-30°/.test(fr.texte), 'consignes absentes de la fiche');
     attendu(decodeURIComponent(fr.demo).includes('Développé incliné Smith Smith') === false && decodeURIComponent(fr.demo).includes('Développé incliné Smith'), 'recherche démo incohérente : ' + decodeURIComponent(fr.demo));
-    await page.fill('#exec-reference-load', '80'); await page.evaluate(() => document.querySelector('[data-action="exec-set-reference"]').click()); await wait(450);
-    // montée en charge
+    await page.fill('[data-exec-field="weightKg"]', '80');
+    await toucher(page, '.exec-work [data-action="exec-start-ramps"]');
+    // montée en charge demandée
     attendu(await page.evaluate(() => /Banc à 20-30°/.test(document.querySelector('.exec-ramp .f-cue-visible')?.textContent ?? '')), 'consigne invisible sur la montée en charge');
     await verifierFiche('.exec-ramp [data-action="exercise-view"]', 'Développé incliné Smith');
+    attendu(await page.evaluate(() => window.__atteindre(document.querySelector('.exec-ramp [data-action="exec-skip-ramps"]')).ok), '« Aller directement aux séries » non utilisable');
+    attendu(/32\.5 kg|32 kg/.test(await page.evaluate(() => document.querySelector('.exec-ramp .exec-huge')?.textContent ?? '')), 'montée calculée sur une autre charge que 80 kg');
     await jusquASerie(page);
     // série de travail : consigne visible hors « Technique & douleur »
     attendu(await page.evaluate(() => { const c = document.querySelector('.exec-work .f-cue-visible'); return !!c && !c.closest('details') && window.__atteindre(c).ok; }), 'consigne de la série non visible');
@@ -291,10 +322,11 @@ async function scenario(nom, fn) {
     await toucher(page, '.f-exec-tools [data-action="exec-show-program"]');
     await toucher(page, '[data-exercise-card="legs-a-leg-ext"] [data-action="exercise-do-now"]');
     const toast = await page.evaluate(() => document.getElementById('toast')?.textContent ?? '');
-    attendu(/Changement de côté en cours/.test(toast), 'pas d’explication pendant le changement de côté : ' + toast);
+    attendu(/Termine d’abord le côté droit de Fentes bulgares/.test(toast), 'pas d’explication pendant le changement de côté : ' + toast);
     s = await seanceDu(page, 'legs-a');
     attendu(s.activeTimer?.kind === 'side-switch' && s.exerciseOrder.indexOf('legs-a-leg-ext') > s.exerciseOrder.indexOf('legs-a-bulgarian'), 'le refus a modifié la séance');
-    await page.evaluate(() => window.scrollTo(0, 0)); await toucher(page, '[data-action="exec-resume"]');
+    // 3.6.3 : le refus ramène sur l'étape en cours (mode guidé), pas sur la liste repliée
+    attendu((await etape(page)).guide, 'le refus laisse sur la liste');
     await toucher(page, '.timer-overlay [data-action="timer-skip"]');
     e = await etape(page); attendu(e.cote === 'CÔTÉ DROIT', 'pas passé au côté droit');
     // brouillon côté droit (préremplissage d'origine = valeurs du gauche), rechargement
@@ -419,7 +451,7 @@ async function scenario(nom, fn) {
     let h = await page.evaluate(() => ({ statut: document.querySelector('.f-top-status')?.textContent.trim(), pill: document.querySelector('.f-session-hero .f-pill')?.textContent }));
     attendu(/En séance/.test(h.statut) && h.pill === 'En cours', 'état de départ non reproduit : ' + JSON.stringify(h));
     await toucher(page, '.f-session-hero [data-action="cancel-session"]');
-    attendu(/Rien n’a été fait/.test(dialoguesVus.at(-1) ?? '') && /du lundi 14 septembre/.test(dialoguesVus.at(-1) ?? ''), 'confirmation absente ou inexacte : ' + dialoguesVus.at(-1));
+    attendu(/Rien n’a été fait/.test(dialoguesVus.at(-1) ?? '') && /du lundi \d+ /.test(dialoguesVus.at(-1) ?? ''), 'confirmation absente ou inexacte : ' + dialoguesVus.at(-1));
     h = await page.evaluate(() => ({ statut: document.querySelector('.f-top-status')?.textContent.trim(), pill: document.querySelector('.f-session-hero .f-pill')?.textContent, cta: document.querySelector('.f-session-hero .f-cta')?.textContent.trim(), annuler: !!document.querySelector('[data-action="cancel-session"]') }));
     attendu(!/En séance/.test(h.statut) && h.pill === 'Au programme' && /Préparer ma séance/.test(h.cta) && !h.annuler, 'toujours en séance : ' + JSON.stringify(h));
     let s = await seanceDu(page, 'pull-a');
@@ -648,6 +680,455 @@ async function scenario(nom, fn) {
     const apres = futur.exercises[premier].sets.map((x) => x.weightKg);
     attendu(apres.every((kg) => kg >= 70), `charges anciennes non recalculées : ${JSON.stringify(avant)} → ${JSON.stringify(apres)}`);
     return `sans marque : ${JSON.stringify(avant)} → ${JSON.stringify(apres)}, recalcul annoncé dans la confirmation`;
+  });
+
+  // ================================================================ 3.6.3 — SÉANCE RÉELLE DU 14/09
+  await scenario('S18 Ta séance : profil commencé début août → séance faite en décharge gardée telle quelle, séances suivantes à 3 séries et charges normales, historique figé', async ({ page }) => {
+    const jour = await aujourdHuiIso(page);
+    const JOURS = { 1: 'pull-a', 2: 'push-a', 3: 'legs-a', 4: 'pull-b', 5: 'push-b', 6: 'legs-b' };
+    const futur = await page.evaluate(() => { const d = new Date(); do { d.setDate(d.getDate() + 1); } while (d.getDay() === 0); return { date: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`, dow: d.getDay() }; });
+    const futurDay = JOURS[futur.dow];
+    const modele = await modeleSeance(page, 'pull-a');
+    const ex = modele.exerciseOrder[0];
+    const modeleFutur = await modeleSeance(page, futurDay);
+    const exF = modeleFutur.exerciseOrder[0];
+    // Séance du jour : 2 séries faites en décharge (semaine 7).
+    const enCours = JSON.parse(JSON.stringify(modele));
+    Object.assign(enCours, { id: `${jour}:pull-a`, date: jour, weekIndex: 7, startedAt: Date.now() - 1800e3, endedAt: null, updatedAt: Date.now(), execution: { ...(enCours.execution ?? {}), active: false } });
+    enCours.exercises[ex].sets = [0, 1].map(() => ({ id: 'x' + Math.random(), done: true, weightKg: 60, reps: 8, rir: 4, technique: 'good', pain: 0, restActualSec: 120, completedAt: Date.now() - 600e3 }));
+    // Séance terminée le 01/09 (semaine 5) à 70 kg — référence normale.
+    const ancienne = JSON.parse(JSON.stringify(modele));
+    Object.assign(ancienne, { id: '2026-09-01:pull-a', date: '2026-09-01', weekIndex: 5, startedAt: Date.parse('2026-09-01T18:00:00'), endedAt: Date.parse('2026-09-01T19:20:00'), status: 'COMPLETE' });
+    ancienne.exercises[ex].sets = [0, 1, 2].map(() => ({ id: 'y' + Math.random(), done: true, weightKg: 70, reps: 8, rir: 1, technique: 'good', pain: 0, restActualSec: 120, completedAt: Date.parse('2026-09-01T18:30:00') }));
+    // Séance à venir déjà créée par 3.6.2 en décharge : 2 séries pré-remplies à 87,5 % (52,5 kg sur 60).
+    const passeFutur = JSON.parse(JSON.stringify(modeleFutur));
+    Object.assign(passeFutur, { id: `2026-09-02:${futurDay}`, date: '2026-09-02', weekIndex: 5, startedAt: Date.parse('2026-09-02T18:00:00'), endedAt: Date.parse('2026-09-02T19:00:00'), status: 'COMPLETE' });
+    passeFutur.exercises[exF].sets = passeFutur.exercises[exF].sets.map(() => ({ id: 'z' + Math.random(), done: true, weightKg: 60, reps: 8, rir: 2, technique: 'good', pain: 0, completedAt: Date.parse('2026-09-02T18:30:00') }));
+    const aVenir = JSON.parse(JSON.stringify(modeleFutur));
+    Object.assign(aVenir, { id: `${futur.date}:${futurDay}`, date: futur.date, weekIndex: 7, startedAt: null, endedAt: null });
+    aVenir.exercises[exF].sets = [0, 1].map(() => ({ id: 'w' + Math.random(), done: false, weightKg: 52.5, reps: null, rir: null, technique: 'good', pain: 0, restActualSec: null, completedAt: null }));
+    aVenir.exercises[exF].autoSeed = { loadKg: 52.5, sources: [passeFutur.id], sets: [0, 1] };
+    await ecrireBase(page, { profil: { startDate: '2026-08-05', programVersion: 'transformation-12s' }, supprimerChampsProfil: ['programStartDate'], sessions: [enCours, ancienne, passeFutur, aVenir] });
+    await page.reload({ waitUntil: 'load' }); await wait(2500);
+    const profil = await lireProfil(page);
+    attendu(profil.programStartDate === '2026-09-07' && profil.startDate === '2026-08-05', 'migration du début de programme incorrecte : ' + JSON.stringify({ p: profil.programStartDate, s: profil.startDate }));
+    const base = await lireBase(page);
+    const a = base.sessions.find((x) => x.id === '2026-09-01:pull-a'), c = base.sessions.find((x) => x.id === `${jour}:pull-a`), f = base.sessions.find((x) => x.id === aVenir.id);
+    attendu(a.planWeekIndex === 5 && a.exercises[ex].sets.every((x) => x.done && x.weightKg === 70), 'séance terminée modifiée');
+    attendu(c.planWeekIndex === 7 && c.weekIndex === 7 && c.exercises[ex].sets.filter((x) => x.done).length === 2, 'la séance faite en décharge a été réinterprétée : ' + JSON.stringify({ w: c.weekIndex, p: c.planWeekIndex }));
+    const chargesF = f.exercises[exF].sets.map((x) => x.weightKg);
+    const semaineF = f.weekIndex;
+    attendu(semaineF <= 3 && chargesF.length >= 3 && chargesF.every((kg) => kg >= 60), `séance à venir : semaine ${semaineF}, charges ${JSON.stringify(chargesF)} (décharge non recalculée)`);
+    // Accueil et liste du jour à venir
+    await allerJour(page, futurDay);
+    const carte = await page.evaluate((id) => ({ plan: document.querySelector(`[data-exercise-card="${id}"] .exercise-plan`)?.textContent.replace(/\s+/g, ' '), banniere: !!document.querySelector('.f-deload-banner') }), exF);
+    attendu(!/décharge/.test(carte.plan ?? '') && !carte.banniere, 'le jour à venir est encore présenté en décharge : ' + JSON.stringify(carte));
+    // Réglages : le début du programme est visible et expliqué
+    await toucher(page, '.bottom-nav [data-tab="tools"]');
+    await toucher(page, '.f-tool[data-action="forge-open"][data-section="forge-profile"]');
+    const reglage = await page.evaluate(() => ({ v: document.querySelector('[data-profile-field="programStartDate"]')?.value, aide: document.querySelector('.f-program-start-help')?.textContent }));
+    attendu(reglage.v === '2026-09-07' && /semaine/.test(reglage.aide ?? '') && /décharge/.test(reglage.aide ?? ''), 'réglage absent : ' + JSON.stringify(reglage));
+    return `début du programme 2026-09-07 ; séance du jour (2 séries en décharge) gardée en semaine 7 ; ${futurDay} du ${futur.date} : semaine ${semaineF}, ${JSON.stringify(chargesF)} au lieu de [52.5, 52.5] ; 01/09 figée en semaine 5`;
+  });
+
+  await scenario('S19 « Faire maintenant » sur un exercice lourd : la série 1 directement, titre visible, échauffement seulement proposé', async ({ page }) => {
+    await demarrer(page, 'pull-a');
+    await page.evaluate(() => document.querySelector('[data-action="exec-skip-general-warmup"]').click()); await wait(450);
+    await passerActivations(page);
+    await toucher(page, '.f-exec-tools [data-action="exec-show-program"]');
+    await toucher(page, '[data-exercise-card="pull-a-chest-row"] [data-action="exercise-do-now"]');
+    const e = await page.evaluate(() => ({ titre: document.querySelector('.execution .exec-title')?.textContent, serie: document.body.innerText.match(/Série \d+ sur \d+/)?.[0], charge: !!document.querySelector('#exec-reference-load'), offre: document.querySelector('.f-ramp-offer')?.textContent.replace(/\s+/g, ' '), titreVisible: window.__visible(document.querySelector('.execution .exec-title')).ok }));
+    attendu(/Rowing poitrine appuyée/.test(e.titre ?? '') && e.serie === 'Série 1 sur 3' && !e.charge, 'pas directement la série : ' + JSON.stringify(e));
+    attendu(e.titreVisible, 'titre de l’exercice recouvert (message) : ' + JSON.stringify(e));
+    attendu(/Échauffement conseillé : 2 séries légères/.test(e.offre ?? ''), 'échauffement non proposé : ' + e.offre);
+    // Sans charge saisie : explication, rien ne change
+    await page.fill('[data-exec-field="weightKg"]', '');
+    await toucher(page, '.exec-work [data-action="exec-start-ramps"]');
+    const msg = await page.evaluate(() => document.getElementById('toast')?.textContent ?? '');
+    attendu(/Indique d’abord ta charge/.test(msg) && (await etape(page)).serie === 'Série 1 sur 3', 'charge vide mal gérée : ' + msg);
+    // Avec charge : montée en charge, puis « Aller directement aux séries »
+    await page.fill('[data-exec-field="weightKg"]', '40');
+    await toucher(page, '.exec-work [data-action="exec-start-ramps"]');
+    attendu(await page.evaluate(() => !!document.querySelector('.exec-ramp')), 'montée en charge non lancée');
+    await toucher(page, '.exec-ramp [data-action="exec-skip-ramps"]');
+    const apres = await etape(page);
+    attendu(apres.serie === 'Série 1 sur 3' && !(await page.evaluate(() => !!document.querySelector('.f-ramp-offer'))), 'retour aux séries incorrect : ' + JSON.stringify(apres));
+    const kg = await page.evaluate(() => document.querySelector('[data-exec-field="weightKg"]').value);
+    attendu(kg === '40', 'charge saisie perdue : ' + kg);
+    return 'Rowing appuyé : Série 1 sur 3 immédiatement, titre visible, échauffement proposé ; demandé puis sauté → retour à la série avec 40 kg';
+  });
+
+  await scenario('S20 Unilatéral : gauche → 15 s → droite (ressenti à indiquer) → repos 90 s → … → repos avant l’exercice suivant après la dernière série', async ({ page, env }) => {
+    await demarrer(page, 'pull-a');
+    await page.evaluate(() => document.querySelector('[data-action="exec-skip-general-warmup"]').click()); await wait(450);
+    await passerActivations(page);
+    await toucher(page, '.f-exec-tools [data-action="exec-show-program"]');
+    await toucher(page, '[data-exercise-card="pull-a-unilateral"] [data-action="exercise-do-now"]');
+    const faireCote = async (reps, rir) => {
+      await page.fill('[data-exec-field="weightKg"]', '12'); await page.fill('[data-exec-field="reps"]', String(reps));
+      await toucher(page, `[data-exec-field="rir"][data-value="${rir}"]`);
+      await toucher(page, '[data-action="exec-validate-set"]');
+    };
+    let e = await etape(page); attendu(e.serie === 'Série 1 sur 2' && e.cote === 'CÔTÉ GAUCHE', 'départ : ' + JSON.stringify(e));
+    await faireCote(12, 2);
+    let s = await seanceDu(page, 'pull-a');
+    attendu(s.activeTimer?.kind === 'side-switch', 'pas de changement de côté');
+    await toucher(page, '.timer-overlay [data-action="timer-skip"]');
+    const droite = await page.evaluate(() => ({ cote: document.querySelector('.exec-side')?.textContent, rir: document.querySelector('[data-exec-group="rir"] .chip-choice.selected')?.dataset.value ?? null, rappel: document.querySelector('.exec-work .f-side-summary')?.textContent }));
+    attendu(droite.cote === 'CÔTÉ DROIT' && droite.rir === null && /Gauche fait\s: 12 kg × 12/.test(droite.rappel ?? ''), 'côté droit : ' + JSON.stringify(droite));
+    await faireCote(11, 1);
+    s = await seanceDu(page, 'pull-a');
+    attendu(s.activeTimer?.kind === 'work-rest' && s.activeTimer.totalSec === 90, 'repos 90 s après les deux côtés absent : ' + JSON.stringify(s.activeTimer));
+    await toucher(page, '.timer-overlay [data-action="timer-skip"]');
+    await faireCote(12, 2); await toucher(page, '.timer-overlay [data-action="timer-skip"]'); await faireCote(10, 1);
+    s = await seanceDu(page, 'pull-a');
+    const t = s.activeTimer;
+    attendu(t?.kind === 'transition' && t.totalSec === 90 && t.context.exerciseId === 'pull-a-unilateral' && t.context.sessionId === s.id, 'pas de repos après la dernière série : ' + JSON.stringify(t));
+    const overlay = await page.evaluate(() => ({ label: document.querySelector('.timer-overlay .timer-label')?.textContent, ensuite: document.querySelector('.timer-overlay .f-timer-next')?.textContent, titre: document.querySelector('.execution .exec-title')?.textContent, scroll: window.scrollY }));
+    attendu(/EXERCICE SUIVANT/.test(overlay.label ?? '') && /Ensuite : /.test(overlay.ensuite ?? '') && overlay.scroll === 0, 'affichage du repos : ' + JSON.stringify(overlay));
+    attendu(!overlay.titre?.includes('unilatéral'), 'l’écran reste sur l’exercice terminé : ' + overlay.titre);
+    // « Faire maintenant » pendant ce repos : pas de confirmation, repos arrêté, jamais enregistré comme repos de série
+    const dialogues = []; page.on('dialog', (d) => dialogues.push(d.message()));
+    await toucher(page, '.f-exec-tools [data-action="exec-show-program"]');
+    await toucher(page, '[data-exercise-card="pull-a-hammer"] [data-action="exercise-do-now"]');
+    s = await seanceDu(page, 'pull-a');
+    attendu(s.activeTimer === null && dialogues.length === 0, 'repos non arrêté ou confirmation inutile : ' + JSON.stringify({ t: s.activeTimer, dialogues }));
+    attendu(s.exercises['pull-a-unilateral'].sets[1].restActualSec === null, 'le repos avant l’exercice suivant a été enregistré comme repos de série');
+    attendu(/Curl marteau/.test((await etape(page)).titre ?? ''), 'mauvais exercice ouvert');
+    const sets = s.exercises['pull-a-unilateral'].sets;
+    attendu(sets[0].sides.left.reps === 12 && sets[0].sides.right.reps === 11 && sets[0].sides.right.rir === 1 && sets[1].done, 'côtés mal enregistrés : ' + JSON.stringify(sets.map((x) => x.sides)));
+    return 'gauche 12 → 15 s → droite (RIR non présélectionné, rappel du gauche) → REPOS 90 s → série 2 → « REPOS AVANT L’EXERCICE SUIVANT » 90 s avec « Ensuite » ; Faire maintenant l’arrête sans confirmation';
+  });
+
+  await scenario('S21 Vue liste unilatérale : gauche fait visible, statut clair, « ✓ Fait » protégé, « Faire maintenant » pendant les 15 s ramène au côté droit', async ({ page, setDialogues, dialoguesVus }) => {
+    await demarrer(page, 'pull-a');
+    await page.evaluate(() => document.querySelector('[data-action="exec-skip-general-warmup"]').click()); await wait(450);
+    await passerActivations(page);
+    await toucher(page, '.f-exec-tools [data-action="exec-show-program"]');
+    const carte = '[data-exercise-card="pull-a-unilateral"]';
+    await toucher(page, `${carte} details.f-exercise-detail > summary`);
+    const ligne = `${carte} [data-set-row][data-set="0"]`;
+    await page.fill(`${ligne} [data-set-field="weightKg"]`, '12');
+    await page.fill(`${ligne} [data-set-field="reps"]`, '20');
+    await page.selectOption(`${ligne} [data-set-field="rir"]`, '0');
+    await page.selectOption(`${ligne} [data-set-field="pain"]`, '2');
+    await toucher(page, `${ligne} [data-action="toggle-set"]`);
+    let s = await seanceDu(page, 'pull-a');
+    attendu(s.activeTimer?.kind === 'side-switch', 'pas de changement de côté');
+    const vue = await page.evaluate(({ carte, ligne }) => ({ resume: document.querySelector(`${ligne} .f-side-summary`)?.textContent, statut: document.querySelector(`${carte} .f-card-status`)?.textContent, rir: document.querySelector(`${ligne} [data-set-field="rir"]`)?.value, douleur: document.querySelector(`${ligne} [data-set-field="pain"]`)?.value, badge: document.querySelector(`${ligne} .side-badge`)?.textContent }), { carte, ligne });
+    attendu(/Gauche fait\s: 12 kg × 20/.test(vue.resume ?? '') && /gauche fait, droite à faire/.test(vue.statut ?? '') && vue.rir === '' && vue.douleur === '' && vue.badge === 'CÔTÉ DROIT', 'vue liste : ' + JSON.stringify(vue));
+    // Faire maintenant sur CE même exercice pendant les 15 s : retour au côté droit en mode guidé, chrono conservé
+    await toucher(page, `${carte} [data-action="exercise-do-now"]`);
+    const e = await etape(page);
+    s = await seanceDu(page, 'pull-a');
+    attendu(e.guide && e.cote === 'CÔTÉ DROIT' && s.activeTimer?.kind === 'side-switch', 'pas ramené au côté droit : ' + JSON.stringify({ e, t: s.activeTimer?.kind }));
+    await toucher(page, '.timer-overlay [data-action="timer-skip"]');
+    // Côté droit depuis la liste
+    await toucher(page, '.f-exec-tools [data-action="exec-show-program"]');
+    const ouvert = await page.evaluate((c) => document.querySelector(`${c} details.f-exercise-detail`)?.open, carte);
+    if (!ouvert) await toucher(page, `${carte} details.f-exercise-detail > summary`);
+    await page.fill(`${ligne} [data-set-field="reps"]`, '18');
+    await page.selectOption(`${ligne} [data-set-field="rir"]`, '1');
+    await toucher(page, `${ligne} [data-action="toggle-set"]`);
+    await page.evaluate(() => document.querySelector('.timer-overlay [data-action="timer-skip"]')?.click()); await wait(400);
+    const fin = await page.evaluate((l) => ({ resume: document.querySelector(`${l} .f-side-summary`)?.textContent, badge: !!document.querySelector(`${l} .side-badge`) }), ligne);
+    attendu(/✓ Gauche 12 kg × 20 · ✓ Droite 12 kg × 18/.test(fin.resume ?? '') && !fin.badge, 'série faite mal affichée : ' + JSON.stringify(fin));
+    // « ✓ Fait » : refus de la confirmation = série intacte
+    setDialogues('refuser');
+    await toucher(page, `${ligne} [data-action="toggle-set"]`);
+    s = await seanceDu(page, 'pull-a');
+    attendu(/Annuler la validation de la série 1 \(gauche 12 kg × 20, droite 12 kg × 18\)/.test(dialoguesVus.at(-1) ?? '') && s.exercises['pull-a-unilateral'].sets[0].done && s.exercises['pull-a-unilateral'].sets[0].sides.left.reps === 20, '« ✓ Fait » non protégé : ' + dialoguesVus.at(-1));
+    return 'liste : « ✓ Gauche fait : 12 kg × 20 — droite à faire », statut « gauche fait, droite à faire », ressenti/douleur à indiquer ; Faire maintenant → côté droit ; « ✓ Fait » demande confirmation';
+  });
+
+  await scenario('S22 Bandeau « Revenir à l’étape en cours » : ne recouvre plus la variante ni les titres', async ({ page }) => {
+    await demarrer(page, 'pull-a');
+    await page.evaluate(() => document.querySelector('[data-action="exec-skip-general-warmup"]').click()); await wait(450);
+    await passerActivations(page);
+    await toucher(page, '.f-exec-tools [data-action="exec-show-program"]');
+    const carte = '[data-exercise-card="pull-a-unilateral"]';
+    await toucher(page, `${carte} details.f-exercise-detail > summary`);
+    const problemes = [];
+    for (let y = 0; y <= 2400; y += 60) {
+      await page.evaluate((yy) => window.scrollTo(0, yy), y); await wait(40);
+      const r = await page.evaluate((c) => {
+        const out = [];
+        for (const el of [document.querySelector(`${c} [data-exercise-variant]`), document.querySelector(`${c} h3`)]) {
+          if (!el) continue;
+          const b = el.getBoundingClientRect(); if (b.bottom < 90 || b.top > innerHeight - 90) continue;
+          const top = document.elementFromPoint(b.left + 10, b.top + b.height / 2);
+          if (top && top.closest('.exec-resume-banner')) out.push(el.tagName + '@' + Math.round(b.top));
+        }
+        return out;
+      }, carte);
+      problemes.push(...r);
+    }
+    attendu(problemes.length === 0, 'recouvert par le bandeau : ' + problemes.join(', '));
+    const bandeau = await page.evaluate(() => getComputedStyle(document.querySelector('.exec-resume-banner')).position);
+    attendu(bandeau === 'static', 'bandeau encore collant : ' + bandeau);
+    await toucher(page, '.f-exec-tools [data-action="exec-show-program"]').catch(() => {});
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await toucher(page, '.exec-resume-banner');
+    attendu((await etape(page)).guide, 'le bandeau ne ramène plus à l’étape');
+    return 'sélecteur de variante et titres jamais sous le bandeau sur 2400 px de défilement ; bandeau à sa place, toujours utilisable';
+  });
+
+  await scenario('S23 Séance restée ouverte d’un autre jour : l’accueil propose « Terminer et garder mes séries » ou « Reprendre »', async ({ page }) => {
+    const modele = await modeleSeance(page, 'pull-a');
+    const ex = modele.exerciseOrder[0];
+    // Le lundi précédent (Pull A a lieu le lundi) : une séance réellement possible.
+    const hier = await page.evaluate(() => { const d = new Date(); const recul = ((d.getDay() + 6) % 7) || 7; d.setDate(d.getDate() - recul); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; });
+    const ouverte = JSON.parse(JSON.stringify(modele));
+    Object.assign(ouverte, { id: `${hier}:pull-a`, date: hier, startedAt: Date.now() - 20 * 3600e3, updatedAt: Date.now() - 19 * 3600e3, endedAt: null, execution: { ...(ouverte.execution ?? {}), active: true } });
+    ouverte.exercises[ex].sets[0] = { ...ouverte.exercises[ex].sets[0], done: true, weightKg: 50, reps: 8, rir: 2, technique: 'good', pain: 0, completedAt: Date.now() - 19.5 * 3600e3 };
+    ouverte.exercises[ex].sets[1] = { ...ouverte.exercises[ex].sets[1], done: true, weightKg: 50, reps: 7, rir: 1, technique: 'good', pain: 0, completedAt: Date.now() - 19.4 * 3600e3 };
+    await ecrireBase(page, { sessions: [ouverte] });
+    await page.reload({ waitUntil: 'load' }); await wait(2500);
+    const accueil = await page.evaluate(() => ({ tab: document.querySelector('.bottom-nav [aria-current="page"]')?.dataset.tab, texte: document.querySelector('.f-stale-session')?.textContent.replace(/\s+/g, ' ') }));
+    attendu(accueil.tab === 'home' && /restée ouverte/.test(accueil.texte ?? '') && /2 séries déjà validées/.test(accueil.texte ?? ''), 'accueil : ' + JSON.stringify(accueil));
+    await toucher(page, '.f-stale-session [data-action="stale-finish"]');
+    const s = (await lireBase(page)).sessions.find((x) => x.id === ouverte.id);
+    attendu(s.endedAt && s.status === 'INCOMPLETE' && s.exercises[ex].sets.filter((x) => x.done).length === 2 && s.execution.active === false, 'séance mal terminée : ' + JSON.stringify({ e: s.endedAt, st: s.status }));
+    const parasites = (await lireBase(page)).sessions.filter((x) => x.id !== ouverte.id && x.endedAt && !x.exercises[ex].sets.some((y) => y.done));
+    attendu(parasites.length === 0, 'une autre séance a été terminée par erreur : ' + parasites.map((x) => x.id).join(','));
+    const apres = await page.evaluate(() => ({ banniere: !!document.querySelector('.f-stale-session'), statut: document.querySelector('.f-top-status')?.textContent.trim(), tab: document.querySelector('.bottom-nav [aria-current="page"]')?.dataset.tab }));
+    attendu(!apres.banniere && !/En séance/.test(apres.statut) && apres.tab === 'home', 'après : ' + JSON.stringify(apres));
+    return `séance d’hier ouverte → accueil « ${accueil.texte.slice(0, 60)}… » → terminée (INCOMPLETE), 2 séries gardées, plus « En séance »`;
+  });
+
+  await scenario('S24 Décharge (semaine 7 du programme) : annoncée clairement dans la liste et le mode guidé ; réglage du début ne touche pas l’historique', async ({ page }) => {
+    const jour = await aujourdHuiIso(page);
+    const lundi = await page.evaluate(() => { const d = new Date(); const shift = d.getDay() === 0 ? -6 : 1 - d.getDay(); d.setDate(d.getDate() + shift - 42); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; });
+    const modele = await modeleSeance(page, 'pull-a');
+    const terminee = JSON.parse(JSON.stringify(modele));
+    Object.assign(terminee, { id: '2026-08-31:pull-a', date: '2026-08-31', startedAt: Date.parse('2026-08-31T18:00:00'), endedAt: Date.parse('2026-08-31T19:00:00'), status: 'COMPLETE', weekIndex: 3, planWeekIndex: 3 });
+    await ecrireBase(page, { profil: { programStartDate: lundi }, sessions: [terminee] });
+    await page.reload({ waitUntil: 'load' }); await wait(2500);
+    await allerJour(page, 'pull-a');
+    const liste = await page.evaluate(() => ({ banniere: document.querySelector('.f-deload-banner')?.textContent.replace(/\s+/g, ' '), plan: document.querySelector('[data-exercise-card="pull-a-lat-pronation"] .exercise-plan')?.textContent.replace(/\s+/g, ' '), visible: window.__visible(document.querySelector('.f-deload-banner') ?? document.body).ok }));
+    attendu(/Semaine 7 du programme · Décharge/.test(liste.banniere ?? '') && /2 × \(décharge, au lieu de 3\)/.test(liste.plan ?? ''), 'décharge non annoncée : ' + JSON.stringify(liste));
+    await page.evaluate(() => window.scrollTo(0, 0)); await toucher(page, '[data-action="start-session"]');
+    await page.evaluate(() => document.querySelector('[data-action="exec-skip-general-warmup"]').click()); await wait(450);
+    await passerActivations(page);
+    const guide = await page.evaluate(() => document.querySelector('.f-deload-inline')?.textContent ?? '');
+    attendu(/Semaine de décharge : 2 séries au lieu de 3/.test(guide), 'mode guidé muet sur la décharge : ' + guide);
+    // Changer le début du programme : la séance du jour suit, la séance terminée garde sa semaine
+    await toucher(page, '.f-exec-tools [data-action="exec-show-program"]');
+    await toucher(page, '.bottom-nav [data-tab="tools"]');
+    await toucher(page, '.f-tool[data-action="forge-open"][data-section="forge-profile"]');
+    await page.fill('[data-profile-field="programStartDate"]', jour);
+    await page.evaluate(() => document.querySelector('[data-profile-field="programStartDate"]').dispatchEvent(new Event('change', { bubbles: true }))); await wait(800);
+    const base = await lireBase(page);
+    const t = base.sessions.find((x) => x.id === '2026-08-31:pull-a'), c = base.sessions.find((x) => x.id === `${jour}:pull-a`);
+    attendu(t.weekIndex === 3 && t.planWeekIndex === 3 && c.weekIndex === 1, 'réglage : ' + JSON.stringify({ t: t.weekIndex, c: c?.weekIndex }));
+    return 'bandeau « Semaine 7 du programme · Décharge », carte « 2 × (décharge, au lieu de 3) », mode guidé « 2 séries au lieu de 3 » ; début changé → séance du jour semaine 1, séance terminée toujours semaine 3';
+  });
+
+  // ================================================================ 3.6.3 — défauts trouvés par la relecture
+  async function seanceGuideeAvecTravail(page, dayId, faits) {
+    const jour = await aujourdHuiIso(page);
+    const modele = await modeleSeance(page, dayId);
+    const s0 = JSON.parse(JSON.stringify(modele));
+    s0.startedAt = Date.now() - 3600e3; s0.updatedAt = Date.now(); s0.endedAt = null;
+    s0.execution = { ...(s0.execution ?? {}), active: true };
+    for (const [id, n] of Object.entries(faits))
+      s0.exercises[id].sets = s0.exercises[id].sets.map((set, k) => k < n ? { ...set, done: true, weightKg: 20, reps: 12, rir: 2, technique: 'good', pain: 0, completedAt: Date.now() - 1800e3 } : set);
+    await ecrireBase(page, { sessions: [s0] });
+    await page.reload({ waitUntil: 'load' }); await wait(2500);
+    return { jour, modele: s0 };
+  }
+
+  await scenario('S25 Après la dernière série du dernier exercice : le cardio démarre (le repos avant l’exercice suivant ne bloque pas)', async ({ page }) => {
+    const day = 'pull-a';
+    const modele = await modeleSeance(page, day);
+    const faits = {};
+    for (const id of modele.exerciseOrder) if (id !== 'pull-a-incline-walk') faits[id] = modele.exercises[id].sets.length;
+    faits['pull-a-hammer'] = modele.exercises['pull-a-hammer'].sets.length - 1;
+    await seanceGuideeAvecTravail(page, day, faits);
+    await allerJour(page, day); await page.evaluate(() => window.scrollTo(0, 0));
+    if (await page.evaluate(() => !!document.querySelector('[data-action="exec-enter"]'))) await toucher(page, '[data-action="exec-enter"]');
+    if (await page.evaluate(() => !!document.querySelector('[data-action="exec-resume"]'))) await toucher(page, '[data-action="exec-resume"]');
+    let e = await etape(page);
+    attendu(/Curl marteau/.test(e.titre ?? ''), 'pas sur la dernière série du curl marteau : ' + JSON.stringify(e));
+    await saisirEtValider(page, { kg: 12, reps: 12 });
+    let s = await seanceDu(page, day);
+    attendu(s.activeTimer?.kind === 'transition', 'pas de repos avant le cardio : ' + JSON.stringify(s.activeTimer));
+    await toucher(page, '[data-action="exec-start-cardio"]');
+    s = await seanceDu(page, day);
+    const toast = await page.evaluate(() => document.getElementById('toast')?.textContent ?? '');
+    attendu(s.activeTimer?.kind === 'cardio' && !/déjà en cours/.test(toast), 'cardio refusé : ' + JSON.stringify({ t: s.activeTimer?.kind, toast }));
+    return 'dernière série du curl marteau → repos avant l’exercice suivant → « DÉMARRER » le cardio : le repos est clos, le cardio tourne';
+  });
+
+  await scenario('S26 Séance menée depuis la liste, « Faire maintenant » : la série de l’exercice choisi, pas l’échauffement général ni les activations', async ({ page }) => {
+    await seanceGuideeAvecTravail(page, 'pull-a', { 'pull-a-lat-pronation': 2 });
+    await ecrireBase(page, {});
+    await page.evaluate(async () => {
+      const db = await new Promise((res) => { const x = indexedDB.open('colosse-adaptive-db'); x.onsuccess = () => res(x.result); });
+      const t = db.transaction('sessions', 'readwrite'); const st = t.objectStore('sessions');
+      const all = await new Promise((r) => { const g = st.getAll(); g.onsuccess = () => r(g.result); });
+      for (const x of all) if (x.startedAt && !x.endedAt) { x.execution = { ...(x.execution ?? {}), active: false }; st.put(x); }
+      await new Promise((r) => { t.oncomplete = r; }); db.close();
+    });
+    await page.reload({ waitUntil: 'load' }); await wait(2500);
+    await allerJour(page, 'pull-a');
+    await toucher(page, '[data-exercise-card="pull-a-reverse-pecdeck"] [data-action="exercise-do-now"]');
+    const e = await etape(page);
+    const s = await seanceDu(page, 'pull-a');
+    attendu(e.guide && /Reverse pec-deck/.test(e.titre ?? '') && e.serie === 'Série 1 sur 3', 'écran après Faire maintenant : ' + JSON.stringify(e));
+    attendu(s.warmup.general.skipped !== true && s.warmup.general.done !== true, 'l’échauffement a été marqué passé à la place de l’utilisateur');
+    return 'séance commencée dans la liste → Faire maintenant Reverse pec-deck → « Série 1 sur 3 » directement, échauffement non marqué';
+  });
+
+  await scenario('S27 Échauffement demandé pendant le repos avant l’exercice suivant : la montée avance ; charge tapée prioritaire sur le pré-remplissage', async ({ page }) => {
+    // Historique : rowing appuyé 50 kg le 01/09 → pré-remplissage à 50 kg.
+    const modele = await modeleSeance(page, 'pull-a');
+    const passe = JSON.parse(JSON.stringify(modele));
+    Object.assign(passe, { id: '2026-09-01:pull-a', date: '2026-09-01', startedAt: Date.parse('2026-09-01T18:00:00'), endedAt: Date.parse('2026-09-01T19:00:00'), status: 'COMPLETE', weekIndex: 1, planWeekIndex: 1 });
+    passe.exercises['pull-a-chest-row'].sets = passe.exercises['pull-a-chest-row'].sets.map(() => ({ id: 'p' + Math.random(), done: true, weightKg: 50, reps: 8, rir: 2, technique: 'good', pain: 0, completedAt: Date.parse('2026-09-01T18:30:00') }));
+    await ecrireBase(page, { sessions: [passe] });
+    await page.reload({ waitUntil: 'load' }); await wait(2200);
+    await demarrer(page, 'pull-a');
+    await page.evaluate(() => document.querySelector('[data-action="exec-skip-general-warmup"]').click()); await wait(450);
+    await passerActivations(page);
+    // Terminer le tirage pronation → repos avant l'exercice suivant (rowing)
+    await toucher(page, '.f-exec-tools [data-action="exec-show-program"]');
+    await toucher(page, '[data-exercise-card="pull-a-lat-pronation"] [data-action="exercise-do-now"]');
+    for (let k = 0; k < 3; k++) { await saisirEtValider(page, { kg: 60, reps: 8 }); if (k < 2) await page.evaluate(() => document.querySelector('.timer-overlay [data-action="timer-skip"]')?.click()); await wait(300); }
+    let s = await seanceDu(page, 'pull-a');
+    attendu(s.activeTimer?.kind === 'transition', 'pas de repos avant l’exercice suivant');
+    let e = await etape(page);
+    if (!/Rowing poitrine/.test(e.titre ?? '')) { await toucher(page, '.f-exec-tools [data-action="exec-show-program"]'); await toucher(page, '[data-exercise-card="pull-a-chest-row"] [data-action="exercise-do-now"]'); }
+    const prerempli = await page.evaluate(() => document.querySelector('[data-exec-field="weightKg"]').value);
+    await page.fill('[data-exec-field="weightKg"]', '70');
+    await toucher(page, '.exec-work [data-action="exec-start-ramps"]');
+    const rampeA = await page.evaluate(() => document.querySelector('.exec-ramp .exec-huge')?.textContent);
+    attendu(/35 kg/.test(rampeA ?? ''), `montée calculée sur le pré-remplissage (${prerempli}) au lieu de 70 kg : ${rampeA}`);
+    await toucher(page, '.exec-ramp [data-action="exec-validate-ramp"]');
+    s = await seanceDu(page, 'pull-a');
+    const toast = await page.evaluate(() => document.getElementById('toast')?.textContent ?? '');
+    attendu(s.activeTimer?.kind === 'ramp-rest' && !/déjà en cours/.test(toast), 'repos de montée refusé : ' + JSON.stringify({ t: s.activeTimer?.kind, toast }));
+    await toucher(page, '.timer-overlay [data-action="timer-skip"]');
+    const rampeB = await page.evaluate(() => document.querySelector('.exec-ramp .exec-huge')?.textContent);
+    attendu(/50 kg|49/.test(rampeB ?? ''), 'étape B non affichée : ' + rampeB);
+    return `pré-rempli ${prerempli} kg, tapé 70 → montée A ${rampeA}, B ${rampeB} ; « SÉRIE FAITE » pendant le repos avant l’exercice suivant : repos de montée lancé`;
+  });
+
+  await scenario('S28 Séance du jour en cours + ancienne séance restée ouverte : « En séance » et « Reprendre » mènent à la séance du jour, chrono conservé', async ({ page }) => {
+    const modele = await modeleSeance(page, 'pull-a');
+    const ex = modele.exerciseOrder[0];
+    const lundiPasse = await page.evaluate(() => { const d = new Date(); const recul = ((d.getDay() + 6) % 7) || 7; d.setDate(d.getDate() - recul); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; });
+    const ouverte = JSON.parse(JSON.stringify(modele));
+    Object.assign(ouverte, { id: `${lundiPasse}:pull-a`, date: lundiPasse, startedAt: Date.now() - 170 * 3600e3, updatedAt: Date.now() - 168 * 3600e3, endedAt: null, execution: { active: true } });
+    ouverte.exercises[ex].sets[0] = { ...ouverte.exercises[ex].sets[0], done: true, weightKg: 50, reps: 8, rir: 2, technique: 'good', pain: 0 };
+    await ecrireBase(page, { sessions: [ouverte] });
+    await page.reload({ waitUntil: 'load' }); await wait(2200);
+    await demarrer(page, 'push-a'); await jusquASerie(page); await saisirEtValider(page, { kg: 80, reps: 8 });
+    const avant = (await seanceDu(page, 'push-a')).activeTimer;
+    attendu(avant?.kind === 'work-rest', 'pas de repos sur la séance du jour');
+    await toucher(page, '.f-exec-tools [data-action="exec-show-program"]');
+    await toucher(page, '.bottom-nav [data-tab="home"]');
+    const statut = await page.evaluate(() => document.querySelector('.f-top-status')?.textContent.trim());
+    await toucher(page, '.f-top-status');
+    const e = await etape(page);
+    const push = await seanceDu(page, 'push-a');
+    const old = (await lireBase(page)).sessions.find((x) => x.id === ouverte.id);
+    attendu(/En séance/.test(statut) && e.guide && /Développé incliné Smith/.test(e.titre ?? ''), '« En séance » mène ailleurs : ' + JSON.stringify({ statut, e }));
+    attendu(push.activeTimer?.kind === 'work-rest' && push.activeTimer.startedAt === avant.startedAt, 'chrono du jour perdu');
+    attendu(old.exercises[ex].sets.filter((x) => x.done).length === 1 && !old.endedAt, 'ancienne séance modifiée');
+    return '« En séance » → séance du jour (Smith), repos conservé ; ancienne séance intacte';
+  });
+
+  await scenario('S29 Liste unilatérale : ressenti du côté droit laissé à « Je ne sais pas » → la série garde le RIR connu, jamais 0', async ({ page }) => {
+    await demarrer(page, 'pull-a');
+    await page.evaluate(() => document.querySelector('[data-action="exec-skip-general-warmup"]').click()); await wait(450);
+    await passerActivations(page);
+    await toucher(page, '.f-exec-tools [data-action="exec-show-program"]');
+    const carte = '[data-exercise-card="pull-a-unilateral"]';
+    await toucher(page, `${carte} details.f-exercise-detail > summary`);
+    const ligne = `${carte} [data-set-row][data-set="0"]`;
+    await page.fill(`${ligne} [data-set-field="weightKg"]`, '12'); await page.fill(`${ligne} [data-set-field="reps"]`, '12');
+    await page.selectOption(`${ligne} [data-set-field="rir"]`, '2');
+    await toucher(page, `${ligne} [data-action="toggle-set"]`);
+    await page.evaluate(() => document.querySelector('.timer-overlay [data-action="timer-skip"]')?.click()); await wait(400);
+    if (await page.evaluate(() => !!document.querySelector('.execution'))) await toucher(page, '.f-exec-tools [data-action="exec-show-program"]');
+    if (!(await page.evaluate((c) => document.querySelector(`${c} details.f-exercise-detail`)?.open, carte))) await toucher(page, `${carte} details.f-exercise-detail > summary`);
+    await page.fill(`${ligne} [data-set-field="reps"]`, '11');
+    await toucher(page, `${ligne} [data-action="toggle-set"]`);
+    const set = (await seanceDu(page, 'pull-a')).exercises['pull-a-unilateral'].sets[0];
+    attendu(set.done && set.rir === 2 && set.sides.right.rir === null, 'RIR enregistré : ' + JSON.stringify({ rir: set.rir, droite: set.sides?.right?.rir }));
+    return 'gauche RIR 2, droite « Je ne sais pas » → série RIR 2 (et non 0)';
+  });
+
+  await scenario('S30 Séance faite en décharge, figée par la mise à jour, puis « Annuler la séance » : elle revient au programme (3 séries, charges normales)', async ({ page }) => {
+    const jour = await aujourdHuiIso(page);
+    const modele = await modeleSeance(page, 'pull-a');
+    const ex = modele.exerciseOrder[0];
+    const enCours = JSON.parse(JSON.stringify(modele));
+    Object.assign(enCours, { id: `${jour}:pull-a`, date: jour, weekIndex: 7, startedAt: Date.now() - 1800e3, endedAt: null, updatedAt: Date.now(), execution: { ...(enCours.execution ?? {}), active: false } });
+    enCours.exercises[ex].sets = [0, 1].map((k) => ({ id: 'x' + k, done: k === 0, weightKg: 60, reps: k === 0 ? 8 : null, rir: k === 0 ? 4 : null, technique: 'good', pain: 0, restActualSec: null, completedAt: k === 0 ? Date.now() - 600e3 : null }));
+    const ancienne = JSON.parse(JSON.stringify(modele));
+    Object.assign(ancienne, { id: '2026-09-01:pull-a', date: '2026-09-01', weekIndex: 5, startedAt: Date.parse('2026-09-01T18:00:00'), endedAt: Date.parse('2026-09-01T19:20:00'), status: 'COMPLETE' });
+    ancienne.exercises[ex].sets = [0, 1, 2].map((k) => ({ id: 'y' + k, done: true, weightKg: 70, reps: 8, rir: 1, technique: 'good', pain: 0, restActualSec: 120, completedAt: Date.parse('2026-09-01T18:30:00') }));
+    await ecrireBase(page, { profil: { startDate: '2026-08-05', programVersion: 'transformation-12s' }, supprimerChampsProfil: ['programStartDate'], sessions: [enCours, ancienne] });
+    await page.reload({ waitUntil: 'load' }); await wait(2500);
+    let c = await seanceDu(page, 'pull-a');
+    attendu(c.planWeekIndex === 7, 'la séance commencée n’a pas été figée');
+    await allerJour(page, 'pull-a'); await page.evaluate(() => window.scrollTo(0, 0));
+    await toucher(page, '.session-actions [data-action="cancel-session"]');
+    c = (await lireBase(page)).sessions.find((x) => x.id === `${jour}:pull-a`);
+    const carte = await page.evaluate((id) => ({ plan: document.querySelector(`[data-exercise-card="${id}"] .exercise-plan`)?.textContent.replace(/\s+/g, ' '), banniere: !!document.querySelector('.f-deload-banner') }), ex);
+    attendu(!('planWeekIndex' in c) && c.weekIndex === 2 && c.exercises[ex].sets.length >= 3 && !carte.banniere && /^3 ×/.test(carte.plan ?? ''), 'séance annulée encore en décharge : ' + JSON.stringify({ w: c.weekIndex, p: c.planWeekIndex, n: c.exercises[ex].sets.length, carte }));
+    attendu(c.exercises[ex].sets.every((x) => !x.done) && c.exercises[ex].sets.every((x) => x.weightKg === null || x.weightKg >= 70), 'charges après annulation : ' + JSON.stringify(c.exercises[ex].sets.map((x) => x.weightKg)));
+    return `après annulation : semaine ${c.weekIndex}, ${c.exercises[ex].sets.length} séries, charges ${JSON.stringify(c.exercises[ex].sets.map((x) => x.weightKg))}`;
+  });
+
+  await scenario('S31 Séance neuve : « Faire maintenant » dès « Commencer » garde l’échauffement et les activations, puis l’exercice choisi', async ({ page }) => {
+    await demarrer(page, 'pull-a');
+    attendu(/ÉCHAUFFEMENT/.test((await etape(page)).eyebrow ?? ''), 'pas d’échauffement au départ');
+    await toucher(page, '.f-exec-tools [data-action="exec-show-program"]');
+    await toucher(page, '[data-exercise-card="pull-a-chest-row"] [data-action="exercise-do-now"]');
+    const msg = await page.evaluate(() => document.getElementById('toast')?.textContent ?? '');
+    let e = await etape(page);
+    attendu(/ÉCHAUFFEMENT/.test(e.eyebrow ?? '') && /juste après l’échauffement/.test(msg), 'échauffement supprimé ou message trompeur : ' + JSON.stringify({ e, msg }));
+    await page.evaluate(() => document.querySelector('[data-action="exec-skip-general-warmup"]').click()); await wait(450);
+    attendu(/ACTIVATION/.test((await etape(page)).eyebrow ?? ''), 'activations supprimées');
+    await passerActivations(page);
+    e = await etape(page);
+    attendu(/Rowing poitrine appuyée/.test(e.titre ?? '') && e.serie === 'Série 1 sur 3', 'l’exercice choisi ne suit pas l’échauffement : ' + JSON.stringify(e));
+    return 'Faire maintenant dès le départ → échauffement (message « juste après l’échauffement ») → activations → Rowing appuyé Série 1 sur 3';
+  });
+
+  await scenario('S32 Séance figée par la mise à jour : dévalider puis revalider la seule série ne la fait plus basculer en décharge', async ({ page }) => {
+    const jour = await aujourdHuiIso(page);
+    const modele = await modeleSeance(page, 'pull-a');
+    const ex = modele.exerciseOrder[0];
+    const enCours = JSON.parse(JSON.stringify(modele));
+    Object.assign(enCours, { id: `${jour}:pull-a`, date: jour, weekIndex: 7, startedAt: Date.now() - 1800e3, endedAt: null, updatedAt: Date.now(), execution: { ...(enCours.execution ?? {}), active: false } });
+    enCours.exercises[ex].sets = [0, 1].map((k) => ({ id: 'x' + k, done: k === 0, weightKg: 60, reps: k === 0 ? 8 : null, rir: k === 0 ? 4 : null, technique: 'good', pain: 0, restActualSec: null, completedAt: k === 0 ? Date.now() - 600e3 : null }));
+    enCours.exercises[ex].autoSeed = { loadKg: 60, sources: ['2026-08-31:pull-a'], sets: [0, 1] };
+    const historique = JSON.parse(JSON.stringify(modele));
+    Object.assign(historique, { id: '2026-08-31:pull-a', date: '2026-08-31', weekIndex: 5, planWeekIndex: 5, startedAt: Date.parse('2026-08-31T18:00:00'), endedAt: Date.parse('2026-08-31T19:00:00'), status: 'COMPLETE' });
+    historique.exercises[ex].sets = [0, 1, 2].map((k) => ({ id: 'h' + k, done: true, weightKg: 70, reps: 8, rir: 1, technique: 'good', pain: 0, completedAt: Date.parse('2026-08-31T18:30:00') }));
+    await ecrireBase(page, { profil: { startDate: '2026-08-05', programVersion: 'transformation-12s' }, supprimerChampsProfil: ['programStartDate'], sessions: [enCours, historique] });
+    await page.reload({ waitUntil: 'load' }); await wait(2500);
+    attendu((await seanceDu(page, 'pull-a')).planWeekIndex === 7, 'pas figée');
+    await allerJour(page, 'pull-a');
+    const carte = `[data-exercise-card="${ex}"]`;
+    await toucher(page, `${carte} details.f-exercise-detail > summary`);
+    await toucher(page, `${carte} [data-set-row][data-set="0"] [data-action="toggle-set"]`);
+    let c = (await lireBase(page)).sessions.find((x) => x.id === `${jour}:pull-a`);
+    attendu(!('planWeekIndex' in c) && c.weekIndex === 2, 'dévalidation : ' + JSON.stringify({ w: c.weekIndex, p: c.planWeekIndex }));
+    const charges = c.exercises[ex].sets.map((x) => x.weightKg);
+    attendu(charges[0] === 60 && c.exercises[ex].sets[0].reps === 8 && charges.slice(1).every((kg) => kg >= 70), 'charge réellement soulevée remplacée ou séries libres non recalculées : ' + JSON.stringify(charges));
+    if (!(await page.evaluate((k) => document.querySelector(`${k} details.f-exercise-detail`)?.open, carte))) await toucher(page, `${carte} details.f-exercise-detail > summary`);
+    await page.fill(`${carte} [data-set-row][data-set="0"] [data-set-field="weightKg"]`, '72');
+    await page.fill(`${carte} [data-set-row][data-set="0"] [data-set-field="reps"]`, '8');
+    await toucher(page, `${carte} [data-set-row][data-set="0"] [data-action="toggle-set"]`);
+    c = (await lireBase(page)).sessions.find((x) => x.id === `${jour}:pull-a`);
+    const vue = await page.evaluate((k) => ({ plan: document.querySelector(`${k} .exercise-plan`)?.textContent.replace(/\s+/g, ' '), banniere: !!document.querySelector('.f-deload-banner') }), carte);
+    attendu(c.weekIndex === 2 && !('planWeekIndex' in c) && /^3 ×/.test(vue.plan ?? '') && !vue.banniere, 'revalidation : ' + JSON.stringify({ w: c.weekIndex, p: c.planWeekIndex, vue }));
+    return `figée (7) → dévalidée : semaine 2, charges ${JSON.stringify(charges)} (60 kg soulevés gardés) → revalidée 72 kg × 8 : reste en semaine 2, 3 séries, sans décharge`;
   });
 
   console.log('\nRESUME ' + JSON.stringify({ total: resultats.length, ok: resultats.filter((r) => r.ok).length }));

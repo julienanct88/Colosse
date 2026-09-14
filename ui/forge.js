@@ -40,7 +40,7 @@ export function icon(name, cls = '') {
   return `<svg class="f-icon ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${paths[name] ?? paths.grid}</svg>`;
 }
 export function renderForgeHeader(app) {
-  const running = app.snapshot.sessions.some(s => s.execution?.active && !s.endedAt);
+  const running = app.snapshot.sessions.some(s => s.execution?.active && !s.endedAt && !(app.isStaleSession?.(s)));
   return `<header class="topbar forge-topbar">
     <button class="f-brand" data-action="tab" data-tab="home" aria-label="Colosse, accueil"><span class="f-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>COLOSSE<span class="f-brand-edition">ADAPTIVE / FORGE</span></span></button>
     <button class="f-top-status" data-action="${running ? 'forge-resume' : 'forge-open'}" ${running ? '' : 'data-tab="settings" data-section="forge-data"'}>${running ? '<i class="f-live-dot"></i> En séance' : `${icon('shield')} Sur cet appareil`}</button>
@@ -62,13 +62,14 @@ export function renderForgeWeek(app, context) {
 export function renderForgeHome(app) {
   const c=app.currentContext(), {day, session, weekIndex}=c;
   const phase=getTrainingPhase(weekIndex), plan=estimateSessionDuration(day, ex=>getExercisePlan(ex,weekIndex));
-  const sets=app.activeSetCount(session,day), running=app.snapshot.sessions.find(s=>s.execution?.active&&!s.endedAt);
+  const sets=app.activeSetCount(session,day), running=app.snapshot.sessions.find(s=>s.execution?.active&&!s.endedAt&&!(app.isStaleSession?.(s)));
   const completed=app.completedWeekSessions(), lastLog=[...app.snapshot.dailyLogs].filter(l=>Number.isFinite(l.weightKg)&&l.weightKg>0).sort((a,b)=>b.date.localeCompare(a.date))[0];
   const todayLog=app.snapshot.dailyLogs.find(l=>l.date===isoDate()), activity=activityProgress(todayLog??{},app.snapshot.profile);
   const active=!!(session.execution?.active&&!session.endedAt);
   const dateLabel=c.date===isoDate()?'Aujourd’hui':formatDateFr(c.date,{weekday:'long',day:'numeric',month:'short'});
   return `<section class="f-home-intro"><span class="eyebrow">${escapeHtml(formatDateFr(isoDate(),{weekday:'long',day:'numeric',month:'long'}))}</span><h1>La force se<br>construit<span class="f-accent">.</span></h1><p>Une séance après l’autre.</p></section>
-    ${running && running.id!==session.id ? `<button class="f-running-banner" data-action="forge-resume">${icon('play')} Une séance est en cours <span>Reprendre ${icon('arrow')}</span></button>` : ''}
+    ${(app.staleSessions?.() ?? []).map(stale=>{const d=TRAINING_DAYS.find(x=>x.id===stale.dayId);const n=app.activeSetCount(stale,d).done;return `<section class="f-stale-session" role="note"><strong>${escapeHtml(d?.name??'Séance')} du ${escapeHtml(formatDateFr(stale.date,{weekday:'long',day:'numeric',month:'long'}))} est restée ouverte</strong><span>${n} série${n>1?'s':''} déjà validée${n>1?'s':''}.</span><div><button class="primary-button" data-action="stale-finish" data-session="${escapeHtml(stale.id)}">Terminer et garder ${n>1?'mes séries':'ma série'}</button><button class="secondary-button" data-action="stale-resume" data-session="${escapeHtml(stale.id)}">Reprendre</button></div></section>`;}).join('')}
+    ${running && running.id!==session.id && !(app.isStaleSession?.(running)) ? `<button class="f-running-banner" data-action="forge-resume">${icon('play')} Une séance est en cours <span>Reprendre ${icon('arrow')}</span></button>` : ''}
     <section class="f-session-hero">
       <div class="f-hero-top"><span class="f-kicker">${escapeHtml(dateLabel)}</span><span class="f-pill">${active?'En cours':session.endedAt?'Enregistrée':'Au programme'}</span></div>
       <div class="f-hero-art" aria-hidden="true"><div></div><div></div><div></div></div>
@@ -76,7 +77,7 @@ export function renderForgeHome(app) {
       <div class="f-hero-metrics"><span>${icon('clock')} ${escapeHtml(plan.targetLabel??`${plan.minutes} min`)}</span><span>${icon('barbell')} ${day.exercises.length} exercices</span></div>
       <button class="f-cta" data-action="${active?'forge-resume':'forge-open'}" ${active?'':'data-tab="training"'}><span>${active?'Reprendre la séance':session.endedAt?'Voir ma séance':'Préparer ma séance'}</span>${icon('arrow')}</button>
       ${active&&canCancelSession(session)?'<button class="f-hero-cancel" data-action="cancel-session">↺ Annuler cette séance</button>':''}
-      <div class="f-hero-foot"><span>Semaine ${weekIndex} <b>·</b> ${escapeHtml(phase.name)}</span>${sets.done?`<span>${sets.done}/${sets.total} séries</span>`:''}</div>
+      <div class="f-hero-foot"><span>Semaine ${weekIndex} <b>·</b> ${escapeHtml(phase.name)}${phase.name==='Décharge'?' (moitié des séries)':''}</span>${sets.done?`<span>${sets.done}/${sets.total} séries</span>`:''}</div>
     </section>
     ${renderForgeWeek(app,c)}
     <section class="f-regularity"><div class="f-mini-icon">${icon('barbell')}</div><div><strong>Régularité</strong><span>${completed===0?'Chaque séance compte.':`${completed} séance${completed>1?'s':''} complète${completed>1?'s':''} cette semaine.`}</span></div><strong class="f-count">${completed}<small> / ${STRENGTH_DAYS.length}</small></strong><div class="f-streak-bars" aria-hidden="true">${STRENGTH_DAYS.map((_,i)=>`<i class="${i<completed?'filled':''}"></i>`).join('')}</div></section>

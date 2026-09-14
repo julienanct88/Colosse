@@ -4,7 +4,7 @@
 
 import {
     activationSteps, computeRampSets, getRampProtocol, isActivationComplete, isGeneralWarmupDone,
-    nextActivationStep, nextRampIndex, normalizeWarmupState, resolveReferenceLoad,
+    nextActivationStep, nextRampIndex, normalizeWarmupState, resolveReferenceLoad, rampsRequested,
 } from './warmup.js';
 import { targetRirForSet, currentSide } from './session.js';
 
@@ -35,6 +35,10 @@ function variantOf(exercise, log) {
 
 function workSetsDone(log, plan) {
     return (log?.sets ?? []).slice(0, plan.sets).filter((set) => set.done).length;
+}
+
+function workStarted(session) {
+    return Object.values(session?.exercises ?? {}).some((log) => (log?.sets ?? []).some((set) => set?.done || set?.sides?.left?.done));
 }
 
 /** Ordre d'exécution : respecte l'ordre mémorisé de la séance. */
@@ -69,10 +73,13 @@ export function computeExecutionStep({ day, session, resolvePlan }) {
         return { stage: STAGES.SESSION_COMPLETE, stepKey: 'complete' };
     }
 
-    if (!isGeneralWarmupDone(warmup))
+    // Une fois des séries validées (séance menée depuis la liste par exemple), l'échauffement général et les
+    // activations ne s'imposent plus. Séance neuve : ils restent les premières étapes (avec « Passer »).
+    const warmupDeferred = workStarted(session);
+    if (!warmupDeferred && !isGeneralWarmupDone(warmup))
         return { stage: STAGES.GENERAL_WARMUP, stepKey: 'general-warmup', exercise: null, exerciseId: null, setIndex: null, side: null };
 
-    if (!isActivationComplete(warmup, day)) {
+    if (!warmupDeferred && !isActivationComplete(warmup, day)) {
         const step = nextActivationStep(warmup, day);
         return { stage: STAGES.ACTIVATION, activation: step, stepKey: `activation:${step.key}`,
                  exercise: null, exerciseId: null, setIndex: null, side: step.side };
@@ -95,23 +102,31 @@ export function computeExecutionStep({ day, session, resolvePlan }) {
         if (done >= plan.sets)
             continue;
 
-        // Montée en charge avant la première série de travail.
+        // Montée en charge : PROPOSÉE sur la première série, faite seulement si demandée.
+        // « Faire maintenant » mène donc toujours directement aux séries de travail.
         const variant = variantOf(exercise, log);
+        let rampOffer = null;
         if (exercise.warmupProtocol && done === 0) {
-            const reference = resolveReferenceLoad({
-                firstWorkSetLoadKg: log.sets?.[0]?.weightKg,
-                prescriptionLoadKg: log.prescription?.loadKg,
-                storedReferenceKg: warmup.ramps[exercise.id]?.referenceLoadKg,
-            });
-            if (reference.needsInput)
-                return { stage: STAGES.NEEDS_REFERENCE_LOAD, exercise, exerciseId: exercise.id, setIndex: null,
-                         side: null, stepKey: `reference:${exercise.id}` };
-            const ramps = computeRampSets(exercise, reference.loadKg, variant?.incrementKg ?? 2.5);
-            const rampIndex = nextRampIndex(warmup, exercise.id, ramps);
-            if (rampIndex >= 0)
-                return { stage: STAGES.RAMP_SET, exercise, exerciseId: exercise.id, setIndex: rampIndex, side: null,
-                         stepKey: `ramp:${exercise.id}:${rampIndex}`, ramp: ramps[rampIndex], ramps,
-                         referenceLoadKg: reference.loadKg };
+            const protocol = getRampProtocol(exercise) ?? [];
+            if (rampsRequested(warmup, exercise.id, protocol.length)) {
+                const demandee = warmup.ramps[exercise.id];
+                // Charge indiquée au moment de demander l'échauffement : prioritaire sur le pré-remplissage.
+                const reference = resolveReferenceLoad({
+                    firstWorkSetLoadKg: demandee?.requested === true && Number(demandee.referenceLoadKg) > 0 ? demandee.referenceLoadKg : log.sets?.[0]?.weightKg,
+                    prescriptionLoadKg: log.prescription?.loadKg,
+                    storedReferenceKg: warmup.ramps[exercise.id]?.referenceLoadKg,
+                });
+                const ramps = reference.needsInput ? [] : computeRampSets(exercise, reference.loadKg, variant?.incrementKg ?? 2.5);
+                const rampIndex = nextRampIndex(warmup, exercise.id, ramps);
+                if (rampIndex >= 0)
+                    return { stage: STAGES.RAMP_SET, exercise, exerciseId: exercise.id, setIndex: rampIndex, side: null,
+                             stepKey: `ramp:${exercise.id}:${rampIndex}`, ramp: ramps[rampIndex], ramps,
+                             referenceLoadKg: reference.loadKg, plan };
+            }
+            const entry = warmup.ramps[exercise.id];
+            const allDone = protocol.length > 0 && protocol.every((_, index) => !!entry?.done?.[index]);
+            if (protocol.length && !entry?.skipped && !allDone)
+                rampOffer = { count: protocol.length };
         }
 
         const setIndex = done;
@@ -121,7 +136,7 @@ export function computeExecutionStep({ day, session, resolvePlan }) {
             stage: STAGES.WORK_SET, exercise, exerciseId: exercise.id, setIndex, side,
             stepKey: `work:${exercise.id}:${setIndex}:${side ?? 'both'}`,
             plan, variant, targetRir: targetRirForSet(plan, setIndex),
-            totalSets: plan.sets,
+            totalSets: plan.sets, rampOffer,
         };
     }
 
@@ -144,12 +159,16 @@ export function executionProgress({ day, session, resolvePlan }) {
     let done = 0;
     let total = 0;
     if (day.kind !== 'recovery') {
-        total += 1;
-        if (isGeneralWarmupDone(warmup))
+        // Travail commencé sans échauffement : les étapes non faites ne sont plus dues (sinon jamais 100 %).
+        const dues = !workStarted(session);
+        const general = isGeneralWarmupDone(warmup);
+        total += dues || general ? 1 : 0;
+        if (general)
             done += 1;
         const steps = activationSteps(day);
-        total += steps.length;
-        done += steps.filter((s) => warmup.activation[s.key]).length;
+        const faites = steps.filter((s) => warmup.activation[s.key]).length;
+        total += dues ? steps.length : faites;
+        done += faites;
     }
     for (const exercise of orderedExercises(day, session)) {
         const log = session?.exercises?.[exercise.id];
@@ -160,12 +179,15 @@ export function executionProgress({ day, session, resolvePlan }) {
             continue;
         }
         const plan = resolvePlan(exercise);
+        // Montée en charge facultative : elle n'entre dans l'avancement que si elle a été demandée ou faite.
         const ramps = getRampProtocol(exercise) ?? [];
-        total += ramps.length + plan.sets;
+        const rampsDone = warmup.ramps[exercise.id]?.done ?? [];
+        const rampsCounted = rampsRequested(warmup, exercise.id, ramps.length) || ramps.some((_, index) => !!rampsDone[index]);
+        total += (rampsCounted ? ramps.length : 0) + plan.sets;
         if (log?.skipped)
             continue;
-        const rampsDone = warmup.ramps[exercise.id]?.done ?? [];
-        done += ramps.filter((_, index) => !!rampsDone[index]).length;
+        if (rampsCounted)
+            done += ramps.filter((_, index) => !!rampsDone[index]).length;
         done += workSetsDone(log, plan);
     }
     return { done, total, percent: total > 0 ? Math.round((done / total) * 100) : 0 };
@@ -342,11 +364,15 @@ export function halfDoneUnilateral(session, day, resolvePlan) {
  */
 export function executionChangeDecision({ activeTimer, targetExerciseId, halfSetExerciseId = null, names = {} }) {
     const nom = (id) => names[id] ?? 'l’exercice en cours';
+    // L'exercice du chrono lui-même (ex. pendant les 15 s entre les deux bras) : on y retourne, le chrono continue.
+    if (activeTimer && activeTimer.kind !== 'transition' && activeTimer.context?.exerciseId === targetExerciseId)
+        return { action: 'proceed', endTimer: false, reason: 'same-exercise', message: null };
     if (activeTimer?.kind === 'side-switch')
         return { action: 'refuse', endTimer: false, reason: 'side-switch',
-            message: `Changement de côté en cours sur ${nom(activeTimer.context?.exerciseId)} : fais d’abord le côté droit (ou passe ce chrono), puis choisis un autre exercice.` };
-    if (activeTimer && activeTimer.context?.exerciseId === targetExerciseId)
-        return { action: 'proceed', endTimer: false, reason: 'same-exercise', message: null };
+            message: `Termine d’abord le côté droit de ${nom(activeTimer.context?.exerciseId)} (ou passe le chrono), puis choisis un autre exercice.` };
+    // Repos entre deux exercices : on passe directement à celui qu'on a choisi.
+    if (activeTimer?.kind === 'transition')
+        return { action: 'proceed', endTimer: true, reason: 'transition', message: null };
     if (activeTimer && ['work-rest', 'ramp-rest', 'activation-rest'].includes(activeTimer.kind))
         return { action: 'confirm', endTimer: true, reason: 'rest-running',
             message: `Un repos est en cours${activeTimer.context?.exerciseId ? ` après ${nom(activeTimer.context.exerciseId)}` : ''}. Il sera arrêté maintenant (sa durée réelle est enregistrée) pour passer à ${nom(targetExerciseId)}. Continuer ?` };
@@ -358,4 +384,24 @@ export function executionChangeDecision({ activeTimer, targetExerciseId, halfSet
             message: `${nom(halfSetExerciseId)} a une série commencée (côté gauche fait). Elle restera à reprendre au côté droit. Passer à ${nom(targetExerciseId)} ?` };
     // L'échauffement général peut continuer : l'exercice choisi viendra juste après.
     return { action: 'proceed', endTimer: false, reason: activeTimer?.kind === 'general-warmup' ? 'after-warmup' : null, message: null };
+}
+
+/**
+ * Chrono à lancer après une série validée (3.6.3).
+ * - série suivante à faire sur cet exercice → 'work-rest' (repos entre séries, durée réelle enregistrée) ;
+ * - dernière série de l'exercice et un autre exercice reste à faire → 'transition'
+ *   (repos avant l'exercice suivant : jamais enregistré comme repos de série) ;
+ * - sinon (fin de séance, superset en cours) → aucun chrono.
+ * Durée : repos de l'exercice (après les deux côtés pour un unilatéral), comme l'annonce la consigne.
+ */
+export function restAfterSetDecision({ plan, setIndex, isLastOfSuperset = true, inSuperset = false, maxSupersetSets = null, nextExercise = null }) {
+    const restSec = plan?.perSide ? (plan.roundRestSec ?? plan.restSec) : plan?.restSec;
+    const sets = inSuperset ? (maxSupersetSets ?? plan.sets) : plan.sets;
+    if (inSuperset && !isLastOfSuperset)
+        return { kind: null, durationSec: 0 };
+    if (setIndex < sets - 1)
+        return { kind: 'work-rest', durationSec: restSec };
+    if (nextExercise)
+        return { kind: 'transition', durationSec: restSec, nextExerciseId: nextExercise.id, nextName: nextExercise.name };
+    return { kind: null, durationSec: 0 };
 }

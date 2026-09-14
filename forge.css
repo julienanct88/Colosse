@@ -372,7 +372,8 @@ h3 { font-size:18px; }
 .toast.error { background:#35221f; color:#ffd0c8; }
 /* Le toast n'est qu'un message : il ne capte jamais un toucher et, en mode guidé, s'affiche sous l'en-tête (outils « Tous les exercices » / « Modifier l’ordre » dégagés). */
 .toast { pointer-events:none; }
-.app-shell.is-executing .toast { top:calc(176px + var(--safe-top)); bottom:auto; }
+/* Mode guidé : le message passe sur la ligne du haut (jour, durée), jamais sur le titre de l'étape ni ses boutons. */
+.app-shell.is-executing .toast { top:calc(6px + var(--safe-top)); bottom:auto; }
 
 /* ---------- Séance au centre : outils, fiches, démonstrations, échauffement (Forge) ---------- */
 .f-exec-tools { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px; }
@@ -412,7 +413,8 @@ h3 { font-size:18px; }
 .f-session-tools span { display:block; margin-top:3px; font-size:11px; color:var(--muted); }
 .f-session-tools .secondary-button { display:inline-flex; align-items:center; gap:6px; flex:0 0 auto; min-height:46px; }
 .f-session-tools .secondary-button .f-icon { width:17px; height:17px; color:var(--forge); }
-.exec-resume-banner { position:sticky; top:calc(78px + var(--safe-top)); z-index:35; min-height:50px; }
+/* Bandeau de retour : à sa place dans la page, opaque, ne recouvre plus aucun contenu. */
+.exec-resume-banner { position:static; min-height:50px; background:#3a2a22; }
 .f-exercise-sheet { max-height:88vh; overflow-y:auto; }
 .f-sheet-title { margin:6px 0 4px; font-size:24px; }
 .f-sheet-status { margin:6px 0 10px; font-size:12px; color:#ffc3a8; }
@@ -426,3 +428,23 @@ h3 { font-size:18px; }
 /* ---------- Annuler une séance commencée (3.6.2) ---------- */
 .f-hero-cancel { width:100%; min-height:44px; margin-top:10px; border:1px solid var(--line, #3a3f3c); border-radius:13px; background:transparent; color:inherit; font-size:14px; font-weight:650; }
 .session-actions .f-cancel-session { min-height:44px; }
+
+/* ---------- 3.6.3 : séance réelle ---------- */
+.exercise-card { scroll-margin-top:calc(90px + var(--safe-top)); }
+.f-deload-banner { display:grid; gap:4px; margin:0 0 12px; padding:12px 14px; border-radius:14px; background:#23302a; border:1px solid #4f7a63; color:#d6efe2; font-size:13px; line-height:1.45; }
+.f-deload-banner strong { font-size:14px; }
+.f-deload-note { color:#9fd7bb; font-weight:600; }
+.f-deload-inline { margin:6px 0; padding:8px 10px; border-radius:10px; background:#23302a; color:#d6efe2; font-size:13px; }
+.f-ramp-offer { display:grid; grid-template-columns:1fr auto; gap:10px; align-items:center; margin:8px 0; padding:10px 12px; border-radius:12px; background:#232626; border:1px solid var(--line); font-size:13px; color:var(--muted); }
+.f-ramp-offer .ghost-button, .f-skip-ramps { min-height:44px; }
+.f-skip-ramps { width:100%; margin-top:10px; }
+.f-side-summary { display:block; margin:4px 0 6px; font-size:13px; color:#b9e2cc; }
+.f-side-summary.is-done { color:#9fd7bb; }
+.f-timer-next { margin:2px 0 4px; font-size:13px; color:var(--muted); }
+.f-timer-next b { color:var(--text); }
+.f-stale-session { display:grid; gap:6px; margin:0 0 14px; padding:14px; border-radius:16px; background:#2a2420; border:1px solid #6b4a36; font-size:13px; color:#f1dccd; }
+.f-stale-session strong { font-size:15px; }
+.f-stale-session div { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:4px; }
+.f-stale-session button { min-height:48px; }
+.f-program-start-help { grid-column:1 / -1; margin:0; font-size:12px; color:var(--muted); }
+.set-row > .f-side-summary { display:block; margin:0 0 8px; padding:6px 10px; border-radius:10px; background:#1f2a24; }

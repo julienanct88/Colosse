@@ -263,17 +263,21 @@ test('v3.5.2 · le compteur X/Y inclut les séries de montée en charge', () => 
 
   const rampSteps = day.exercises.reduce((n, ex) => n + (getRampProtocol(ex)?.length ?? 0), 0);
   const workSets = day.exercises.reduce((n, ex) => n + plan(ex).sets, 0);
-  const expected = 1 + activationSteps(day).length + rampSteps + workSets;
+  const base = 1 + activationSteps(day).length + workSets;
   assert.equal(rampSteps, 5, 'Push A : 3 ramps primary + 2 ramps secondary');
 
+  // 3.6.3 : la montée en charge est proposée, pas imposée — elle n'entre dans le total que demandée.
   const progress = executionProgress({ day, session, resolvePlan: plan });
-  assert.equal(progress.total, expected, 'total = warmup + activation + ramps + séries');
+  assert.equal(progress.total, base, 'total = warmup + activation + séries (montées non demandées)');
 
-  // Valider les ramps fait avancer le compteur…
-  session.warmup.ramps['push-a-incline-smith'] = { referenceLoadKg: 100, done: [true, true, true] };
+  // Demander puis valider les ramps fait avancer le compteur…
+  session.warmup.ramps['push-a-incline-smith'] = { referenceLoadKg: 100, done: [], requested: true };
+  const requested = executionProgress({ day, session, resolvePlan: plan });
+  assert.equal(requested.total, base + 3, 'une montée demandée ajoute ses 3 étapes');
+  session.warmup.ramps['push-a-incline-smith'].done = [true, true, true];
   const advanced = executionProgress({ day, session, resolvePlan: plan });
   assert.equal(advanced.done, 3);
-  assert.equal(advanced.total, expected, '…sans changer le total');
+  assert.equal(advanced.total, base + 3, '…sans changer le total');
 
   // …mais jamais le décompte des séries de travail.
   assert.equal(countSessionSets(session, day, plan).done, 0, 'aucune série de travail réalisée');
