@@ -1099,6 +1099,32 @@ async function scenario(nom, fn) {
     return 'Faire maintenant dès le départ → échauffement (message « juste après l’échauffement ») → activations → Rowing appuyé Série 1 sur 3';
   });
 
+  await scenario('S32 Séance figée par la mise à jour : dévalider puis revalider la seule série ne la fait plus basculer en décharge', async ({ page }) => {
+    const jour = await aujourdHuiIso(page);
+    const modele = await modeleSeance(page, 'pull-a');
+    const ex = modele.exerciseOrder[0];
+    const enCours = JSON.parse(JSON.stringify(modele));
+    Object.assign(enCours, { id: `${jour}:pull-a`, date: jour, weekIndex: 7, startedAt: Date.now() - 1800e3, endedAt: null, updatedAt: Date.now(), execution: { ...(enCours.execution ?? {}), active: false } });
+    enCours.exercises[ex].sets = [0, 1].map((k) => ({ id: 'x' + k, done: k === 0, weightKg: 60, reps: k === 0 ? 8 : null, rir: k === 0 ? 4 : null, technique: 'good', pain: 0, restActualSec: null, completedAt: k === 0 ? Date.now() - 600e3 : null }));
+    await ecrireBase(page, { profil: { startDate: '2026-08-05', programVersion: 'transformation-12s' }, supprimerChampsProfil: ['programStartDate'], sessions: [enCours] });
+    await page.reload({ waitUntil: 'load' }); await wait(2500);
+    attendu((await seanceDu(page, 'pull-a')).planWeekIndex === 7, 'pas figée');
+    await allerJour(page, 'pull-a');
+    const carte = `[data-exercise-card="${ex}"]`;
+    await toucher(page, `${carte} details.f-exercise-detail > summary`);
+    await toucher(page, `${carte} [data-set-row][data-set="0"] [data-action="toggle-set"]`);
+    let c = await seanceDu(page, 'pull-a');
+    attendu(!('planWeekIndex' in c) && c.weekIndex === 2, 'dévalidation : ' + JSON.stringify({ w: c.weekIndex, p: c.planWeekIndex }));
+    if (!(await page.evaluate((k) => document.querySelector(`${k} details.f-exercise-detail`)?.open, carte))) await toucher(page, `${carte} details.f-exercise-detail > summary`);
+    await page.fill(`${carte} [data-set-row][data-set="0"] [data-set-field="weightKg"]`, '72');
+    await page.fill(`${carte} [data-set-row][data-set="0"] [data-set-field="reps"]`, '8');
+    await toucher(page, `${carte} [data-set-row][data-set="0"] [data-action="toggle-set"]`);
+    c = await seanceDu(page, 'pull-a');
+    const vue = await page.evaluate((k) => ({ plan: document.querySelector(`${k} .exercise-plan`)?.textContent.replace(/\s+/g, ' '), banniere: !!document.querySelector('.f-deload-banner') }), carte);
+    attendu(c.weekIndex === 2 && !('planWeekIndex' in c) && /^3 ×/.test(vue.plan ?? '') && !vue.banniere, 'revalidation : ' + JSON.stringify({ w: c.weekIndex, p: c.planWeekIndex, vue }));
+    return 'figée (7) → dévalidée : semaine 2 → revalidée 72 kg × 8 : reste en semaine 2, 3 séries, sans décharge';
+  });
+
   console.log('\nRESUME ' + JSON.stringify({ total: resultats.length, ok: resultats.filter((r) => r.ok).length }));
   srv.kill(); process.exit(resultats.every((r) => r.ok) ? 0 : 1);
 })().catch((e) => { console.log('ECHEC', e.stack?.slice(0, 600)); process.exit(1); });

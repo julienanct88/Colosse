@@ -122,6 +122,19 @@ export class ColosseApp {
                 await saveSession(session);
         return true;
     }
+    /**
+     * Plus aucun travail validé dans une séance jamais enregistrée : sa semaine n'a plus à rester figée
+     * (sinon elle basculerait entre deux semaines au gré des validations). Charges pré-remplies recalculées.
+     */
+    unfreezeWeekIfNoWork(session) {
+        if (!session || session.endedAt || session.status || session.reopenedAt || hasValidatedWork(session) || !('planWeekIndex' in session))
+            return;
+        const ancienne = Number(session.weekIndex);
+        delete session.planWeekIndex;
+        session.weekIndex = sessionWeekIndex(session, this.snapshot.profile);
+        if (Number.isFinite(ancienne) && ancienne !== session.weekIndex)
+            this.reseedAfterWeekChange(session, ancienne);
+    }
     /** Recalcule les charges pré-remplies d'une séance non faite après un changement de semaine du programme. */
     reseedAfterWeekChange(session, oldWeek) {
         const day = findDay(session.dayId);
@@ -1972,6 +1985,7 @@ export class ColosseApp {
             set.restActualSec = null;
             set.side = 'left';
             set.sides = undefined;
+            this.unfreezeWeekIfNoWork(context.session);
             context.session.updatedAt = Date.now();
             await saveSession(context.session);
             this.render();
@@ -2118,7 +2132,8 @@ export class ColosseApp {
         // Une montée en charge calculée pour une autre machine ne doit JAMAIS
         // être réutilisée : incréments et charges diffèrent.
         context.session.warmup = clearExerciseRamps(context.session.warmup, exerciseId);
-        this.seedSessionPrescriptions(context.session, context.day, context.date, context.weekIndex);
+        this.unfreezeWeekIfNoWork(context.session);
+        this.seedSessionPrescriptions(context.session, context.day, context.date, context.session.weekIndex);
         context.session.updatedAt = Date.now();
         await saveSession(context.session);
         this.render();
@@ -2343,8 +2358,11 @@ export class ColosseApp {
             await this.saveExecution({ active: true });
         const running = this.execState(fresh.session).active && !fresh.session.endedAt;
         const echauffementDu = warmupPending && !hasValidatedWork(fresh.session);
+        const generalDu = !(warmup.general.done || warmup.general.skipped);
+        const activationsDues = activationSteps(fresh.day).filter((step) => !warmup.activation[step.key]).length;
+        const apres = generalDu && activationsDues ? `l’échauffement et les ${activationsDues} activations` : generalDu ? 'l’échauffement' : `les ${activationsDues} activation${activationsDues > 1 ? 's' : ''} restante${activationsDues > 1 ? 's' : ''}`;
         const message = !running ? `${exercise.name} sera le premier exercice de la séance.`
-            : echauffementDu ? `${exercise.name} passera juste après l’échauffement (touche « Passer » pour y aller tout de suite).`
+            : echauffementDu ? `${exercise.name} passera juste après ${apres}.`
                 : `C’est parti : ${exercise.name}.`;
         if (running)
             this.programViewOverride = false;
