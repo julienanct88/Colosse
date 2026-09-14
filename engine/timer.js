@@ -3,7 +3,7 @@
 
 export const TIMER_KINDS = [
     'general-warmup', 'activation-rest', 'ramp-rest',
-    'side-switch', 'work-rest', 'cardio', 'recovery',
+    'side-switch', 'work-rest', 'cardio', 'recovery', 'transition',
 ];
 
 export const TIMER_LABELS = {
@@ -14,6 +14,7 @@ export const TIMER_LABELS = {
     'work-rest': 'REPOS',
     cardio: 'CARDIO',
     recovery: 'RÉCUPÉRATION',
+    transition: 'REPOS AVANT L’EXERCICE SUIVANT',
 };
 
 export function timerLabel(kind) {
@@ -169,6 +170,7 @@ export const TIMER_END_MESSAGES = {
     'activation-rest': 'Transition terminée.',
     cardio: 'Cardio terminé.',
     recovery: 'Étape de récupération terminée.',
+    transition: 'Repos terminé. Place à l’exercice suivant.',
 };
 
 export function timerEndMessage(kind) {

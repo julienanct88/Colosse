@@ -135,12 +135,12 @@ test('2. chaque kind a son propre message de fin', () => {
     assert.equal(timerEndMessage('recovery'), 'Étape de récupération terminée.');
 });
 
-test('2b. les 7 kinds ont un message, tous distincts, et un seul parle de série suivante', () => {
-    assert.equal(TIMER_KINDS.length, 7);
+test('2b. les 8 kinds ont un message, tous distincts, et un seul parle de série suivante', () => {
+    assert.equal(TIMER_KINDS.length, 8);
     for (const kind of TIMER_KINDS)
         assert.ok(TIMER_END_MESSAGES[kind], `${kind} doit avoir un message`);
     const messages = TIMER_KINDS.map(timerEndMessage);
-    assert.equal(new Set(messages).size, 7, 'aucun message dupliqué');
+    assert.equal(new Set(messages).size, 8, 'aucun message dupliqué');
     assert.deepEqual(messages.filter((m) => m.includes('Série suivante')), ['Repos terminé. Série suivante.']);
     assert.equal(messages.filter((m) => m.includes('Cardio')).length, 1, 'la récup ne dit pas "Cardio"');
 });

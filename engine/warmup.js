@@ -149,6 +149,26 @@ export function isWarmupComplete(state, day) {
 }
 
 /** Index de la prochaine série de chauffe non réalisée pour un exercice. */
+/**
+ * La montée en charge est PROPOSÉE, jamais imposée (3.6.3) : elle ne s'affiche que
+ * si l'utilisateur l'a demandée (« Faire l'échauffement »). Rétrocompatible :
+ * une montée déjà commencée dans une ancienne version (au moins une série faite,
+ * pas toutes) continue normalement.
+ */
+export function rampsRequested(state, exerciseId, rampCount = null) {
+    const entry = normalizeWarmupState(state).ramps[exerciseId];
+    if (!entry || entry.skipped)
+        return false;
+    if (entry.requested === true)
+        return true;
+    if (entry.requested === false)
+        return false;
+    const done = Array.isArray(entry.done) ? entry.done : [];
+    const total = Number.isFinite(rampCount) && rampCount > 0 ? rampCount : done.length;
+    const faites = done.filter(Boolean).length;
+    return faites > 0 && faites < total;
+}
+
 export function nextRampIndex(state, exerciseId, rampSets) {
     if (!rampSets || rampSets.length === 0)
         return -1;

@@ -6,15 +6,15 @@ import { clearAllData, deleteSession, loadSnapshot, saveAdjustment, saveDailyLog
 import { defaultDayForDate, findDay, findExercise, getExercisePlan, getTrainingPhase, TRAINING_DAYS, STRENGTH_DAYS } from './program.js';
 import { nextPrescription, prescriptionFromHistory, suggestNextSet, summarizeSession, } from './engine/progression.js';
 import { estimateSessionDuration, remainingSessionSeconds, } from './engine/duration.js';
-import { aggregateSides, currentSide, bothSidesDone, countSessionSets, isSessionComplete as isSessionCompletePure, countCompletedStrengthSessions, weekdayOffset, targetRirForSet, isSetValid, countsForHistory, finishStatus, formatSeconds, closeSession, cancelSessionSummary, cancelSessionMessage, cancelSession, canCancelSession, seededSetIndices, legacySeededSetIndices, withoutSeedMark, resetExerciseLogForVariant, timedExerciseStatus, timedExerciseActions, timedStopRequest, } from './engine/session.js';
+import { aggregateSides, currentSide, bothSidesDone, countSessionSets, isSessionComplete as isSessionCompletePure, countCompletedStrengthSessions, weekdayOffset, targetRirForSet, isSetValid, countsForHistory, finishStatus, formatSeconds, closeSession, trainingWeekIndex, sessionWeekIndex, migrateProgramStart, cancelSessionSummary, cancelSessionMessage, cancelSession, canCancelSession, seededSetIndices, legacySeededSetIndices, withoutSeedMark, resetExerciseLogForVariant, timedExerciseStatus, timedExerciseActions, timedStopRequest, } from './engine/session.js';
 import { analyzeWeightTrend, macrosForCalories, targetWeight, weeklyTargets, } from './engine/weight.js';
 import { analyzeRecovery, analyzeStrengthTrend, } from './engine/recovery.js';
 import { activityGoalHelp, activityGoalLabel, activityModeLabel, activityProgress, activitySummary, } from './engine/activity.js';
 import { addDays, isoDate, startOfWeek, uid, weekIndexFromStart, } from './engine/math.js';
-import { computeExecutionStep, executionProgress, normalizeExecutionState, STAGES, canReorder, programOrder, normalizeOrder, pickSessionOrder, moveInOrder, deferExercise, isExercisePending, bringToFront, executionChangeDecision, halfDoneUnilateral, } from './engine/execution.js';
+import { computeExecutionStep, executionProgress, normalizeExecutionState, STAGES, canReorder, programOrder, normalizeOrder, pickSessionOrder, moveInOrder, deferExercise, isExercisePending, bringToFront, executionChangeDecision, halfDoneUnilateral, restAfterSetDecision, } from './engine/execution.js';
 import { createTimer, elapsedSeconds, remainingSeconds as timerRemaining, isExpired as timerExpired, pauseTimer, resumeTimer, adjustTimer as adjustTimerState, timerLabel, timerControls, canShortenTimer, timerEndMessage, } from './engine/timer.js';
 import { applyTimerOutcome, createTimerResolutionQueue, startTimerDecision, timerOwnerSession } from './engine/timer-effects.js';
-import { computeRampSets, normalizeWarmupState, resolveReferenceLoad, clearExerciseRamps, GENERAL_WARMUP, WARMUP_EQUIPMENT, resolveWarmupEquipment, activationSteps, } from './engine/warmup.js';
+import { computeRampSets, normalizeWarmupState, resolveReferenceLoad, clearExerciseRamps, rampsRequested, getRampProtocol, GENERAL_WARMUP, WARMUP_EQUIPMENT, resolveWarmupEquipment, activationSteps, } from './engine/warmup.js';
 import { renderExecution, renderExecMenu, renderReorderPanel, renderExerciseSheet } from './ui/execution.js';
 import { decisionMeta, escapeHtml, formatClock, formatDateFr, formatKg, numberInputValue, pct, sparklineSvg, } from './ui/templates.js';
 const YOUTUBE_SEARCH = 'https://www.youtube.com/results?search_query=';
@@ -71,12 +71,15 @@ export class ColosseApp {
     async init() {
         this.root.innerHTML = '<div class="splash"><div class="splash-mark">C</div><strong>COLOSSE</strong><span>Préparation de ton programme…</span></div>';
         this.snapshot = await loadSnapshot();
+        await this.migrateProgramStartIfNeeded();
         this.programViewOverride = false;
         this.viewWeekStart = startOfWeek(new Date());
         // Une séance en cours (mode exécution actif) a priorité sur le jour du
         // calendrier : après un reload, un verrouillage ou un kill de la PWA,
         // on revient exactement là où on s'était arrêté.
-        const running = this.snapshot.sessions.find((item) => item.execution?.active && !item.endedAt);
+        // Une séance restée ouverte depuis un AUTRE jour ne reprend pas la main :
+        // l'accueil propose de la terminer (séries gardées) ou de la reprendre.
+        const running = this.snapshot.sessions.find((item) => item.execution?.active && !item.endedAt && !this.isStaleSession(item));
         const todayDayId = defaultDayForDate().id;
         const targetDayId = running?.dayId ?? todayDayId;
         if (this.snapshot.settings.selectedDayId !== targetDayId) {
@@ -96,6 +99,62 @@ export class ColosseApp {
         this.bindEvents();
         this.tickHandle = window.setInterval(() => this.tick(), 250);
         this.render();
+    }
+    /** Migration additive : début du programme distinct de la date de départ du profil. */
+    async migrateProgramStartIfNeeded() {
+        const result = migrateProgramStart(this.snapshot.profile, this.snapshot.sessions);
+        if (!result.changed)
+            return false;
+        const avant = new Map(this.snapshot.sessions.map((item) => [item.id, JSON.stringify(item)]));
+        this.snapshot.profile = result.profile;
+        this.snapshot.sessions = result.sessions;
+        await saveProfile(this.snapshot.profile);
+        for (const session of this.snapshot.sessions)
+            if (avant.get(session.id) !== JSON.stringify(session))
+                await saveSession(session);
+        return true;
+    }
+    /** Séance commencée un autre jour, jamais terminée, sans activité depuis plus de 6 h. */
+    isStaleSession(session, now = Date.now()) {
+        if (!session?.startedAt || session.endedAt)
+            return false;
+        const last = Number(session.updatedAt || session.startedAt) || 0;
+        return session.date < isoDate(new Date(now)) && now - last > 6 * 3600 * 1000;
+    }
+    staleSessions() {
+        return this.snapshot.sessions.filter((item) => this.isStaleSession(item) && (item.execution?.active || this.activeSetCount(item, findDay(item.dayId)).done > 0));
+    }
+    /**
+     * Termine UNE séance précise restée ouverte (jamais la séance affichée par erreur) :
+     * effet de son chrono éventuel, puis clôture avec ses séries telles quelles.
+     */
+    async finishStaleSession(sessionId) {
+        let session = this.snapshot.sessions.find((item) => item.id === sessionId);
+        if (!session || !session.startedAt || session.endedAt)
+            return;
+        if (session.activeTimer) {
+            const result = applyTimerOutcome(session, session.activeTimer, Date.now());
+            if (this.timer?.context?.sessionId === session.id)
+                this.timer = null;
+            session = result.session;
+        }
+        const day = findDay(session.dayId);
+        const weekIndex = sessionWeekIndex(session, this.snapshot.profile);
+        const count = countSessionSets(session, day, (exercise) => getExercisePlan(exercise, weekIndex));
+        const outcome = finishStatus(count);
+        const closed = closeSession({ ...session, weekIndex, execution: this.execState(session) }, { now: Date.now(), status: outcome.status });
+        this.replaceSession(closed);
+        await saveSession(closed);
+        removeSessionDrafts(this.draftStorage(), closed.id);
+        if (!this.snapshot.sessions.some((item) => item.execution?.active && !item.endedAt))
+            await this.releaseWakeLock();
+        this.render();
+        this.showToast(`${day.name} du ${formatDateFr(closed.date, { day: 'numeric', month: 'long' })} terminée : ${count.done} série${count.done > 1 ? 's' : ''} gardée${count.done > 1 ? 's' : ''}.`, 'success', 6000);
+    }
+    /** Affiche le jour et la semaine d'une séance donnée. */    /** Affiche le jour et la semaine d'une séance donnée. */
+    focusSession(session) {
+        this.snapshot.settings.selectedDayId = session.dayId;
+        this.viewWeekStart = startOfWeek(new Date(`${session.date}T12:00:00`));
     }
     bindEvents() {
         this.root.addEventListener('click', (event) => void this.handleClick(event));
@@ -122,6 +181,7 @@ export class ColosseApp {
         // Glisser-déposer : la poignée seule démarre le drag, donc un champ ou
         // un select ne le déclenche jamais et le scroll vertical reste normal.
         this.root.addEventListener('pointerdown', (event) => this.onDragStart(event));
+        this.root.addEventListener('pointerdown', () => this.unlockAudio(), { passive: true });
         window.addEventListener('beforeinstallprompt', (event) => {
             event.preventDefault();
             this.installPrompt = event;
@@ -137,6 +197,9 @@ export class ColosseApp {
             if (document.visibilityState === 'visible' && this.currentContext().session.startedAt && !this.currentContext().session.endedAt) {
                 void this.acquireWakeLock();
             }
+            // Retour dans l'app : un chrono terminé pendant l'absence est signalé tout de suite.
+            if (document.visibilityState === 'visible')
+                this.tick();
         });
     }
     dayDate(day) {
@@ -148,12 +211,13 @@ export class ColosseApp {
     currentContext() {
         const day = this.currentDay();
         const date = this.dayDate(day);
-        const weekIndex = weekIndexFromStart(this.snapshot.profile.startDate, date);
         let session = this.snapshot.sessions.find((item) => item.id === `${date}:${day.id}`);
         if (!session) {
             session = makeSession(day.id, date, this.snapshot.profile);
             this.snapshot.sessions.push(session);
         }
+        // Semaine du PROGRAMME ; une séance terminée garde la sienne.
+        const weekIndex = sessionWeekIndex(session, this.snapshot.profile);
         this.syncSession(session, day, weekIndex);
         return { day, date, weekIndex, session };
     }
@@ -430,7 +494,7 @@ export class ColosseApp {
         const context = this.currentContext();
         const orderedExercises = this.orderedExercises(context.day, context.session);
         const phase = getTrainingPhase(context.weekIndex);
-        const target = weeklyTargets(this.snapshot.profile, 1, context.weekIndex)[0];
+        const target = weeklyTargets(this.snapshot.profile, 1, weekIndexFromStart(this.snapshot.profile.startDate, context.date))[0];
         const planned = estimateSessionDuration(context.day, (exercise) => getExercisePlan(exercise, context.weekIndex));
         const setCount = this.activeSetCount(context.session, context.day);
         const progress = setCount.total ? Math.round((setCount.done / setCount.total) * 100) : 0;
@@ -481,6 +545,7 @@ export class ColosseApp {
         }).join('')}
       </section>
 
+      ${phase.name === 'Décharge' ? `<section class="f-deload-banner" role="note"><strong>Semaine ${context.weekIndex} du programme · Décharge</strong><span>Moitié des séries (ex. 2 au lieu de 3), charges allégées, garde 4 répétitions. Début du programme : ${escapeHtml(formatDateFr(this.snapshot.profile.programStartDate ?? this.snapshot.profile.startDate, { day: 'numeric', month: 'long' }))} — modifiable dans Réglages › Profil.</span></section>` : ''}
       ${executing ? '<button class="exec-resume-banner" data-action="exec-resume">\u25b6 Revenir à l’étape en cours</button>' : ''}
       <section class="session-card ${complete ? 'complete' : ''}">
         <div class="session-heading">
@@ -560,13 +625,14 @@ export class ColosseApp {
         <div class="exercise-index">${String(index + 1).padStart(2, '0')}</div>
         <div class="exercise-title">
           <div class="exercise-name-row"><h3>${escapeHtml(exercise.name)}</h3>${exercise.optional ? '<span class="badge">BONUS</span>' : ''}${exercise.superset ? `<span class="badge muted">SUPERSET ${escapeHtml(exercise.superset.split('-').at(-1) ?? '')}</span>` : ''}</div>
-          <div class="exercise-plan"><b>${plan.sets} × ${plan.metric === 'seconds' ? `${formatSeconds(plan.repMin)}\u2013${formatSeconds(plan.repMax)}` : `${plan.repMin}\u2013${plan.repMax} reps`}</b><span>garde ${plan.targetRir} reps</span><span>repos ${formatClock(plan.restSec)}</span>${plan.tempo ? `<span class="tempo-hint" title="Tempo ${escapeHtml(plan.tempo)} : secondes de descente \u2013 pause basse \u2013 mont\u00e9e \u2013 pause haute">tempo ${escapeHtml(plan.tempo)}</span>` : ''}</div>
+          <div class="exercise-plan"><b>${plan.sets} ×${plan.deload && exercise.sets !== plan.sets ? ` <small class="f-deload-note">(décharge, au lieu de ${exercise.sets})</small>` : ''} ${plan.metric === 'seconds' ? `${formatSeconds(plan.repMin)}\u2013${formatSeconds(plan.repMax)}` : `${plan.repMin}\u2013${plan.repMax} reps`}</b><span>garde ${plan.targetRir} reps</span><span>repos ${formatClock(plan.restSec)}</span>${plan.tempo ? `<span class="tempo-hint" title="Tempo ${escapeHtml(plan.tempo)} : secondes de descente \u2013 pause basse \u2013 mont\u00e9e \u2013 pause haute">tempo ${escapeHtml(plan.tempo)}</span>` : ''}</div>
         </div>
         <a class="video-link" href="${escapeHtml(demoSearch({ name: exercise.name, variantLabel: variant.label }).url)}" target="_blank" rel="noopener noreferrer" aria-label="Rechercher une démonstration de ${escapeHtml(exercise.name)} (YouTube)">▶</a>
       </div>
       ${(() => {
             const pending = isExercisePending(exercise, log, plan);
-            const statut = log.skipped ? ['is-skipped', 'Passé'] : !pending ? ['is-done', `Terminé · ${doneSets.length}/${plan.sets}`] : doneSets.length ? ['is-partial', `En cours · ${doneSets.length}/${plan.sets} séries`] : ['', `À faire · 0/${plan.sets} séries`];
+            const demiSerie = plan.perSide && activeSets.some((set) => !set.done && set.sides?.left?.done);
+            const statut = log.skipped ? ['is-skipped', 'Passé'] : !pending ? ['is-done', `Terminé · ${doneSets.length}/${plan.sets}`] : doneSets.length || demiSerie ? ['is-partial', `En cours · ${doneSets.length}/${plan.sets} séries${demiSerie ? ' · gauche fait, droite à faire' : ''}`] : ['', `À faire · 0/${plan.sets} séries`];
             return `<div class="f-card-summary">
         <p class="f-card-variant"><span>${escapeHtml(variantDisplay(variant))}</span><span class="f-card-status ${statut[0]}">${exercise.id === nextId ? 'Prochain · ' : ''}${escapeHtml(statut[1])}</span></p>
         ${exercise.coachingCue ? `<p class="f-card-cue">${escapeHtml(exercise.coachingCue)}</p>` : ''}
@@ -658,6 +724,13 @@ export class ColosseApp {
         const rowTargetRir = targetRirForSet(plan, setIndex);
         const sideState = plan.perSide ? (set.side ?? 'left') : null;
         const sideLabel = sideState === 'right' ? 'CÔTÉ DROIT' : 'CÔTÉ GAUCHE';
+        const cote = (value) => `${formatKg(value?.weightKg ?? 0)} kg × ${value?.reps ?? '?'}`;
+        const sideSummary = !plan.perSide ? ''
+            : set.done && set.sides?.left?.done && set.sides?.right?.done
+                ? `<span class="f-side-summary is-done">✓ Gauche ${cote(set.sides.left)} · ✓ Droite ${cote(set.sides.right)}</span>`
+                : set.sides?.left?.done
+                    ? `<span class="f-side-summary">✓ Gauche fait : ${cote(set.sides.left)}${set.sides.left.rir !== null && set.sides.left.rir !== undefined ? ` · RIR ${set.sides.left.rir}` : ''} — <b>droite à faire</b></span>`
+                    : '';
         const hit = set.done
             && Number(set.reps) >= plan.repMin
             && Number(set.reps) <= plan.repMax
@@ -666,12 +739,13 @@ export class ColosseApp {
         return `<div class="set-row ${set.done ? 'done' : ''} ${hit ? 'hit' : ''}" data-set-row data-exercise="${exercise.id}" data-set="${setIndex}">
       <div class="set-primary">
         <span class="set-number"><small>${isSeconds ? 'Bloc' : 'Série'}</small>${setIndex + 1}</span>
-        ${plan.perSide ? `<span class="side-badge ${sideState}">${sideLabel}</span>` : ''}
+        ${plan.perSide && !set.done ? `<span class="side-badge ${sideState}">${sideLabel}</span>` : ''}
+        ${sideSummary}
         ${needsLoadInput ? `<label><span>Charge (kg)</span><input type="number" inputmode="decimal" min="0" step="0.25" data-set-field="weightKg" value="${numberInputValue(suggestedWeight)}" placeholder="0" aria-label="Charge série ${setIndex + 1}"/></label>` : ''}
         ${isSeconds
             ? `<label><span>Durée (s)</span><input type="number" inputmode="numeric" min="0" step="5" data-set-field="reps" value="${numberInputValue(set.reps)}" placeholder="${plan.repMin}" aria-label="Durée en secondes du bloc ${setIndex + 1}"/><small class="set-hint">objectif ${formatSeconds(plan.repMin)}${plan.repMax !== plan.repMin ? `\u2013${formatSeconds(plan.repMax)}` : ''}</small></label>`
             : `<label><span>Répétitions</span><input type="number" inputmode="numeric" min="0" max="50" step="1" data-set-field="reps" value="${numberInputValue(set.reps)}" placeholder="0" aria-label="Répétitions série ${setIndex + 1}"/></label>`}
-        <button class="set-check" data-action="toggle-set" data-exercise="${exercise.id}" data-set="${setIndex}" aria-label="Valider ${isSeconds ? 'le bloc' : 'la série'} ${setIndex + 1}">${set.done ? '✓ Fait' : (plan.perSide ? `Valider ${sideLabel.toLowerCase()}` : 'Valider')}</button>
+        <button class="set-check" data-action="toggle-set" data-exercise="${exercise.id}" data-set="${setIndex}" aria-label="${set.done ? `Série ${setIndex + 1} validée — toucher pour annuler la validation` : `Valider ${isSeconds ? 'le bloc' : 'la série'} ${setIndex + 1}`}">${set.done ? '✓ Fait' : (plan.perSide ? `Valider ${sideLabel.toLowerCase()}` : 'Valider')}</button>
       </div>
       <div class="set-feedback">
         <label><span>Encore possible <small class="rir-target">(cible ${rowTargetRir})</small></span><select data-set-field="rir" aria-label="Répétitions encore possibles après la série ${setIndex + 1}"><option value="" ${set.rir === null ? 'selected' : ''}>Je ne sais pas</option><option value="0" ${set.rir === 0 ? 'selected' : ''}>Aucune</option>${[1, 2, 3, 4, 5].map((value) => `<option value="${value}" ${set.rir === value ? 'selected' : ''}>${value} rep${value > 1 ? 's' : ''}</option>`).join('')}<option value="6" ${set.rir === 6 ? 'selected' : ''}>6 reps ou +</option></select></label>
@@ -799,9 +873,9 @@ export class ColosseApp {
         const strength = analyzeStrengthTrend(this.snapshot.sessions);
         const selectedDay = this.currentDay();
         const previewDate = this.dayDate(selectedDay);
-        const previewWeek = weekIndexFromStart(this.snapshot.profile.startDate, previewDate);
         const mockSession = this.snapshot.sessions.find((session) => session.id === `${previewDate}:${selectedDay.id}`)
             ?? makeSession(selectedDay.id, previewDate, this.snapshot.profile);
+        const previewWeek = sessionWeekIndex(mockSession, this.snapshot.profile);
         this.syncSession(mockSession, selectedDay, previewWeek);
         const adjustments = [...this.snapshot.adjustments].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 8);
         return `
@@ -869,7 +943,9 @@ export class ColosseApp {
           ${this.profileField('age', 'Âge', profile.age, 'ans', '1', 18, 90)}
           ${this.profileField('heightCm', 'Taille', profile.heightCm, 'cm', '1', 130, 230)}
           ${this.profileField('startWeightKg', 'Poids de départ', profile.startWeightKg, 'kg', '0.1', 40, 250)}
-          <label>Date de départ<div class="input-unit"><input type="date" data-profile-field="startDate" value="${escapeHtml(profile.startDate)}"/></div></label>
+          <label>Date de départ <small>(suivi du poids)</small><div class="input-unit"><input type="date" data-profile-field="startDate" value="${escapeHtml(profile.startDate)}"/></div></label>
+          <label>Début du programme <small>(semaines, séries, décharge)</small><div class="input-unit"><input type="date" data-profile-field="programStartDate" value="${escapeHtml(profile.programStartDate ?? profile.startDate)}"/></div></label>
+          <p class="f-program-start-help">${escapeHtml(this.programStartSummary())}</p>
           ${this.profileField('weeklyLossRatePct', 'Perte / semaine', profile.weeklyLossRatePct * 100, '%', '0.05', 0.1, 1)}
           ${this.profileField('sessionLimitMinutes', 'Alerte durée (affichage seul)', profile.sessionLimitMinutes, 'min', '5', 60, 120)}
         </div>
@@ -926,6 +1002,7 @@ export class ColosseApp {
         const remaining = this.timerRemainingSec();
         return `<section class="timer-overlay f-timer ${this.timerCollapsed ? 'is-mini' : ''}" aria-label="Chronomètre ${escapeHtml(timerLabel(this.timer.kind))}">
           <div class="f-timer-head">${icon('timer')}<span class="timer-label">${escapeHtml(timerLabel(this.timer.kind))}${this.timer.paused ? ' · Pause' : ''}</span><button class="f-timer-toggle" data-action="forge-timer-toggle" aria-expanded="${!this.timerCollapsed}" aria-label="${this.timerCollapsed ? 'Déployer le chronomètre' : 'Réduire le chronomètre'}">${icon(this.timerCollapsed ? 'plus' : 'minus')}</button></div>
+          ${this.timer.kind === 'transition' && this.timer.context?.nextName ? `<p class="f-timer-next">Ensuite : <b>${escapeHtml(this.timer.context.nextName)}</b></p>` : ''}
           <strong id="timer-remaining" role="timer" aria-live="off">${formatClock(remaining)}</strong>
           <div class="timer-progress"><i id="timer-progress" style="width:${Math.max(0, Math.min(100, remaining / this.timer.totalSec * 100))}%"></i></div>
           <div class="timer-actions">${this.renderTimerControls()}</div>
@@ -1221,6 +1298,59 @@ export class ColosseApp {
                     w.ramps[exId] = { ...(w.ramps[exId] ?? {}), referenceLoadKg: value, done: w.ramps[exId]?.done ?? [] };
                 });
                 this.render();
+                break;
+            }
+            case 'exec-start-ramps': {
+                // Échauffement demandé depuis la série 1 : il se calcule sur la charge indiquée.
+                const exId = actionElement.dataset.exercise ?? '';
+                const context = this.currentContext();
+                const log = context.session.exercises[exId];
+                const champ = this.root.querySelector('.exec-work [data-exec-field="weightKg"]');
+                const charge = Number(champ?.value) || Number(log?.sets?.[0]?.weightKg) || Number(log?.prescription?.loadKg) || 0;
+                if (!(charge > 0)) {
+                    this.showToast('Indique d’abord ta charge de travail dans « Charge », puis touche « Faire l’échauffement ».', 'info', 6000);
+                    break;
+                }
+                this.persistForgeDraft();
+                await this.patchWarmup((w) => {
+                    w.ramps[exId] = { referenceLoadKg: charge, done: [], requested: true };
+                });
+                this.render();
+                window.scrollTo({ top: 0, behavior: 'instant' });
+                break;
+            }
+            case 'exec-skip-ramps': {
+                const exId = actionElement.dataset.exercise ?? '';
+                if (this.timer?.kind === 'ramp-rest')
+                    await this.resolveActiveTimer(true);
+                await this.patchWarmup((w) => {
+                    w.ramps[exId] = { ...(w.ramps[exId] ?? {}), requested: false, skipped: true };
+                });
+                this.render();
+                window.scrollTo({ top: 0, behavior: 'instant' });
+                break;
+            }
+            case 'stale-finish': {
+                await this.finishStaleSession(actionElement.dataset.session ?? '');
+                break;
+            }
+            case 'stale-resume': {
+                const stale = this.snapshot.sessions.find((item) => item.id === actionElement.dataset.session);
+                if (!stale)
+                    break;
+                this.focusSession(stale);
+                this.snapshot.settings.currentTab = 'training';
+                await saveSettings(this.snapshot.settings);
+                await this.ensureCurrentSession();
+                const context = this.currentContext();
+                if (context.session.id !== stale.id)
+                    break; // jamais agir sur une autre séance que celle proposée
+                context.session.updatedAt = Date.now();
+                await this.restoreTimerFromSession();
+                await this.saveExecution({ active: true });
+                this.programViewOverride = false;
+                this.render();
+                window.scrollTo({ top: 0, behavior: 'instant' });
                 break;
             }
             case 'exec-validate-ramp': {
@@ -1770,6 +1900,12 @@ export class ColosseApp {
         if (!exercise || !log || !set)
             return;
         if (set.done) {
+            // Dévalider efface la série (et ses deux côtés) : toujours sur confirmation explicite.
+            const cotes = set.sides?.left?.done && set.sides?.right?.done
+                ? ` (gauche ${formatKg(set.sides.left.weightKg)} kg × ${set.sides.left.reps}, droite ${formatKg(set.sides.right.weightKg)} kg × ${set.sides.right.reps})`
+                : ` (${formatKg(set.weightKg)} kg × ${set.reps})`;
+            if (!confirm(`Annuler la validation de la série ${setIndex + 1}${cotes} ? Elle redeviendra à faire.`))
+                return;
             set.done = false;
             set.completedAt = null;
             set.restActualSec = null;
@@ -1826,6 +1962,9 @@ export class ColosseApp {
             };
             if (side === 'left') {
                 set.side = 'right';
+                // Côté droit : charge et répétitions reprises du gauche, mais ressenti et douleur à indiquer pour CE côté.
+                set.rir = null;
+                set.pain = null;
                 context.session.updatedAt = Date.now();
                 await saveSession(context.session);
                 removeDraft(this.draftStorage(), draftKey({ sessionId: context.session.id, exerciseId: exercise.id, variantId: log.variantId, setIndex, side: 'left' }));
@@ -1857,19 +1996,37 @@ export class ColosseApp {
             this.showToast('Douleur ≥ 4/10 : arrête cet exercice et choisis une variante indolore.', 'error', 6000);
         else if (set.technique === 'degraded')
             this.showToast('Technique dégradée : aucune hausse de charge ne sera autorisée.', 'info', 5000);
-        if (this.snapshot.settings.autoStartTimer && this.shouldStartRest(exercise, setIndex, context)) {
-            await this.startGenericTimer('work-rest', plan.perSide ? (plan.roundRestSec ?? plan.restSec) : plan.restSec, { exerciseId: exercise.id, setIndex });
+        const repsHorsFourchette = plan.metric !== 'seconds' && Number(set.reps) > plan.repMax + 2;
+        if (repsHorsFourchette && Number(set.pain) < 4 && set.technique !== 'degraded')
+            this.showToast(`${set.reps} répétitions pour ${plan.repMin}–${plan.repMax} prévues : augmente la charge à la prochaine série.`, 'info', 6000);
+        // Repos entre séries, ou repos avant l'exercice suivant après la dernière série.
+        const decision = this.restAfterSet(exercise, setIndex, context);
+        const exerciceTermine = log.sets.slice(0, plan.sets).every((item) => item.done);
+        if (this.snapshot.settings.autoStartTimer && decision.kind) {
+            await this.startGenericTimer(decision.kind, decision.durationSec, decision.kind === 'transition'
+                ? { exerciseId: exercise.id, setIndex, nextExerciseId: decision.nextExerciseId, nextName: decision.nextName }
+                : { exerciseId: exercise.id, setIndex });
         }
+        if (exerciceTermine && !repsHorsFourchette && Number(set.pain) < 4 && set.technique !== 'degraded')
+            this.showToast(decision.nextName ? `${exercise.name} terminé. Ensuite : ${decision.nextName}.` : `${exercise.name} terminé.`, 'success', 5000);
         this.render();
+        // En mode guidé, le nouvel exercice s'affiche depuis le haut (titre visible).
+        if (exerciceTermine && this.shouldRenderExecution())
+            window.scrollTo({ top: 0, behavior: 'instant' });
     }
-    shouldStartRest(exercise, setIndex, context) {
+    /** Décision pure (engine) alimentée par l'ordre réel de la séance. */
+    restAfterSet(exercise, setIndex, context) {
         const plan = getExercisePlan(exercise, context.weekIndex);
-        if (!exercise.superset)
-            return setIndex < plan.sets - 1;
-        const group = this.orderedExercises(context.day, context.session).filter((item) => item.superset === exercise.superset);
-        const lastExercise = group.at(-1);
-        const maxSets = Math.max(...group.map((item) => getExercisePlan(item, context.weekIndex).sets));
-        return lastExercise?.id === exercise.id && setIndex < maxSets - 1;
+        const ordered = this.orderedExercises(context.day, context.session);
+        const group = exercise.superset ? ordered.filter((item) => item.superset === exercise.superset) : [];
+        const next = ordered.find((item) => item.id !== exercise.id && isExercisePending(item, context.session.exercises[item.id], getExercisePlan(item, context.weekIndex)));
+        return restAfterSetDecision({
+            plan, setIndex,
+            inSuperset: !!exercise.superset,
+            isLastOfSuperset: !exercise.superset || group.at(-1)?.id === exercise.id,
+            maxSupersetSets: group.length ? Math.max(...group.map((item) => getExercisePlan(item, context.weekIndex).sets)) : null,
+            nextExercise: next ? { id: next.id, name: next.name } : null,
+        });
     }
     async applyNextLoad(exerciseId, setIndex, loadKg) {
         const context = this.currentContext();
@@ -2094,19 +2251,30 @@ export class ColosseApp {
             names[timer.context.exerciseId] = findExercise(timer.context.exerciseId)?.name;
         const decision = executionChangeDecision({ activeTimer: timer, targetExerciseId: exerciseId, halfSetExerciseId: halfDoneUnilateral(context.session, context.day, resolvePlan), names });
         if (decision.action === 'refuse') {
-            this.showToast(decision.message, 'info', 7000);
+            // On reste sur l'étape en cours (mode guidé), jamais sur une liste repliée.
+            if (context.session.startedAt && !context.session.endedAt) {
+                this.programViewOverride = false;
+                if (!this.execState(context.session).active)
+                    await this.saveExecution({ active: true });
+                this.render();
+                window.scrollTo({ top: 0, behavior: 'instant' });
+            }
+            this.showToast(decision.message, 'info', 6000);
             return;
         }
         if (decision.action === 'confirm') {
             if (!confirm(decision.message))
                 return;
-            if (decision.endTimer)
-                await this.resolveActiveTimer(true);
         }
+        if (decision.endTimer)
+            await this.resolveActiveTimer(true);
         const fresh = this.currentContext(); // une résolution de chrono a pu réécrire la session
         const pendingIds = new Set(fresh.day.exercises.filter((ex) => isExercisePending(ex, fresh.session.exercises[ex.id], resolvePlan(ex))).map((ex) => ex.id));
         const result = bringToFront(fresh.session.exerciseOrder, exerciseId, { isPending: (id) => pendingIds.has(id), day: fresh.day });
         this.exerciseSheet = null;
+        // Séance déjà commencée : « Faire maintenant » ouvre directement le mode guidé sur cet exercice.
+        if (fresh.session.startedAt && !fresh.session.endedAt && !this.execState(fresh.session).active)
+            await this.saveExecution({ active: true });
         const running = this.execState(fresh.session).active && !fresh.session.endedAt;
         const warmup = normalizeWarmupState(fresh.session.warmup);
         const warmupPending = fresh.day.kind !== 'recovery' && (!(warmup.general.done || warmup.general.skipped) || activationSteps(fresh.day).some((step) => !warmup.activation[step.key]));
@@ -2268,9 +2436,14 @@ export class ColosseApp {
     }
     async updateProfileField(field, rawValue) {
         if (field === 'startDate') {
+            // Date de départ : suivi du poids uniquement. Les semaines du programme n'en dépendent plus.
             this.snapshot.profile.startDate = rawValue || isoDate();
+        }
+        else if (field === 'programStartDate') {
+            this.snapshot.profile.programStartDate = rawValue || isoDate();
+            // Seules les séances pas encore terminées suivent le nouveau début ; l'historique garde ses semaines.
             this.snapshot.sessions.forEach((session) => {
-                session.weekIndex = weekIndexFromStart(this.snapshot.profile.startDate, session.date);
+                session.weekIndex = sessionWeekIndex(session, this.snapshot.profile);
             });
         }
         else {
@@ -2287,6 +2460,15 @@ export class ColosseApp {
             await saveSession(session);
         await this.ensureCurrentSession();
         this.render();
+    }
+    /** « Aujourd'hui : semaine 2 · Remise en route. Prochaine décharge : semaine du 19 octobre. » */
+    programStartSummary(today = isoDate()) {
+        const week = trainingWeekIndex(this.snapshot.profile, today);
+        const phase = getTrainingPhase(week);
+        const cycle = ((Math.max(1, week) - 1) % 12) + 1;
+        const semainesAvantDecharge = (7 - cycle + 12) % 12;
+        const decharge = formatDateFr(isoDate(addDays(startOfWeek(today), semainesAvantDecharge * 7)), { day: 'numeric', month: 'long' });
+        return `Aujourd’hui : semaine ${week} · ${phase.name}. ${cycle === 7 ? 'Cette semaine est la décharge (moitié des séries).' : `Prochaine décharge : semaine du ${decharge}.`} Les séances déjà terminées gardent leur semaine.`;
     }
     async applyCalorieAdjustment() {
         const recovery = analyzeRecovery(this.snapshot.dailyLogs);
@@ -2311,6 +2493,41 @@ export class ColosseApp {
     timerRemainingSec() {
         return timerRemaining(this.timer);
     }
+    /**
+     * Un seul contexte audio, créé et « déverrouillé » au premier toucher : sur iPhone,
+     * un son lancé hors geste avec un contexte neuf reste muet.
+     */
+    audioContext() {
+        try {
+            if (!this.sharedAudio) {
+                const Ctor = window.AudioContext || window.webkitAudioContext;
+                if (!Ctor)
+                    return null;
+                this.sharedAudio = new Ctor();
+            }
+            return this.sharedAudio;
+        }
+        catch {
+            return null;
+        }
+    }
+    unlockAudio() {
+        if (this.audioUnlocked || !this.snapshot?.settings?.soundEnabled)
+            return;
+        const context = this.audioContext();
+        if (!context)
+            return;
+        try {
+            const buffer = context.createBuffer(1, 1, 22050);
+            const source = context.createBufferSource();
+            source.buffer = buffer;
+            source.connect(context.destination);
+            source.start(0);
+            void context.resume?.();
+            this.audioUnlocked = true;
+        }
+        catch { /* ignoré */ }
+    }
     notifyTimerEnd() {
         if (this.snapshot.settings.vibrationEnabled) {
             try {
@@ -2320,8 +2537,10 @@ export class ColosseApp {
         }
         if (this.snapshot.settings.soundEnabled) {
             try {
-                const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-                const context = new AudioContextCtor();
+                const context = this.audioContext();
+                if (!context)
+                    throw new Error('audio indisponible');
+                void context.resume?.();
                 [660, 880, 1100].forEach((frequency, index) => {
                     const oscillator = context.createOscillator();
                     const gain = context.createGain();
@@ -2395,6 +2614,7 @@ export class ColosseApp {
                 return;
             await saveSnapshot(parsed);
             this.snapshot = await loadSnapshot();
+            await this.migrateProgramStartIfNeeded();
             this.viewWeekStart = startOfWeek(new Date());
             await this.ensureCurrentSession();
             this.showToast('Sauvegarde restaurée.', 'success');

@@ -18,6 +18,7 @@ const empreinte = (page) => page.evaluate(async () => {
   for (const s of [...db.objectStoreNames].sort()) out[s] = await new Promise((r) => { const t = db.transaction(s, 'readonly'); const g = t.objectStore(s).getAll(); g.onsuccess = () => r(g.result); });
   db.close(); return JSON.stringify(out);
 });
+const diff = (a, b, chemin = '') => { if (JSON.stringify(a) === JSON.stringify(b)) return []; if (typeof a !== 'object' || typeof b !== 'object' || !a || !b) return [chemin + ' : ' + JSON.stringify(a)?.slice(0, 60) + ' → ' + JSON.stringify(b)?.slice(0, 60)]; return [...new Set([...Object.keys(a), ...Object.keys(b)])].flatMap((k) => diff(a[k], b[k], chemin + '/' + k)); };
 const h = (s) => crypto.createHash('sha256').update(s).digest('hex').slice(0, 16);
 (async () => {
   execSync(`rm -rf "${SITE}" && cp -R "${ANCIENNE}" "${SITE}" && find "${SITE}" -type f -exec touch {} +`);
@@ -28,7 +29,16 @@ const h = (s) => crypto.createHash('sha256').update(s).digest('hex').slice(0, 16
     await page.reload({ waitUntil: 'load' }); await wait(2000);
     const avantCaches = await page.evaluate(async () => ({ caches: await caches.keys(), ctrl: !!navigator.serviceWorker.controller }));
     note(avantCaches.ctrl && avantCaches.caches.includes(ANCIEN_CACHE), `version précédente installée (${ANCIEN_CACHE}, service worker actif) : ` + avantCaches.caches.join(','));
-    // Données de test dans l'ancienne version : check-in + séance commencée avec une série validée
+    // État comme sur le téléphone : profil commencé le 5 août (programme installé ensuite).
+    await page.evaluate(async () => {
+      const db = await new Promise((res) => { const x = indexedDB.open('colosse-adaptive-db'); x.onsuccess = () => res(x.result); });
+      const t = db.transaction('profile', 'readwrite'); const st = t.objectStore('profile');
+      const cur = await new Promise((r) => { const g = st.get('profile'); g.onsuccess = () => r(g.result); });
+      st.put({ id: 'profile', value: { ...cur.value, startDate: '2026-08-05' } });
+      await new Promise((r) => { t.oncomplete = r; }); db.close();
+    });
+    await page.reload({ waitUntil: 'load' }); await wait(2000);
+    // Données de test dans l'ancienne version : séance commencée avec une série validée
     await toucher(page, '.bottom-nav [data-tab="training"]');
     await toucher(page, '[data-action="select-day"][data-day="push-a"]');
     await toucher(page, '[data-action="start-session"]');
@@ -45,7 +55,7 @@ const h = (s) => crypto.createHash('sha256').update(s).digest('hex').slice(0, 16
     await page.evaluate(() => document.querySelector('[data-action="exec-validate-set"]').click()); await wait(700);
     await page.evaluate(() => document.querySelector('.timer-overlay [data-action="timer-skip"]')?.click()); await wait(700);
     const e1 = await empreinte(page); const d1 = JSON.parse(e1);
-    note(d1.sessions.some((s) => s.exercises['push-a-incline-smith'].sets[0].done), `données de test créées dans la version précédente (empreinte ${h(e1)})`);
+    note(d1.sessions.some((s) => s.exercises['push-a-incline-smith']?.sets?.[0]?.done), `données de test créées dans la version précédente (empreinte ${h(e1)})`);
     // Publication simulée de la nouvelle version sur la MÊME adresse
     execSync(`rsync -a --delete --exclude .git "${NOUVELLE}/" "${SITE}/" && find "${SITE}" -type f -exec touch {} +`);
     await page.evaluate(async () => { const r = await navigator.serviceWorker.getRegistration(); await r.update(); });
@@ -60,7 +70,18 @@ const h = (s) => crypto.createHash('sha256').update(s).digest('hex').slice(0, 16
     note(apres.caches.length === 1 && apres.caches[0] === NOUVEAU_CACHE, 'ancien cache supprimé, nouveau cache seul : ' + apres.caches.join(','));
     note(apres.version === NOUVELLE_VERSION && apres.drafts, `fichiers servis = nouvelle version ${NOUVELLE_VERSION}`);
     note(apres.outils && apres.serie === 'Série 2 sur 4', `séance reprise dans la nouvelle interface au bon endroit (${apres.serie}, « Tous les exercices » présent)`);
-    const e3 = await empreinte(page); note(e1 === e3, `données strictement identiques après mise à jour (empreinte ${h(e3)})`);
+    const e3 = await empreinte(page);
+    // Seuls changements permis : ajouts de la migration 3.6.3 (début du programme, semaine figée/recalculée,
+    // séries vides ajoutées quand le plan redevient complet). Aucune valeur saisie ne doit bouger.
+    const ecartsMaj = diff(JSON.parse(e1), JSON.parse(e3));
+    const permis = (x) => /^\/profile\/0\/value\/programStartDate : undefined → /.test(x)
+      || /^\/sessions\/\d+\/(weekIndex|planWeekIndex|updatedAt) : /.test(x)
+      || /^\/sessions\/\d+\/exercises\/[^/]+\/sets\/\d+ : undefined → /.test(x);
+    const interdits = ecartsMaj.filter((x) => !permis(x));
+    note(interdits.length === 0, `données d’origine intactes après mise à jour (${ecartsMaj.length} ajout(s) de migration${interdits.length ? ' ; INTERDITS : ' + interdits.join(' | ') : ''})`);
+    const d3 = JSON.parse(e3);
+    const seance = d3.sessions.find((x) => x.exercises['push-a-incline-smith']?.sets?.[0]?.done);
+    note(d3.profile[0].value.programStartDate === '2026-09-07' && d3.profile[0].value.startDate === '2026-08-05' && seance.exercises['push-a-incline-smith'].sets[0].weightKg === 80, `migration : début du programme 2026-09-07, date de départ inchangée, série 80 kg intacte (semaine ${seance.weekIndex})`);
     // Hors ligne : serveur arrêté + réseau coupé
     await page.fill('[data-exec-field="reps"]', '7');
     srv.kill(); await ctx.setOffline(true); await wait(500);
@@ -72,7 +93,6 @@ const h = (s) => crypto.createHash('sha256').update(s).digest('hex').slice(0, 16
     await toucher(page, '.f-exercise-sheet [data-action="exercise-sheet-close"]');
     await toucher(page, '.bottom-nav [data-tab="weight"]'); await toucher(page, '.bottom-nav [data-tab="history"]'); await toucher(page, '.bottom-nav [data-tab="tools"]');
     const e4 = await empreinte(page);
-    const diff = (a, b, chemin = '') => { if (JSON.stringify(a) === JSON.stringify(b)) return []; if (typeof a !== 'object' || typeof b !== 'object' || !a || !b) return [chemin + ' : ' + JSON.stringify(a)?.slice(0, 60) + ' → ' + JSON.stringify(b)?.slice(0, 60)]; return [...new Set([...Object.keys(a), ...Object.keys(b)])].flatMap((k) => diff(a[k], b[k], chemin + '/' + k)); };
     const ecarts = diff(JSON.parse(e3), JSON.parse(e4));
     console.log('   écarts : ' + JSON.stringify(ecarts));
     note(ecarts.every((x) => /^\/settings\/0\/value\/currentTab |^\/meta\/\d+\/value |^\/settings\/0\/updatedAt/.test(x)), 'hors ligne : navigation complète ; seules les préférences d’onglet changent (aucune donnée d’entraînement modifiée)');

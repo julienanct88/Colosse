@@ -142,12 +142,14 @@ function renderRampSet(step, ctx) {
     <span class="exec-eyebrow">ÉCHAUFFEMENT — ne compte pas dans les séries de travail</span>
     <h2 class="exec-title">${escapeHtml(step.exercise.name)}</h2>
     ${variant ? `<p class="f-work-variant">${escapeHtml(variantText(variant))}</p>` : ''}
-    <div class="exec-sub">Montée en charge ${escapeHtml(r.key)} · ${Math.round(r.pct * 100)} % · même mouvement, plus léger</div>
+    <div class="exec-sub">Montée en charge ${escapeHtml(r.key)} (${step.setIndex + 1}/${step.ramps?.length ?? 1}) · ${Math.round(r.pct * 100)} % · même mouvement, plus léger</div>
+    ${step.plan ? `<p class="f-next-up">Ensuite : <strong>${step.plan.sets} séries × ${step.plan.repMin}–${step.plan.repMax} reps</strong> <span>· garde ${step.plan.targetRir} reps · repos ${formatClock(step.plan.restSec)}</span></p>` : ''}
     <div class="exec-huge">${r.loadKg} kg</div>
     <div class="exec-meta"><span>${r.reps} répétitions</span><span>repos ${formatClock(r.restSec)}</span></div>
     ${step.exercise.coachingCue ? `<p class="exec-cue f-cue-visible">${escapeHtml(step.exercise.coachingCue)}</p>` : ''}
     ${exerciseHelp(ctx, step.exercise)}
     <button class="exec-primary" data-action="exec-validate-ramp" data-exercise="${step.exerciseId}" data-index="${step.setIndex}" data-rest="${r.restSec}">SÉRIE FAITE</button>
+    <button class="ghost-button f-skip-ramps" data-action="exec-skip-ramps" data-exercise="${step.exerciseId}">Aller directement aux séries</button>
   </div>`;
 }
 
@@ -172,7 +174,10 @@ function renderWorkSet(step, ctx) {
     <p class="f-work-variant">${escapeHtml(step.variant ? variantText(step.variant) : 'Variante du programme')}${needsLoad ? '' : ' · poids du corps'}</p>
     ${exercise.coachingCue ? `<p class="exec-cue f-cue-visible">${escapeHtml(exercise.coachingCue)}</p>` : ''}
     ${exerciseHelp(ctx, exercise)}
+    ${plan.deload && Number(exercise.sets) > totalSets ? `<p class="f-deload-inline">Semaine de décharge : ${totalSets} série${totalSets > 1 ? 's' : ''} au lieu de ${exercise.sets}, charges allégées.</p>` : ''}
+    ${step.rampOffer ? `<div class="f-ramp-offer"><span>Échauffement conseillé : ${step.rampOffer.count} séries légères, calculées sur ta charge.</span><button type="button" class="ghost-button" data-action="exec-start-ramps" data-exercise="${exercise.id}">Faire l’échauffement</button></div>` : ''}
     ${side ? `<div class="exec-side ${side}">${side === 'left' ? 'CÔTÉ GAUCHE' : 'CÔTÉ DROIT'}</div>` : ''}
+    ${side === 'right' && log?.sets?.[setIndex]?.sides?.left?.done ? `<p class="f-side-summary">✓ Gauche fait : ${escapeHtml(String(log.sets[setIndex].sides.left.weightKg ?? 0))} kg × ${escapeHtml(String(log.sets[setIndex].sides.left.reps ?? '?'))}</p>` : ''}
     <div class="f-set-dots" aria-hidden="true">${Array.from({length:totalSets},(_,i)=>`<span class="${log.sets[i]?.done?'is-done':i===setIndex?'is-current':''}"></span>`).join('')}</div>
     <div class="f-work-panel">
       <div class="f-set-caption">Série ${setIndex + 1} sur ${totalSets}<span>À toi de jouer</span></div>

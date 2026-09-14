@@ -1,6 +1,65 @@
 // Logique de séance — fonctions PURES, testables sans DOM ni IndexedDB.
 // Extraites de app.js pour que les tests portent sur le comportement réel.
 
+import { weekIndexFromStart } from './math.js';
+
+// ---------------------------------------------------------------------------
+// Semaine du PROGRAMME (séries, RIR, décharge) — distincte de la date de départ
+// du profil, qui ne sert qu'au suivi du poids.
+// ---------------------------------------------------------------------------
+
+/** Lundi de la semaine où le programme « Transformation 12 semaines » a été installé (12/09/2026). */
+export const TRANSFORMATION_INSTALL_WEEK = '2026-09-07';
+
+/** Semaine d'entraînement d'une date : comptée depuis le début du programme. */
+export function trainingWeekIndex(profile, date) {
+    return weekIndexFromStart(profile?.programStartDate || profile?.startDate, date);
+}
+
+/**
+ * Semaine avec laquelle une séance est planifiée. Une séance terminée garde
+ * pour toujours la semaine avec laquelle elle a été faite (`planWeekIndex`) :
+ * changer le début du programme ne réinterprète jamais l'historique.
+ */
+export function sessionWeekIndex(session, profile) {
+    const frozen = Number(session?.planWeekIndex);
+    if (Number.isFinite(frozen) && frozen >= 1)
+        return frozen;
+    return trainingWeekIndex(profile, session?.date);
+}
+
+/**
+ * Migration additive (3.6.3) : ajoute `profile.programStartDate`.
+ * - Les séances TERMINÉES sont figées sur leur semaine actuelle (rien ne change pour l'historique).
+ * - Profil commencé avant l'installation du programme de 12 semaines : le programme
+ *   démarre la semaine de son installation (sinon la séance du 14/09 tombait en
+ *   « semaine 7 · décharge », 2 séries au lieu de 3).
+ * - Les séances en cours ou à venir suivent le nouveau compte.
+ * Renvoie { changed, profile, sessions } ; ne modifie pas les objets reçus.
+ */
+export function migrateProgramStart(profile, sessions = []) {
+    if (!profile || profile.programStartDate)
+        return { changed: false, profile, sessions };
+    const start = profile.startDate && profile.startDate < TRANSFORMATION_INSTALL_WEEK && profile.programVersion === 'transformation-12s'
+        ? TRANSFORMATION_INSTALL_WEEK
+        : (profile.startDate || TRANSFORMATION_INSTALL_WEEK);
+    const nextProfile = { ...profile, programStartDate: start };
+    const nextSessions = sessions.map((session) => {
+        if (!session)
+            return session;
+        if (session.endedAt) {
+            if (Number.isFinite(Number(session.planWeekIndex)) && Number(session.planWeekIndex) >= 1)
+                return session;
+            const week = Number.isFinite(Number(session.weekIndex)) && Number(session.weekIndex) >= 1
+                ? Number(session.weekIndex)
+                : weekIndexFromStart(profile.startDate, session.date);
+            return { ...session, planWeekIndex: week, weekIndex: week };
+        }
+        return { ...session, weekIndex: trainingWeekIndex(nextProfile, session.date) };
+    });
+    return { changed: true, profile: nextProfile, sessions: nextSessions };
+}
+
 /** Décalage du jour dans une semaine qui commence le lundi. Dimanche = +6, jamais -1. */
 export function weekdayOffset(weekday) {
     return weekday === 0 ? 6 : weekday - 1;
@@ -153,6 +212,8 @@ export function closeSession(session, { now = Date.now(), status = 'INCOMPLETE' 
         ...session,
         endedAt: now,
         status,
+        // La semaine avec laquelle la séance a été faite reste la sienne.
+        planWeekIndex: Number.isFinite(Number(session.planWeekIndex)) && Number(session.planWeekIndex) >= 1 ? Number(session.planWeekIndex) : session.weekIndex,
         activeTimer: null,
         execution: { ...(session.execution ?? {}), active: false, stage: null, updatedAt: now },
         updatedAt: now,

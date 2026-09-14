@@ -86,7 +86,7 @@ test('11. l’arrondi respecte incrementKg et ne produit jamais 0', () => {
   assert.equal(roundWarmupLoad(0.4, 2.5), 2.5, 'jamais 0 si une charge est requise');
   assert.equal(roundWarmupLoad(0, 2.5), 0, 'aucune référence -> 0');
 });
-test('12. sans charge de référence, on demande la charge de travail', () => {
+test('12. sans charge de référence : directement la série 1, montée en charge seulement proposée (3.6.3)', () => {
   assert.deepEqual(computeRampSets({ warmupProtocol: 'primary' }, 0, 2.5), []);
   assert.equal(resolveReferenceLoad({}).needsInput, true);
   assert.equal(resolveReferenceLoad({ prescriptionLoadKg: 80 }).loadKg, 80);
@@ -94,7 +94,23 @@ test('12. sans charge de référence, on demande la charge de travail', () => {
   const s = blankSession(day);
   s.warmup.general.done = true;
   for (const st of activationSteps(day)) s.warmup.activation[st.key] = { done: true };
-  assert.equal(stepOf(day, s).stage, STAGES.NEEDS_REFERENCE_LOAD);
+  const step = stepOf(day, s);
+  assert.equal(step.stage, STAGES.WORK_SET, 'plus d’écran « charge de référence » imposé');
+  assert.equal(step.setIndex, 0);
+  assert.deepEqual(step.rampOffer, { count: 3 }, 'échauffement proposé');
+  // Demandé avec une charge : les montées s'affichent, puis la série 1 sans nouvelle proposition.
+  s.warmup.ramps['push-a-incline-smith'] = { referenceLoadKg: 100, done: [], requested: true };
+  assert.equal(stepOf(day, s).stage, STAGES.RAMP_SET);
+  s.warmup.ramps['push-a-incline-smith'].done = [true, true, true];
+  assert.equal(stepOf(day, s).rampOffer, null);
+  // Passé : plus proposé.
+  s.warmup.ramps['push-a-incline-smith'] = { skipped: true, requested: false };
+  assert.equal(stepOf(day, s).stage, STAGES.WORK_SET);
+  assert.equal(stepOf(day, s).rampOffer, null);
+  // Rétrocompatible : une montée commencée dans une ancienne version continue.
+  s.warmup.ramps['push-a-incline-smith'] = { referenceLoadKg: 100, done: [true] };
+  assert.equal(stepOf(day, s).stage, STAGES.RAMP_SET);
+  assert.equal(stepOf(day, s).setIndex, 1);
 });
 
 // 13-14 — les séries de chauffe : étapes du mode exécution, jamais du travail
@@ -103,7 +119,7 @@ test('13-14. les séries de chauffe sont des étapes mais jamais des séries de 
   const s = blankSession(day);
   s.warmup.general.done = true;
   for (const st of activationSteps(day)) s.warmup.activation[st.key] = { done: true };
-  s.warmup.ramps['push-a-incline-smith'] = { referenceLoadKg: 100, done: [] };
+  s.warmup.ramps['push-a-incline-smith'] = { referenceLoadKg: 100, done: [], requested: true };
   const before = executionProgress({ day, session: s, resolvePlan: planFor(1) });
   const setsBefore = countSessionSets(s, day, planFor(1));
   s.warmup.ramps['push-a-incline-smith'].done = [true, true, true];

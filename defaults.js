@@ -1,6 +1,7 @@
 import { defaultDayForDate, findDay, getExercisePlan } from './program.js';
-import { isoDate, uid, weekIndexFromStart } from './engine/math.js';
-export const APP_VERSION = '3.6.2';
+import { isoDate, uid } from './engine/math.js';
+import { trainingWeekIndex } from './engine/session.js';
+export const APP_VERSION = '3.6.3';
 export const SCHEMA_VERSION = 7;
 export function defaultProfile(today = new Date()) {
     return {
@@ -9,6 +10,8 @@ export function defaultProfile(today = new Date()) {
         heightCm: 197,
         startWeightKg: 96.2,
         startDate: isoDate(today),
+        // programStartDate : ajouté par migrateProgramStart (jamais par défaut, sinon la migration
+        // d'un profil existant serait court-circuitée par le remplissage des valeurs par défaut).
         weeklyLossRatePct: 0.005,
         currentCalories: 2700,
         proteinG: 200,
@@ -56,7 +59,7 @@ export function makeExerciseLog(exerciseId, variantId, sets) {
 }
 export function makeSession(dayId, date, profile) {
     const day = findDay(dayId);
-    const weekIndex = weekIndexFromStart(profile.startDate, date);
+    const weekIndex = trainingWeekIndex(profile, date);
     const exercises = {};
     day.exercises.forEach((exercise) => {
         const plan = getExercisePlan(exercise, weekIndex);
