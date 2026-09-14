@@ -23,7 +23,9 @@ export function trainingWeekIndex(profile, date) {
  */
 export function sessionWeekIndex(session, profile) {
     const frozen = Number(session?.planWeekIndex);
-    if (Number.isFinite(frozen) && frozen >= 1)
+    // Semaine figée seulement pour une séance enregistrée ou contenant du travail réel.
+    const aProteger = !!(session?.endedAt || session?.status || session?.reopenedAt || hasValidatedWork(session));
+    if (aProteger && Number.isFinite(frozen) && frozen >= 1)
         return frozen;
     return trainingWeekIndex(profile, session?.date);
 }
@@ -363,7 +365,8 @@ export function cancelSession(session, { now = Date.now(), createSet }) {
             sets: Array.from({ length: (log?.sets ?? []).length }, () => createSet()),
         };
     }
-    const { status, ...rest } = session;
+    // Une séance annulable n'a jamais été enregistrée : ni statut ni semaine figée à garder.
+    const { status, planWeekIndex, ...rest } = session;
     return {
         ...rest,
         startedAt: null,

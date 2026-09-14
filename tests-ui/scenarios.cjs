@@ -1060,6 +1060,45 @@ async function scenario(nom, fn) {
     return 'gauche RIR 2, droite « Je ne sais pas » → série RIR 2 (et non 0)';
   });
 
+  await scenario('S30 Séance faite en décharge, figée par la mise à jour, puis « Annuler la séance » : elle revient au programme (3 séries, charges normales)', async ({ page }) => {
+    const jour = await aujourdHuiIso(page);
+    const modele = await modeleSeance(page, 'pull-a');
+    const ex = modele.exerciseOrder[0];
+    const enCours = JSON.parse(JSON.stringify(modele));
+    Object.assign(enCours, { id: `${jour}:pull-a`, date: jour, weekIndex: 7, startedAt: Date.now() - 1800e3, endedAt: null, updatedAt: Date.now(), execution: { ...(enCours.execution ?? {}), active: false } });
+    enCours.exercises[ex].sets = [0, 1].map((k) => ({ id: 'x' + k, done: k === 0, weightKg: 60, reps: k === 0 ? 8 : null, rir: k === 0 ? 4 : null, technique: 'good', pain: 0, restActualSec: null, completedAt: k === 0 ? Date.now() - 600e3 : null }));
+    const ancienne = JSON.parse(JSON.stringify(modele));
+    Object.assign(ancienne, { id: '2026-09-01:pull-a', date: '2026-09-01', weekIndex: 5, startedAt: Date.parse('2026-09-01T18:00:00'), endedAt: Date.parse('2026-09-01T19:20:00'), status: 'COMPLETE' });
+    ancienne.exercises[ex].sets = [0, 1, 2].map((k) => ({ id: 'y' + k, done: true, weightKg: 70, reps: 8, rir: 1, technique: 'good', pain: 0, restActualSec: 120, completedAt: Date.parse('2026-09-01T18:30:00') }));
+    await ecrireBase(page, { profil: { startDate: '2026-08-05', programVersion: 'transformation-12s' }, supprimerChampsProfil: ['programStartDate'], sessions: [enCours, ancienne] });
+    await page.reload({ waitUntil: 'load' }); await wait(2500);
+    let c = await seanceDu(page, 'pull-a');
+    attendu(c.planWeekIndex === 7, 'la séance commencée n’a pas été figée');
+    await allerJour(page, 'pull-a'); await page.evaluate(() => window.scrollTo(0, 0));
+    await toucher(page, '.session-actions [data-action="cancel-session"]');
+    c = (await lireBase(page)).sessions.find((x) => x.id === `${jour}:pull-a`);
+    const carte = await page.evaluate((id) => ({ plan: document.querySelector(`[data-exercise-card="${id}"] .exercise-plan`)?.textContent.replace(/\s+/g, ' '), banniere: !!document.querySelector('.f-deload-banner') }), ex);
+    attendu(!('planWeekIndex' in c) && c.weekIndex === 2 && c.exercises[ex].sets.length >= 3 && !carte.banniere && /^3 ×/.test(carte.plan ?? ''), 'séance annulée encore en décharge : ' + JSON.stringify({ w: c.weekIndex, p: c.planWeekIndex, n: c.exercises[ex].sets.length, carte }));
+    attendu(c.exercises[ex].sets.every((x) => !x.done) && c.exercises[ex].sets.every((x) => x.weightKg === null || x.weightKg >= 70), 'charges après annulation : ' + JSON.stringify(c.exercises[ex].sets.map((x) => x.weightKg)));
+    return `après annulation : semaine ${c.weekIndex}, ${c.exercises[ex].sets.length} séries, charges ${JSON.stringify(c.exercises[ex].sets.map((x) => x.weightKg))}`;
+  });
+
+  await scenario('S31 Séance neuve : « Faire maintenant » dès « Commencer » garde l’échauffement et les activations, puis l’exercice choisi', async ({ page }) => {
+    await demarrer(page, 'pull-a');
+    attendu(/ÉCHAUFFEMENT/.test((await etape(page)).eyebrow ?? ''), 'pas d’échauffement au départ');
+    await toucher(page, '.f-exec-tools [data-action="exec-show-program"]');
+    await toucher(page, '[data-exercise-card="pull-a-chest-row"] [data-action="exercise-do-now"]');
+    const msg = await page.evaluate(() => document.getElementById('toast')?.textContent ?? '');
+    let e = await etape(page);
+    attendu(/ÉCHAUFFEMENT/.test(e.eyebrow ?? '') && /juste après l’échauffement/.test(msg), 'échauffement supprimé ou message trompeur : ' + JSON.stringify({ e, msg }));
+    await page.evaluate(() => document.querySelector('[data-action="exec-skip-general-warmup"]').click()); await wait(450);
+    attendu(/ACTIVATION/.test((await etape(page)).eyebrow ?? ''), 'activations supprimées');
+    await passerActivations(page);
+    e = await etape(page);
+    attendu(/Rowing poitrine appuyée/.test(e.titre ?? '') && e.serie === 'Série 1 sur 3', 'l’exercice choisi ne suit pas l’échauffement : ' + JSON.stringify(e));
+    return 'Faire maintenant dès le départ → échauffement (message « juste après l’échauffement ») → activations → Rowing appuyé Série 1 sur 3';
+  });
+
   console.log('\nRESUME ' + JSON.stringify({ total: resultats.length, ok: resultats.filter((r) => r.ok).length }));
   srv.kill(); process.exit(resultats.every((r) => r.ok) ? 0 : 1);
 })().catch((e) => { console.log('ECHEC', e.stack?.slice(0, 600)); process.exit(1); });

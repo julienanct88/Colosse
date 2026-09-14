@@ -1835,8 +1835,11 @@ export class ColosseApp {
         this.reorderOpen = false;
         this.exerciseSheet = null;
         this.programViewOverride = false;
-        // Charges prescrites remises comme pour une séance jamais démarrée.
-        this.seedSessionPrescriptions(cancelled, context.day, context.date, context.weekIndex);
+        // Semaine du programme recalculée (l'annulation retire toute semaine figée), puis charges prescrites
+        // remises comme pour une séance jamais démarrée.
+        const semaine = sessionWeekIndex(cancelled, this.snapshot.profile);
+        this.syncSession(cancelled, context.day, semaine);
+        this.seedSessionPrescriptions(cancelled, context.day, context.date, semaine);
         await saveSession(cancelled);
         for (const { item, exercices } of aRecalculer) {
             for (const { id, indices } of exercices)
@@ -2314,10 +2317,8 @@ export class ColosseApp {
             // On reste sur l'étape en cours (mode guidé), jamais sur une liste repliée.
             if (context.session.startedAt && !context.session.endedAt) {
                 this.programViewOverride = false;
-                const w = normalizeWarmupState(context.session.warmup);
-                const enAttente = context.day.kind !== 'recovery' && (!(w.general.done || w.general.skipped) || activationSteps(context.day).some((step) => !w.activation[step.key]));
-                if (!this.execState(context.session).active || enAttente)
-                    await this.saveExecution({ active: true, ...(enAttente ? { warmupDeferred: true } : {}) });
+                if (!this.execState(context.session).active)
+                    await this.saveExecution({ active: true });
                 this.render();
                 window.scrollTo({ top: 0, behavior: 'instant' });
             }
@@ -2338,10 +2339,13 @@ export class ColosseApp {
         // sans imposer l'échauffement général ni les activations (ils restent faisables).
         const warmup = normalizeWarmupState(fresh.session.warmup);
         const warmupPending = fresh.day.kind !== 'recovery' && (!(warmup.general.done || warmup.general.skipped) || activationSteps(fresh.day).some((step) => !warmup.activation[step.key]));
-        if (fresh.session.startedAt && !fresh.session.endedAt && (!this.execState(fresh.session).active || warmupPending))
-            await this.saveExecution({ active: true, ...(warmupPending ? { warmupDeferred: true } : {}) });
+        if (fresh.session.startedAt && !fresh.session.endedAt && !this.execState(fresh.session).active)
+            await this.saveExecution({ active: true });
         const running = this.execState(fresh.session).active && !fresh.session.endedAt;
-        const message = !running ? `${exercise.name} sera le premier exercice de la séance.` : `C’est parti : ${exercise.name}.`;
+        const echauffementDu = warmupPending && !hasValidatedWork(fresh.session);
+        const message = !running ? `${exercise.name} sera le premier exercice de la séance.`
+            : echauffementDu ? `${exercise.name} passera juste après l’échauffement (touche « Passer » pour y aller tout de suite).`
+                : `C’est parti : ${exercise.name}.`;
         if (running)
             this.programViewOverride = false;
         if (result.moved)

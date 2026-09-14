@@ -73,9 +73,9 @@ export function computeExecutionStep({ day, session, resolvePlan }) {
         return { stage: STAGES.SESSION_COMPLETE, stepKey: 'complete' };
     }
 
-    // Une fois le travail commencé (séries validées, ou exercice choisi avec « Faire maintenant »),
-    // l'échauffement général et les activations ne s'imposent plus : ils restent faisables, jamais bloquants.
-    const warmupDeferred = session?.execution?.warmupDeferred === true || workStarted(session);
+    // Une fois des séries validées (séance menée depuis la liste par exemple), l'échauffement général et les
+    // activations ne s'imposent plus. Séance neuve : ils restent les premières étapes (avec « Passer »).
+    const warmupDeferred = workStarted(session);
     if (!warmupDeferred && !isGeneralWarmupDone(warmup))
         return { stage: STAGES.GENERAL_WARMUP, stepKey: 'general-warmup', exercise: null, exerciseId: null, setIndex: null, side: null };
 
@@ -159,12 +159,16 @@ export function executionProgress({ day, session, resolvePlan }) {
     let done = 0;
     let total = 0;
     if (day.kind !== 'recovery') {
-        total += 1;
-        if (isGeneralWarmupDone(warmup))
+        // Travail commencé sans échauffement : les étapes non faites ne sont plus dues (sinon jamais 100 %).
+        const dues = !workStarted(session);
+        const general = isGeneralWarmupDone(warmup);
+        total += dues || general ? 1 : 0;
+        if (general)
             done += 1;
         const steps = activationSteps(day);
-        total += steps.length;
-        done += steps.filter((s) => warmup.activation[s.key]).length;
+        const faites = steps.filter((s) => warmup.activation[s.key]).length;
+        total += dues ? steps.length : faites;
+        done += faites;
     }
     for (const exercise of orderedExercises(day, session)) {
         const log = session?.exercises?.[exercise.id];

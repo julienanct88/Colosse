@@ -76,19 +76,49 @@ test('Échauffement demandé : calculé sur la charge indiquée, pas sur le pré
     for (const ex of day.exercises)
         exercises[ex.id] = { variantId: ex.variants[0].id, skipped: false, sets: Array.from({ length: getExercisePlan(ex, 2).sets }, () => ({ done: false, weightKg: 50, reps: null })) };
     const warmup = emptyWarmupState();
+    warmup.general.done = true;
+    for (const st of activationSteps(day)) warmup.activation[st.key] = { done: true };
     warmup.ramps['pull-a-chest-row'] = { referenceLoadKg: 70, done: [], requested: true };
-    const session = { exercises, warmup, execution: { active: true, warmupDeferred: true }, exerciseOrder: ['pull-a-chest-row', ...day.exercises.map((e) => e.id).filter((id) => id !== 'pull-a-chest-row')] };
+    const session = { exercises, warmup, execution: { active: true }, exerciseOrder: ['pull-a-chest-row', ...day.exercises.map((e) => e.id).filter((id) => id !== 'pull-a-chest-row')] };
     const step = computeExecutionStep({ day, session, resolvePlan: (ex) => getExercisePlan(ex, 2) });
-    assert.equal(step.stage, STAGES.RAMP_SET, 'échauffement choisi avec « Faire maintenant » : plus d’échauffement général imposé');
+    assert.equal(step.stage, STAGES.RAMP_SET);
     assert.equal(step.referenceLoadKg, 70);
     assert.equal(step.ramp.loadKg, 35);
     // Séance menée depuis la liste (séries validées, échauffement jamais fait) : pas d'échauffement général imposé.
     const liste = { exercises: JSON.parse(JSON.stringify(exercises)), warmup: emptyWarmupState(), execution: { active: true }, exerciseOrder: day.exercises.map((e) => e.id) };
     liste.exercises['pull-a-lat-pronation'].sets[0].done = true;
     assert.equal(computeExecutionStep({ day, session: liste, resolvePlan: (ex) => getExercisePlan(ex, 2) }).stage, STAGES.WORK_SET);
-    // Rien de fait et pas de « Faire maintenant » : l'échauffement général reste la première étape.
-    const neuve = { ...liste, exercises: JSON.parse(JSON.stringify(exercises)) };
+    // Séance neuve, même avec un exercice amené en tête (« Faire maintenant ») : l'échauffement reste la première étape.
+    const neuve = { ...liste, exercises: JSON.parse(JSON.stringify(exercises)), exerciseOrder: ['pull-a-chest-row', ...day.exercises.map((e) => e.id).filter((id) => id !== 'pull-a-chest-row')] };
     assert.equal(computeExecutionStep({ day, session: neuve, resolvePlan: (ex) => getExercisePlan(ex, 2) }).stage, STAGES.GENERAL_WARMUP);
+});
+
+test('Avancement : 100 % en fin de séance même quand le travail a commencé sans échauffement (séance menée depuis la liste)', async () => {
+    const { executionProgress } = await import('../engine/execution.js');
+    const day = findDay('pull-a');
+    const exercises = {};
+    for (const ex of day.exercises)
+        exercises[ex.id] = { variantId: ex.variants[0].id, skipped: false, sets: Array.from({ length: getExercisePlan(ex, 2).sets }, () => ({ done: true, weightKg: 20, reps: 10 })) };
+    const session = { exercises, warmup: emptyWarmupState(), exerciseOrder: day.exercises.map((e) => e.id) };
+    const p = executionProgress({ day, session, resolvePlan: (ex) => getExercisePlan(ex, 2) });
+    assert.equal(p.percent, 100);
+    const neuve = { exercises: JSON.parse(JSON.stringify(exercises)), warmup: emptyWarmupState(), exerciseOrder: day.exercises.map((e) => e.id) };
+    for (const log of Object.values(neuve.exercises)) log.sets.forEach((set) => { set.done = false; });
+    assert.equal(executionProgress({ day, session: neuve, resolvePlan: (ex) => getExercisePlan(ex, 2) }).total, p.total + 1 + activationSteps(day).length, 'séance neuve : échauffement et activations comptés');
+});
+
+test('Annuler une séance figée dans sa semaine la rend au programme (plus de décharge à vie)', async () => {
+    const { cancelSession } = await import('../engine/session.js');
+    const { makeSet } = await import('../defaults.js');
+    const profile = { startDate: '2026-08-05', programStartDate: '2026-09-07' };
+    const figee = { id: '2026-09-14:pull-a', date: '2026-09-14', dayId: 'pull-a', startedAt: 1, endedAt: null, weekIndex: 7, planWeekIndex: 7, exercises: { a: { sets: [{ done: true, weightKg: 60, reps: 8 }] } } };
+    assert.equal(sessionWeekIndex(figee, profile), 7, 'avec du travail : figée');
+    const annulee = cancelSession(figee, { now: 2, createSet: makeSet });
+    assert.equal('planWeekIndex' in annulee, false);
+    assert.equal(sessionWeekIndex(annulee, profile), 2);
+    // Une semaine figée sans travail ni enregistrement (données incohérentes) n'est pas appliquée.
+    assert.equal(sessionWeekIndex({ date: '2026-09-14', planWeekIndex: 7, exercises: {} }, profile), 2);
+    assert.equal(sessionWeekIndex({ date: '2026-09-14', planWeekIndex: 7, endedAt: 5, exercises: {} }, profile), 7);
 });
 
 test('Repos après une série : entre séries, puis AVANT L’EXERCICE SUIVANT après la dernière', () => {
