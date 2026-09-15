@@ -1062,6 +1062,7 @@ export class ColosseApp {
         const remaining = this.timerRemainingSec();
         return `<section class="timer-overlay f-timer ${this.timerCollapsed ? 'is-mini' : ''}" aria-label="Chronomètre ${escapeHtml(timerLabel(this.timer.kind))}">
           <div class="f-timer-head">${icon('timer')}<span class="timer-label">${escapeHtml(timerLabel(this.timer.kind))}${this.timer.paused ? ' · Pause' : ''}</span><button class="f-timer-toggle" data-action="forge-timer-toggle" aria-expanded="${!this.timerCollapsed}" aria-label="${this.timerCollapsed ? 'Déployer le chronomètre' : 'Réduire le chronomètre'}">${icon(this.timerCollapsed ? 'plus' : 'minus')}</button></div>
+          ${this.renderTimerNote()}
           ${this.timer.kind === 'transition' ? (() => { const nom = this.transitionNextName(); return nom ? `<p class="f-timer-next">Ensuite : <b>${escapeHtml(nom)}</b></p>` : ''; })() : ''}
           <strong id="timer-remaining" role="timer" aria-live="off">${formatClock(remaining)}</strong>
           <div class="timer-progress"><i id="timer-progress" style="width:${Math.max(0, Math.min(100, remaining / this.timer.totalSec * 100))}%"></i></div>
@@ -1104,6 +1105,11 @@ export class ColosseApp {
             chip.closest('.chip-row')?.querySelectorAll('.chip-choice').forEach((el) => { el.classList.remove('selected'); el.setAttribute('aria-pressed', 'false'); });
             chip.classList.add('selected');
             chip.setAttribute('aria-pressed', 'true');
+            const manquant = chip.closest('.is-missing');
+            if (manquant) {
+                manquant.classList.remove('is-missing');
+                manquant.parentElement?.querySelector(':scope > .f-field-error')?.remove();
+            }
             if (chip.closest('[data-forge-step]'))
                 this.persistForgeDraft();
             return;
@@ -1116,7 +1122,10 @@ export class ColosseApp {
             case 'forge-step': {
                 const input = actionElement.closest('.f-value-cell')?.querySelector('input[data-exec-field]');
                 if (!input) break;
-                input.value = String(steppedValue(input.value || input.placeholder, Number(actionElement.dataset.delta), Number(input.min) || 0));
+                const depart = input.dataset.start ?? input.placeholder;
+                input.value = input.value === '' && Number(depart) > 0
+                    ? String(Number(depart))
+                    : String(steppedValue(input.value || depart, Number(actionElement.dataset.delta), Number(input.min) || 0));
                 input.dispatchEvent(new Event('input', { bubbles: true }));
                 break;
             }
@@ -1584,6 +1593,11 @@ export class ColosseApp {
     async handleInput(event) {
         const target = event.target;
         if (target instanceof Element && target.matches('input[data-exec-field]') && target.closest('[data-forge-step]')) {
+            const cellule = target.closest('.f-value-cell.is-missing');
+            if (cellule && Number(target.value) > 0) {
+                cellule.classList.remove('is-missing');
+                cellule.closest('.exec-fields')?.parentElement?.querySelector(':scope > .f-field-error')?.remove();
+            }
             this.persistForgeDraft();
             return;
         }
@@ -1774,11 +1788,15 @@ export class ColosseApp {
             set.weightKg = Number(weightInput.value);
         if (repsInput && repsInput.value !== '')
             set.reps = Number(repsInput.value);
+        // Ce qui manque est signalé SUR le champ concerné (et amené à l'écran), pas dans un bandeau en haut.
+        const variantCourante = exercise.variants.find((item) => item.id === log.variantId) ?? exercise.variants[0];
+        if (weightInput && (variantCourante?.loadMode ?? 'external') === 'external' && !(Number(set.weightKg) > 0))
+            return this.flagMissingField(weightInput.closest('.f-value-cell'), 'Indique la charge (kg) avant de valider.');
+        if (repsInput && !(Number(set.reps) > 0))
+            return this.flagMissingField(repsInput.closest('.f-value-cell'), 'Indique les répétitions faites avant de valider.');
         const rir = chosen('rir');
-        if (rir === undefined) {
-            this.showToast('Indique ton RIR réel : toute la progression en dépend.', 'error');
-            return;
-        }
+        if (rir === undefined)
+            return this.flagMissingField(root?.querySelector('.f-rir-choice'), 'Touche ton RIR juste au-dessus : combien de répétitions tu pouvais encore faire.');
         set.rir = Number(rir);
         const technique = chosen('technique');
         if (technique !== undefined)
@@ -1788,6 +1806,48 @@ export class ColosseApp {
             set.pain = Number(pain);
         await saveSession(ctx.session);
         await this.toggleSet(exerciseId, setIndex);
+    }
+    /** Clé du chrono en mémoire : une note n'appartient qu'au chrono pour lequel elle a été écrite. */
+    timerNoteKey(timer = this.timer) {
+        return timer ? `${timer.kind}|${timer.context?.exerciseId ?? ''}|${timer.context?.setIndex ?? ''}` : null;
+    }
+    /** Messages de fin de série : dans le chrono déployé s'il y en a un, sinon en bandeau (comportement historique). */
+    announce(messages) {
+        if (!messages.length) {
+            this.timerNote = null;
+            return;
+        }
+        if (this.timer && !this.timerCollapsed && this.shouldRenderExecution()) {
+            this.timerNote = { key: this.timerNoteKey(), messages };
+            this.render();
+            return;
+        }
+        this.timerNote = null;
+        for (const message of messages)
+            this.showToast(message.text, message.type, message.duration);
+    }
+    renderTimerNote() {
+        const note = this.timerNote;
+        if (!note || note.key !== this.timerNoteKey())
+            return '';
+        return note.messages.map((message) => `<p class="f-timer-note ${message.type === 'error' ? 'is-error' : ''}" role="status">${escapeHtml(message.text)}</p>`).join('');
+    }
+    /** Champ obligatoire manquant : entouré, message juste en dessous, amené au centre de l'écran. */
+    flagMissingField(field, message) {
+        if (!field) {
+            this.showToast(message, 'error');
+            return;
+        }
+        this.root.querySelectorAll('.is-missing').forEach((el) => el.classList.remove('is-missing'));
+        this.root.querySelectorAll('.f-field-error').forEach((el) => el.remove());
+        field.classList.add('is-missing');
+        const note = document.createElement('p');
+        note.className = 'f-field-error';
+        note.setAttribute('role', 'alert');
+        note.textContent = message;
+        (field.classList.contains('f-value-cell') ? field.closest('.exec-fields') ?? field : field).after(note);
+        field.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        navigator.vibrate?.(60);
     }
     async execSkipCurrentExercise() {
         const { step } = this.executionContext();
@@ -2048,7 +2108,7 @@ export class ColosseApp {
                 await saveSession(context.session);
                 removeDraft(this.draftStorage(), draftKey({ sessionId: context.session.id, exerciseId: exercise.id, variantId: log.variantId, setIndex, side: 'left' }));
                 await this.startGenericTimer('side-switch', Math.max(5, planSide.sideSwitchSec || 15), { exerciseId: exercise.id, setIndex });
-                this.showToast('Côté gauche validé — passe au côté droit.', 'info');
+                this.announce([{ text: 'Côté gauche validé — passe au côté droit.', type: 'info' }]);
                 return;
             }
             // Côté droit : la série devient réellement faite, valeurs agrégées.
@@ -2072,15 +2132,18 @@ export class ColosseApp {
         if (nextSet && !nextSet.done && suggestion.loadKg > 0)
             nextSet.weightKg = suggestion.loadKg;
         await saveSession(context.session);
+        // Messages de fin de série : affichés DANS le chrono de repos qui démarre (là où l'on regarde),
+        // sinon en bandeau. Jamais par-dessus l'en-tête de la séance.
+        const messages = [];
         if (Number(set.pain) >= 4)
-            this.showToast('Douleur ≥ 4/10 : arrête cet exercice et choisis une variante indolore.', 'error', 6000);
+            messages.push({ text: 'Douleur ≥ 4/10 : arrête cet exercice et choisis une variante indolore.', type: 'error', duration: 6000 });
         else if (set.technique === 'degraded')
-            this.showToast('Technique dégradée : aucune hausse de charge ne sera autorisée.', 'info', 5000);
+            messages.push({ text: 'Technique dégradée : aucune hausse de charge ne sera autorisée.', type: 'info', duration: 5000 });
         const avecCharge = (variant?.loadMode ?? 'external') === 'external';
         const repsHorsFourchette = avecCharge && plan.metric !== 'seconds' && Number(set.reps) > plan.repMax + 2;
         const derniereSerie = setIndex >= plan.sets - 1;
         if (repsHorsFourchette && Number(set.pain) < 4 && set.technique !== 'degraded')
-            this.showToast(`${set.reps} répétitions pour ${plan.repMin}–${plan.repMax} prévues : ${derniereSerie ? 'la charge sera augmentée la prochaine fois' : 'augmente la charge à la prochaine série'}.`, 'info', 6000);
+            messages.push({ text: `${set.reps} répétitions pour ${plan.repMin}–${plan.repMax} prévues : ${derniereSerie ? 'la charge sera augmentée la prochaine fois' : 'augmente la charge à la prochaine série'}.`, type: 'info', duration: 6000 });
         // Repos entre séries, ou repos avant l'exercice suivant après la dernière série.
         const decision = this.restAfterSet(exercise, setIndex, context);
         const exerciceTermine = log.sets.slice(0, plan.sets).every((item) => item.done);
@@ -2090,11 +2153,17 @@ export class ColosseApp {
                 : { exerciseId: exercise.id, setIndex });
         }
         if (exerciceTermine && !repsHorsFourchette && Number(set.pain) < 4 && set.technique !== 'degraded')
-            this.showToast(decision.nextName ? `${exercise.name} terminé. Ensuite : ${decision.nextName}.` : `${exercise.name} terminé.`, 'success', 5000);
+            messages.push({ text: decision.nextName ? `${exercise.name} terminé. Ensuite : ${decision.nextName}.` : `${exercise.name} terminé.`, type: 'success', duration: 5000 });
+        this.announce(messages);
         this.render();
-        // En mode guidé, le nouvel exercice s'affiche depuis le haut (titre visible).
-        if (exerciceTermine && this.shouldRenderExecution())
-            window.scrollTo({ top: 0, behavior: 'instant' });
+        // En mode guidé, le nouvel exercice s'affiche depuis le haut (titre visible) ; la série suivante
+        // du même exercice est amenée juste sous l'en-tête (charge et répétitions visibles, jamais coupées).
+        if (this.shouldRenderExecution()) {
+            const panneau = exerciceTermine ? null : this.root.querySelector('.exec-work .f-work-panel');
+            const enTete = this.root.querySelector('.exec-header');
+            const cible = panneau && enTete ? panneau.getBoundingClientRect().top + window.scrollY - enTete.getBoundingClientRect().bottom - 2 : 0;
+            window.scrollTo({ top: Math.max(0, cible), behavior: 'instant' });
+        }
     }
     /** Décision pure (engine) alimentée par l'ordre réel de la séance. */
     restAfterSet(exercise, setIndex, context) {

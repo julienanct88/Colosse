@@ -19,10 +19,10 @@ function header(day, progress, elapsedSec) {
     <div class="exec-header__top"><button class="f-exec-back" data-action="exec-show-program" aria-label="Revenir au programme sans terminer la séance">${icon('back')}</button><div class="f-exec-context"><span class="exec-day">${escapeHtml(day.name)}</span><span class="exec-clock"><span id="exec-elapsed">${formatClock(elapsedSec)}</span> · séance en cours</span></div><button class="f-exec-menu" data-action="exec-menu" aria-label="Options de la séance">${icon('dots')}</button></div>
     <div class="exec-progress"><i style="width:${progress.percent}%"></i></div>
     <div class="exec-progress__label"><span>${progress.done}/${progress.total} étapes</span><span>${progress.percent} %</span></div>
-    <div class="f-exec-tools">
-      <button class="f-exec-tool" data-action="exec-show-program">${icon('list')}<span>Tous les exercices</span></button>
-      <button class="f-exec-tool" data-action="exec-reorder">${icon('tune')}<span>Modifier l’ordre</span></button>
-    </div>
+  </div>
+  <div class="f-exec-tools">
+    <button class="f-exec-tool" data-action="exec-show-program">${icon('list')}<span>Tous les exercices</span></button>
+    <button class="f-exec-tool" data-action="exec-reorder">${icon('tune')}<span>Modifier l’ordre</span></button>
   </div>`;
 }
 
@@ -167,30 +167,36 @@ function renderWorkSet(step, ctx) {
     const order = ctx.session.exerciseOrder ?? ctx.day.exercises.map(ex => ex.id);
     const position = Math.max(0, order.indexOf(exercise.id)) + 1;
     const key = `${ctx.session.id}:${exercise.id}:${log.variantId}:${setIndex}:${side ?? 'both'}`;
-    const stepper = (field, label, value, placeholder, delta, inputmode) => `<div class="f-value-cell"><label><span class="f-value-label">${label}</span><input type="number" inputmode="${inputmode}" min="0" step="${field === 'weightKg' ? '0.25' : '1'}" data-exec-field="${field}" value="${escapeHtml(String(value))}" placeholder="${escapeHtml(String(placeholder))}" aria-label="${label}"/></label><div class="f-stepper"><button type="button" data-action="forge-step" data-delta="-${delta}" aria-label="Diminuer ${label} de ${delta}">${icon('minus')}</button><button type="button" data-action="forge-step" data-delta="${delta}" aria-label="Augmenter ${label} de ${delta}">${icon('plus')}</button></div></div>`;
+    // Champ vide = tiret (jamais un chiffre grisé qui ressemble à une valeur déjà saisie) ; le premier
+    // appui sur − ou + part de la valeur de départ (bas de la fourchette pour les répétitions).
+    const stepper = (field, label, value, start, delta, inputmode) => `<div class="f-value-cell"><label><span class="f-value-label">${label}</span><input type="number" inputmode="${inputmode}" min="0" step="${field === 'weightKg' ? '0.25' : '1'}" data-exec-field="${field}" value="${escapeHtml(String(value))}" placeholder="—" data-start="${escapeHtml(String(start))}" aria-label="${label}"/></label><div class="f-stepper"><button type="button" data-action="forge-step" data-delta="-${delta}" aria-label="Diminuer ${label} de ${delta}">${icon('minus')}</button><button type="button" data-action="forge-step" data-delta="${delta}" aria-label="Augmenter ${label} de ${delta}">${icon('plus')}</button></div></div>`;
+    const doneCount = log.sets.slice(0, totalSets).filter((s) => s.done).length;
+    // Pastilles numérotées : ✓ = série validée, contour = série en cours. Jamais une barre pleine
+    // pour la série en cours (elle se lisait « série 1 déjà faite »).
+    const steps = Array.from({ length: totalSets }, (_, i) => {
+        const done = !!log.sets[i]?.done;
+        const current = !done && i === setIndex;
+        return `<li class="${done ? 'is-done' : current ? 'is-current' : ''}" aria-label="Série ${i + 1} ${done ? 'validée' : current ? 'en cours' : 'à faire'}">${done ? '✓' : i + 1}</li>`;
+    }).join('');
     return `<div class="exec-card exec-work" data-forge-step="${escapeHtml(key)}">
-    <div class="f-work-kicker">EXERCICE ${String(position).padStart(2,'0')} / ${String(order.length).padStart(2,'0')}<span>${log.sets.filter(s => s.done).length}/${totalSets} séries validées</span></div>
+    <div class="f-work-kicker">EXERCICE ${String(position).padStart(2,'0')} / ${String(order.length).padStart(2,'0')}<span>${doneCount}/${totalSets} séries validées</span></div>
     <h2 class="exec-title">${escapeHtml(exercise.name)}</h2>
     <p class="f-work-variant">${escapeHtml(step.variant ? variantText(step.variant) : 'Variante du programme')}${needsLoad ? '' : ' · poids du corps'}</p>
-    ${exercise.coachingCue ? `<p class="exec-cue f-cue-visible">${escapeHtml(exercise.coachingCue)}</p>` : ''}
-    ${exerciseHelp(ctx, exercise)}
     ${plan.deload && Number(exercise.sets) > totalSets ? `<p class="f-deload-inline">Semaine de décharge : ${totalSets} série${totalSets > 1 ? 's' : ''} au lieu de ${exercise.sets}, charges allégées.</p>` : ''}
-    ${step.rampOffer ? `<div class="f-ramp-offer"><span>Échauffement conseillé\u00a0: ${step.rampOffer.count} séries légères, calculées sur ta charge.</span><button type="button" class="ghost-button" data-action="exec-start-ramps" data-exercise="${exercise.id}">Faire l’échauffement</button></div>` : ''}
+    ${step.rampOffer ? `<div class="f-ramp-offer"><span>Échauffement conseillé\u00a0: ${step.rampOffer.count} séries légères<small>calculées sur ta charge</small></span><button type="button" class="ghost-button" data-action="exec-start-ramps" data-exercise="${exercise.id}">Faire l’échauffement</button></div>` : ''}
     ${side ? `<div class="exec-side ${side}">${side === 'left' ? 'CÔTÉ GAUCHE' : 'CÔTÉ DROIT'}</div>` : ''}
     ${side === 'right' && log?.sets?.[setIndex]?.sides?.left?.done ? `<p class="f-side-summary">✓ Gauche fait\u00a0: ${escapeHtml(String(log.sets[setIndex].sides.left.weightKg ?? 0))} kg × ${escapeHtml(String(log.sets[setIndex].sides.left.reps ?? '?'))}</p>` : ''}
-    <div class="f-set-dots" aria-hidden="true">${Array.from({length:totalSets},(_,i)=>`<span class="${log.sets[i]?.done?'is-done':i===setIndex?'is-current':''}"></span>`).join('')}</div>
     <div class="f-work-panel">
-      <div class="f-set-caption">Série ${setIndex + 1} sur ${totalSets}<span>À toi de jouer</span></div>
+      <div class="f-set-caption">Série ${setIndex + 1} sur ${totalSets}<ol class="f-set-steps">${steps}</ol></div>
       <div class="exec-fields ${needsLoad ? '' : 'single'}">
         ${needsLoad ? stepper('weightKg', 'Charge · kg', load, '0', increment, 'decimal') : ''}
         ${stepper('reps', amountLabel, set.reps ?? '', plan.repMin, plan.metric === 'seconds' ? 5 : 1, 'numeric')}
       </div>
-      <p class="f-last-exposure">${icon('clock')}<span>${ctx.lastExposure ? `Dernière exposition : ${escapeHtml(ctx.lastExposure)}` : 'Première exposition : calibre ta charge prudemment.'}</span></p>
+      <div class="exec-choice f-rir-choice"><span><span><b>RIR</b> · répétitions encore possibles</span><small class="rir-target">cible ${targetRir}</small></span><div class="chip-row" data-exec-group="rir" aria-label="RIR réellement ressenti">${rirScale(targetRir)}</div></div>
+      <p class="f-last-exposure">${icon('clock')}<span>${escapeHtml(rangeLabel)} · repos ${formatClock(plan.restSec)}${plan.tempo ? ` · tempo ${escapeHtml(plan.tempo)}` : ''} — ${ctx.lastExposure ? `Dernière exposition : ${escapeHtml(ctx.lastExposure)}` : 'Première exposition : calibre ta charge prudemment.'}</span></p>
     </div>
-    <div class="exec-meta"><span>${rangeLabel}</span><span>Repos ${formatClock(plan.restSec)}</span>${plan.tempo ? `<span>Tempo ${escapeHtml(plan.tempo)}</span>` : ''}</div>
-    <div class="exec-choice"><span>Répétitions encore possibles <small class="rir-target">Cible ${targetRir}</small></span><div class="chip-row" data-exec-group="rir" aria-label="RIR réellement ressenti">${rirScale(targetRir)}</div></div>
     <details class="f-feedback-details" data-forge-detail="feedback:${escapeHtml(key)}">
-      <summary>Technique & douleur · à vérifier</summary>
+      <summary>Technique & douleur · facultatif (propre, 0 par défaut)</summary>
       <div>
         <div class="exec-choice"><span>Qualité du mouvement</span><div class="chip-row" data-exec-group="technique">
           <button type="button" class="chip-choice selected" data-exec-field="technique" data-value="good" aria-pressed="true">Propre</button>
@@ -202,6 +208,8 @@ function renderWorkSet(step, ctx) {
     <div class="f-work-actions"><button class="exec-primary" data-action="exec-validate-set" data-exercise="${exercise.id}" data-set="${setIndex}">
       ${side ? `Valider le côté ${side === 'left' ? 'gauche' : 'droit'}` : `Valider la série ${setIndex + 1}`} ${icon('check')}
     </button></div>
+    ${exercise.coachingCue ? `<p class="exec-cue f-cue-visible">${escapeHtml(exercise.coachingCue)}</p>` : ''}
+    ${exerciseHelp(ctx, exercise)}
     <button class="ghost-button" data-action="exec-show-program" data-exercise="${exercise.id}">${icon('list')} Séries, variante & corrections de cet exercice</button>
   </div>`;
 }

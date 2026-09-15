@@ -265,7 +265,9 @@ test('Chaque étape du mode guidé offre « Tous les exercices », « Modifier l
     }
     const serie = renderExecution(etapes.serie, ctx);
     const cue = serie.indexOf('f-cue-visible');
-    assert.ok(cue > 0 && cue < serie.indexOf('<details class="f-feedback-details"'), 'consigne visible, hors « Technique & douleur »');
+    // 3.6.4 : la série (charge, répétitions, RIR, valider) passe avant la consigne ; la consigne reste hors « Technique & douleur ».
+    // L'ordre réel à l'écran est vérifié au doigt dans tests-ui/scenarios.cjs (S33).
+    assert.ok(cue > serie.indexOf('</details>'), 'consigne visible, hors « Technique & douleur »');
 });
 
 test('Fiche d’exercice : consulter, faire maintenant, fermer — et rappel que la séance ne change pas', () => {

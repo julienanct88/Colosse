@@ -448,3 +448,33 @@ h3 { font-size:18px; }
 .f-stale-session button { min-height:48px; }
 .f-program-start-help { grid-column:1 / -1; margin:0; font-size:12px; color:var(--muted); }
 .set-row > .f-side-summary { display:block; margin:0 0 8px; padding:6px 10px; border-radius:10px; background:#1f2a24; }
+/* 3.6.4 — écran de série : rien ne défile derrière l'heure, rien ne masque la série */
+.app-shell::before { content:""; position:fixed; top:0; left:0; right:0; height:var(--safe-top); background:var(--bg); z-index:60; pointer-events:none; }
+.exec-header { padding-bottom:10px; }
+.f-exec-tools { margin:2px 0 6px; }
+.f-exec-tool { min-height:44px; }
+.f-work-actions { bottom:calc(60px + var(--safe-bottom)); background:linear-gradient(0deg,#141616 80%,#14161600); }
+.app-shell.is-executing .toast { top:calc(var(--safe-top) + 66px); }
+.f-ramp-offer span { display:grid; gap:1px; color:#dcd8ce; }
+.f-ramp-offer small { font-size:11px; color:var(--muted); }
+.f-ramp-offer .ghost-button { padding-inline:12px; font-size:13px; }
+.exec-work .f-help-row { margin:14px 0 8px; }
+.exec-work .exec-choice.is-missing .chip-choice { border-color:#db7770; }
+.f-value-cell.is-missing input { border-color:#db7770; }
+.f-field-error { margin:6px 0 0; color:#ffb4a8; font-size:13px; font-weight:650; }
+.f-timer-note { margin:0 0 8px; padding:8px 10px; border-radius:10px; background:#1d231c; color:#e4ecdc; font-size:13px; line-height:1.45; text-align:center; }
+.f-timer-note.is-error { background:#35221f; color:#ffd0c8; }
+.f-timer.is-mini .f-timer-note { display:none; }
+.f-set-caption { font-size:13px; margin-bottom:12px; }
+.f-set-steps { display:flex; gap:6px; margin:0; padding:0; list-style:none; }
+.f-set-steps li { display:grid; place-items:center; width:26px; height:26px; border-radius:50%; border:1px solid #454c45; color:#8e978d; font-size:12px; font-weight:650; }
+.f-set-steps li.is-current { border:2px solid var(--forge); color:#ffd9c8; background:none; }
+.f-set-steps li.is-done { border-color:#85c8a5; background:#85c8a5; color:#14201a; }
+.exec-work .f-rir-choice { margin:10px 0 0; padding-top:12px; border-top:1px solid #42483e; }
+.f-rir-choice > span b { color:var(--text); font-weight:750; }
+.exec-work .f-work-panel .exec-fields .f-value-cell input { margin:4px 0 6px; }
+.exec-work .f-last-exposure { margin-top:12px; padding-top:10px; font-size:11px; }
+.exec-work .f-feedback-details { margin:12px 0; }
+.exec-work .f-cue-visible { margin:12px 0 4px; }
+.f-rir-choice > span > span { color:var(--muted); }
+.f-value-cell input::placeholder { color:#5d665c; }
