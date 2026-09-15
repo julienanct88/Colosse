@@ -441,7 +441,7 @@ export class ColosseApp {
         const executing = this.shouldRenderExecution();
         const sheetOpen = this.execMenuOpen || this.reorderOpen || !!this.exerciseSheet;
         this.root.innerHTML = `
-      <div class="app-shell ${executing ? 'is-executing' : ''} ${this.timer ? 'has-timer' : ''} ${this.timerCollapsed ? 'timer-is-mini' : ''} ${sheetOpen ? 'has-sheet' : ''}" data-current-tab="${escapeHtml(tab)}">
+      <div class="app-shell ${executing ? 'is-executing' : ''} ${this.timer ? 'has-timer' : ''} ${this.timerCollapsed ? 'timer-is-mini' : ''} ${this.timer && this.renderTimerNote() ? 'has-timer-note' : ''} ${sheetOpen ? 'has-sheet' : ''}" data-current-tab="${escapeHtml(tab)}">
         ${this.renderHeader()}
         <main class="page" id="main-content" ${sheetOpen ? 'inert' : ''}>${page}</main>
         ${sheetOpen ? '' : this.renderNavigation()}
@@ -1784,19 +1784,21 @@ export class ColosseApp {
         const weightInput = readField('weightKg');
         const repsInput = readField('reps');
         const chosen = (group) => root?.querySelector(`[data-exec-group="${group}"] .chip-choice.selected`)?.dataset.value;
-        if (weightInput && weightInput.value !== '')
-            set.weightKg = Number(weightInput.value);
-        if (repsInput && repsInput.value !== '')
-            set.reps = Number(repsInput.value);
-        // Ce qui manque est signalé SUR le champ concerné (et amené à l'écran), pas dans un bandeau en haut.
+        // Ce qui est enregistré est ce qui est AFFICHÉ : un champ vide (« — ») est un champ manquant, jamais
+        // l'ancienne valeur en mémoire. Rien n'est écrit tant que tout n'est pas renseigné ; ce qui manque est
+        // signalé SUR le champ concerné (et amené à l'écran), pas dans un bandeau en haut.
         const variantCourante = exercise.variants.find((item) => item.id === log.variantId) ?? exercise.variants[0];
-        if (weightInput && (variantCourante?.loadMode ?? 'external') === 'external' && !(Number(set.weightKg) > 0))
+        if (weightInput && (variantCourante?.loadMode ?? 'external') === 'external' && !(Number(weightInput.value) > 0))
             return this.flagMissingField(weightInput.closest('.f-value-cell'), 'Indique la charge (kg) avant de valider.');
-        if (repsInput && !(Number(set.reps) > 0))
+        if (repsInput && !(Number(repsInput.value) > 0))
             return this.flagMissingField(repsInput.closest('.f-value-cell'), 'Indique les répétitions faites avant de valider.');
         const rir = chosen('rir');
         if (rir === undefined)
             return this.flagMissingField(root?.querySelector('.f-rir-choice'), 'Touche ton RIR juste au-dessus : combien de répétitions tu pouvais encore faire.');
+        if (weightInput)
+            set.weightKg = weightInput.value === '' ? set.weightKg : Number(weightInput.value);
+        if (repsInput)
+            set.reps = Number(repsInput.value);
         set.rir = Number(rir);
         const technique = chosen('technique');
         if (technique !== undefined)
@@ -1819,7 +1821,7 @@ export class ColosseApp {
         }
         // Le chrono de fin d'exercice affiche déjà « Ensuite : … » : pas de doublon.
         const utiles = this.timer?.kind === 'transition' ? messages.filter((message) => message.type !== 'success') : messages;
-        if (this.timer && !this.timerCollapsed && this.shouldRenderExecution()) {
+        if (this.timer && this.shouldRenderExecution()) {
             if (!utiles.length) {
                 this.timerNote = null;
                 return;
@@ -1834,6 +1836,7 @@ export class ColosseApp {
                     return;
                 this.timerNote = null;
                 this.root.querySelectorAll('.f-timer-note').forEach((el) => el.remove());
+                this.root.querySelector('.app-shell')?.classList.remove('has-timer-note');
             }, duree);
             return;
         }
@@ -1846,6 +1849,22 @@ export class ColosseApp {
         if (!note || note.key !== this.timerNoteKey() || !this.shouldRenderExecution())
             return '';
         return note.messages.map((message) => `<p class="f-timer-note ${message.type === 'error' ? 'is-error' : ''}" role="status">${escapeHtml(message.text)}</p>`).join('');
+    }
+    /** Bande d'écran réellement libre : sous l'en-tête collant, au-dessus du chrono, du bouton collant et de la barre du bas. */
+    freeBand() {
+        const enTete = this.root.querySelector('.exec-header');
+        const haut = enTete && getComputedStyle(enTete).position === 'sticky' ? Math.max(0, enTete.getBoundingClientRect().bottom) : 0;
+        const bas = Math.min(window.innerHeight, ...['.timer-overlay', '.exec-secondary'].map((sel) => this.root.querySelector(sel)?.getBoundingClientRect().top ?? window.innerHeight),
+            ...[...this.root.querySelectorAll('.f-work-actions')].filter((el) => getComputedStyle(el).position === 'sticky').map((el) => el.getBoundingClientRect().top));
+        return { haut, bas };
+    }
+    /** Amène un bloc (du premier au dernier élément) au milieu de la bande libre. */
+    scrollIntoFreeBand(first, last = first) {
+        const { haut, bas } = this.freeBand();
+        const top = first.getBoundingClientRect().top, bottom = last.getBoundingClientRect().bottom;
+        const hauteurLibre = Math.max(0, bas - haut);
+        const decalage = bottom - top <= hauteurLibre ? top - haut - (hauteurLibre - (bottom - top)) / 2 : top - haut - 4;
+        window.scrollTo({ top: Math.max(0, window.scrollY + decalage), behavior: 'instant' });
     }
     /** Champ obligatoire manquant : entouré, message juste en dessous, amené au centre de l'écran. */
     flagMissingField(field, message) {
@@ -1861,7 +1880,7 @@ export class ColosseApp {
         note.setAttribute('role', 'alert');
         note.textContent = message;
         (field.classList.contains('f-value-cell') ? field.closest('.exec-fields') ?? field : field).after(note);
-        field.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        this.scrollIntoFreeBand(field, note);
         navigator.vibrate?.(60);
     }
     async execSkipCurrentExercise() {
@@ -2175,9 +2194,10 @@ export class ColosseApp {
         // du même exercice est amenée juste sous l'en-tête (charge et répétitions visibles, jamais coupées).
         if (this.shouldRenderExecution()) {
             const panneau = exerciceTermine ? null : this.root.querySelector('.exec-work .f-work-panel');
-            const enTete = this.root.querySelector('.exec-header');
-            const cible = panneau && enTete ? panneau.getBoundingClientRect().top + window.scrollY - enTete.getBoundingClientRect().bottom - 2 : 0;
-            window.scrollTo({ top: Math.max(0, cible), behavior: 'instant' });
+            if (panneau)
+                window.scrollTo({ top: Math.max(0, panneau.getBoundingClientRect().top + window.scrollY - this.freeBand().haut - 2), behavior: 'instant' });
+            else
+                window.scrollTo({ top: 0, behavior: 'instant' });
         }
     }
     /** Décision pure (engine) alimentée par l'ordre réel de la séance. */

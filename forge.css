@@ -464,13 +464,22 @@ h3 { font-size:18px; }
 .f-field-error { margin:6px 0 0; color:#ffb4a8; font-size:13px; font-weight:650; }
 .f-timer-note { margin:0 0 8px; padding:8px 10px; border-radius:10px; background:#1d231c; color:#e4ecdc; font-size:13px; line-height:1.45; text-align:center; }
 .f-timer-note.is-error { background:#35221f; color:#ffd0c8; }
-.f-timer.is-mini .f-timer-note { display:none; }
+.f-timer.is-mini .f-timer-note { grid-column:1 / -1; margin:6px 0 4px; padding:6px 8px; font-size:12px; }
+/* La note agrandit le chrono quelques secondes : la page garde assez de place pour atteindre le dernier bouton. */
+.app-shell.has-timer.has-timer-note { padding-bottom:calc(370px + var(--safe-bottom)); }
+.app-shell.has-timer.timer-is-mini.has-timer-note { padding-bottom:calc(254px + var(--safe-bottom)); }
+/* Le dégradé du bouton collant ne capte pas les touches destinées aux cases RIR juste au-dessus. */
+.f-work-actions { pointer-events:none; }
+.f-work-actions > button { pointer-events:auto; }
+/* Cases RIR : au moins 44 px de large sur iPhone 393 px. */
+.exec-work .f-rir-choice > span { padding-inline:9px; }
+.exec-work .f-rir-choice .chip-row { gap:4px; }
 .f-set-caption { font-size:13px; margin-bottom:12px; }
 .f-set-steps { display:flex; gap:6px; margin:0; padding:0; list-style:none; }
 .f-set-steps li { display:grid; place-items:center; width:26px; height:26px; border-radius:50%; border:1px solid #454c45; color:#8e978d; font-size:12px; font-weight:650; }
 .f-set-steps li.is-current { border:2px solid var(--forge); color:#ffd9c8; background:none; }
 .f-set-steps li.is-done { border-color:#85c8a5; background:#85c8a5; color:#14201a; }
-.exec-work .f-rir-choice { margin:10px 0 0; padding-top:12px; border-top:1px solid #42483e; }
+.exec-work .f-rir-choice { margin:10px -9px 0; padding-top:12px; border-top:1px solid #42483e; }
 .f-rir-choice > span b { color:var(--text); font-weight:750; }
 .exec-work .f-work-panel .exec-fields .f-value-cell input { margin:4px 0 6px; }
 .exec-work .f-last-exposure { margin-top:12px; padding-top:10px; font-size:11px; }
