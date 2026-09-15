@@ -18,9 +18,10 @@ Poids : non modifiés (Julien : « ce n'est pas le problème des poids »).
 - Tour 1 : champ vidé validé avec l'ancienne valeur ; paysage ; note cachée chrono réduit ; bas des cases RIR non touchable ; cases < 44 px ; champ manquant caché par le chrono ; tests trop faibles → corrigés (S33–S35 renforcés, mutations détectées).
 - Tour 2 : côté droit non recadré ; changement de variante après le seul côté gauche sans confirmation (préexistant) ; message « répétitions » pour le gainage → corrigés (S36, S37).
 - Tour 3 : bouton principal hors écran sur échauffement, activation, montée en charge (préexistant) ; série 1 non cadrée après les montées ; bannière de mise à jour sur la série et sur le ✕ d'une fiche ; bandeau sur la progression → corrigés (S38).
-- Tour 4 : voir la conclusion de publication.
+- Tour 4 : la bannière de mise à jour placée dans le flux décalait la série de 78 px en pleine saisie (vérifié sous WebKit : un appui sur RIR 2 tombait sur « + 2,5 kg ») → en séance, plus de bannière : point sur ⋯ et « Mettre à jour Colosse » dans le menu (S38 : positions identiques avant/après, sans ancrage du défilement).
+- Tour 5 : bandeau de mise à jour sur la série pendant 6 s ; ligne absente d'un menu déjà ouvert → pas de bandeau en séance, menu ouvert rafraîchi ; recouvrement testé géométriquement (un bandeau en pointer-events:none échappe à elementFromPoint).
 
-Limite connue : sur le premier écran d'un nouvel exercice pendant « Repos avant l'exercice suivant », le chrono déployé recouvre la charge tant qu'il tourne (réduire ou passer le chrono la montre).
+Limite connue : sur le premier écran d'un nouvel exercice (ou du cardio) pendant « Repos avant l'exercice suivant », le chrono déployé recouvre la charge ou le bouton tant qu'il tourne (réduire ou passer le chrono les montre).
 
 ## Résultats
 
