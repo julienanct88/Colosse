@@ -84,7 +84,7 @@ const h = (s) => crypto.createHash('sha256').update(s).digest('hex').slice(0, 16
     note(interdits.length === 0, `données d’origine intactes après mise à jour (${ecartsMaj.length} ajout(s) de migration${interdits.length ? ' ; INTERDITS : ' + interdits.join(' | ') : ''})`);
     const d3 = JSON.parse(e3);
     const seance = d3.sessions.find((x) => x.exercises['push-a-incline-smith']?.sets?.[0]?.done);
-    note(d3.profile[0].value.programStartDate === '2026-09-07' && d3.profile[0].value.startDate === '2026-08-05' && seance.exercises['push-a-incline-smith'].sets[0].weightKg === 80 && (migrationDejaFaite ? seance.planWeekIndex === d1.sessions.find((x) => x.id === seance.id)?.planWeekIndex : seance.planWeekIndex === 7), `migration : début du programme 2026-09-07, date de départ inchangée, séance commencée gardée dans sa semaine (${seance.weekIndex}), série 80 kg intacte`);
+    note(d3.profile[0].value.programStartDate === (migrationDejaFaite ? d1.profile[0].value.programStartDate : '2026-09-07') && d3.profile[0].value.startDate === '2026-08-05' && seance.exercises['push-a-incline-smith'].sets[0].weightKg === 80 && (migrationDejaFaite ? seance.planWeekIndex === d1.sessions.find((x) => x.id === seance.id)?.planWeekIndex : seance.planWeekIndex === 7), `migration : début du programme ${d3.profile[0].value.programStartDate}${migrationDejaFaite ? ' (déjà migré, inchangé)' : ''}, date de départ inchangée, séance commencée gardée dans sa semaine (${seance.weekIndex}), série 80 kg intacte`);
     // Hors ligne : serveur arrêté + réseau coupé
     await page.fill('[data-exec-field="reps"]', '7');
     srv.kill(); await ctx.setOffline(true); await wait(500);
