@@ -1791,10 +1791,10 @@ export class ColosseApp {
         if (weightInput && (variantCourante?.loadMode ?? 'external') === 'external' && !(Number(weightInput.value) > 0))
             return this.flagMissingField(weightInput.closest('.f-value-cell'), 'Indique la charge (kg) avant de valider.');
         if (repsInput && !(Number(repsInput.value) > 0))
-            return this.flagMissingField(repsInput.closest('.f-value-cell'), 'Indique les répétitions faites avant de valider.');
+            return this.flagMissingField(repsInput.closest('.f-value-cell'), getExercisePlan(exercise, ctx.weekIndex).metric === 'seconds' ? 'Indique la durée tenue (secondes) avant de valider.' : 'Indique les répétitions faites avant de valider.');
         const rir = chosen('rir');
         if (rir === undefined)
-            return this.flagMissingField(root?.querySelector('.f-rir-choice'), 'Touche ton RIR juste au-dessus : combien de répétitions tu pouvais encore faire.');
+            return this.flagMissingField(root?.querySelector('.f-rir-choice'), getExercisePlan(exercise, ctx.weekIndex).metric === 'seconds' ? 'Touche ton RIR juste au-dessus : ce que tu pouvais encore tenir.' : 'Touche ton RIR juste au-dessus : combien de répétitions tu pouvais encore faire.');
         if (weightInput)
             set.weightKg = weightInput.value === '' ? set.weightKg : Number(weightInput.value);
         if (repsInput)
@@ -1849,6 +1849,14 @@ export class ColosseApp {
         if (!note || note.key !== this.timerNoteKey() || !this.shouldRenderExecution())
             return '';
         return note.messages.map((message) => `<p class="f-timer-note ${message.type === 'error' ? 'is-error' : ''}" role="status">${escapeHtml(message.text)}</p>`).join('');
+    }
+    /** Mode guidé : la série (ou le côté) à faire est amenée juste sous l'en-tête ; un nouvel exercice s'affiche depuis le haut. */
+    reframeGuidedSet(depuisLeHaut = false) {
+        const panneau = depuisLeHaut ? null : this.root.querySelector('.exec-work .f-work-panel');
+        if (panneau)
+            window.scrollTo({ top: Math.max(0, panneau.getBoundingClientRect().top + window.scrollY - this.freeBand().haut - 2), behavior: 'instant' });
+        else
+            window.scrollTo({ top: 0, behavior: 'instant' });
     }
     /** Bande d'écran réellement libre : sous l'en-tête collant, au-dessus du chrono, du bouton collant et de la barre du bas. */
     freeBand() {
@@ -2143,6 +2151,9 @@ export class ColosseApp {
                 removeDraft(this.draftStorage(), draftKey({ sessionId: context.session.id, exerciseId: exercise.id, variantId: log.variantId, setIndex, side: 'left' }));
                 await this.startGenericTimer('side-switch', Math.max(5, planSide.sideSwitchSec || 15), { exerciseId: exercise.id, setIndex });
                 this.announce([{ text: 'Côté gauche validé — passe au côté droit.', type: 'info' }]);
+                // Côté droit : charge et répétitions reprises du gauche, affichées à l'écran avant d'être validées.
+                if (this.shouldRenderExecution())
+                    this.reframeGuidedSet(false);
                 return;
             }
             // Côté droit : la série devient réellement faite, valeurs agrégées.
@@ -2192,13 +2203,8 @@ export class ColosseApp {
         this.render();
         // En mode guidé, le nouvel exercice s'affiche depuis le haut (titre visible) ; la série suivante
         // du même exercice est amenée juste sous l'en-tête (charge et répétitions visibles, jamais coupées).
-        if (this.shouldRenderExecution()) {
-            const panneau = exerciceTermine ? null : this.root.querySelector('.exec-work .f-work-panel');
-            if (panneau)
-                window.scrollTo({ top: Math.max(0, panneau.getBoundingClientRect().top + window.scrollY - this.freeBand().haut - 2), behavior: 'instant' });
-            else
-                window.scrollTo({ top: 0, behavior: 'instant' });
-        }
+        if (this.shouldRenderExecution())
+            this.reframeGuidedSet(exerciceTermine);
     }
     /** Décision pure (engine) alimentée par l'ordre réel de la séance. */
     restAfterSet(exercise, setIndex, context) {
@@ -2226,15 +2232,22 @@ export class ColosseApp {
         await saveSession(context.session);
         this.render();
     }
-    async changeVariant(exerciseId, variantId) {
+    async changeVariant(exerciseId, variantId, { dejaConfirme = false } = {}) {
         const context = this.currentContext();
         const exercise = context.day.exercises.find((item) => item.id === exerciseId);
         const log = context.session.exercises[exerciseId];
         if (!exercise || !log || !exercise.variants.some((variant) => variant.id === variantId))
             return;
-        if (log.sets.some((set) => set.done) && !confirm('Changer de variante efface les séries de cet exercice pour éviter de mélanger les machines. Continuer ?')) {
+        // Un seul côté fait (unilatéral) est du travail réel : même critère que hasValidatedWork.
+        const travailFait = log.sets.some((set) => set.done || set.sides?.left?.done || set.sides?.right?.done);
+        if (travailFait && !dejaConfirme && !confirm('Changer de variante efface les séries de cet exercice (y compris un côté déjà fait) pour éviter de mélanger les machines. Continuer ?')) {
             this.render();
             return;
+        }
+        // Le changement de côté en cours portait sur une série effacée : il est simplement fermé (aucun effet à écrire).
+        if (this.timer?.kind === 'side-switch' && this.timer.context?.exerciseId === exerciseId && (this.timer.context?.sessionId ?? context.session.id) === context.session.id) {
+            await this.resolveActiveTimer(true);
+            return this.changeVariant(exerciseId, variantId, { dejaConfirme: true });
         }
         const plan = getExercisePlan(exercise, context.weekIndex);
         context.session.exercises[exerciseId] = resetExerciseLogForVariant(log, variantId, plan.sets, makeSet);

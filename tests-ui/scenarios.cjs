@@ -1297,6 +1297,53 @@ async function scenario(nom, fn) {
     return `cases RIR ${Math.min(...cases)} px et touchables en bas ; charge effacée et répétitions effacées refusées sur place ; douleur visible chrono réduit ; RIR manquant visible pendant le repos ; paysage : ${paysage.serie} à l’écran`;
   });
 
+  await scenario('S36 Relecture 3.6.4 (tour 2) : côté droit recadré après défilement, variante changée après le seul côté gauche = confirmation, gainage en secondes', async ({ page, setDialogues, dialoguesVus }) => {
+    const zones = () => page.addStyleTag({ content: ':root{--safe-top:59px!important;--safe-bottom:34px!important}' });
+    await demarrer(page, 'pull-a');
+    await page.evaluate(() => document.querySelector('[data-action="exec-skip-general-warmup"]').click()); await wait(450);
+    await passerActivations(page);
+    await toucher(page, '.f-exec-tools [data-action="exec-show-program"]');
+    await toucher(page, '[data-exercise-card="pull-a-unilateral"] [data-action="exercise-do-now"]');
+    await zones();
+    await page.fill('[data-exec-field="weightKg"]', '20'); await page.fill('[data-exec-field="reps"]', '12');
+    await toucher(page, '.f-rir-choice [data-exec-field="rir"][data-value="2"]');
+    // Julien descend jusqu'en bas (consigne, démonstration) puis valide le côté gauche.
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight)); await wait(200);
+    await toucher(page, '[data-action="exec-validate-set"]'); await wait(300);
+    const droit = await page.evaluate(() => ({ cote: document.querySelector('.exec-side')?.textContent, charge: window.__visible(document.querySelector('[data-exec-field="weightKg"]')), reps: window.__visible(document.querySelector('[data-exec-field="reps"]')), valeurs: [document.querySelector('[data-exec-field="weightKg"]').value, document.querySelector('[data-exec-field="reps"]').value] }));
+    attendu(/DROIT/.test(droit.cote ?? '') && droit.charge.ok && droit.reps.ok, 'côté droit : charge/répétitions reprises du gauche cachées : ' + JSON.stringify(droit));
+    // Pendant le changement de côté : changer de variante → confirmation demandée ; refus → le côté gauche est gardé.
+    await toucher(page, '.f-exec-tools [data-action="exec-show-program"]');
+    await toucher(page, '[data-exercise-card="pull-a-unilateral"] details.f-exercise-detail > summary');
+    const choix = await page.evaluate(() => [...document.querySelectorAll('[data-exercise-variant="pull-a-unilateral"] option')].map((o) => o.value));
+    const autre = choix.find((v) => v !== (document.querySelector('[data-exercise-variant="pull-a-unilateral"]')?.value));
+    const avantVus = dialoguesVus.length;
+    setDialogues('refuser');
+    const courante = await page.evaluate(() => document.querySelector('[data-exercise-variant="pull-a-unilateral"]').value);
+    await page.selectOption('[data-exercise-variant="pull-a-unilateral"]', choix.find((v) => v !== courante)); await wait(700);
+    setDialogues('accepter');
+    const s = await seanceDu(page, 'pull-a');
+    const l = s.exercises['pull-a-unilateral'];
+    attendu(dialoguesVus.length > avantVus && /côté déjà fait/.test(dialoguesVus.at(-1)) && l.variantId === courante && l.sets[0].sides?.left?.done && l.sets[0].sides.left.reps === 12, 'côté gauche effacé sans confirmation : ' + JSON.stringify({ vus: dialoguesVus.slice(avantVus), variante: l.variantId, set: l.sets[0] }));
+    // Gainage : champ en secondes vide → message en secondes.
+    await page.evaluate(() => document.querySelector('.timer-overlay [data-action="timer-skip"]')?.click()); await wait(300);
+    await toucher(page, '[data-exercise-card="pull-a-unilateral"] [data-action="exercise-do-now"]').catch(() => {});
+    return `côté droit : ${droit.valeurs.join(' kg × ')} visibles ; variante refusée → gauche 20 kg × 12 gardé ; message « ${dialoguesVus.at(-1).slice(0, 60)}… »`;
+  });
+
+  await scenario('S37 Gainage (secondes) : champ vide signalé en secondes, jamais en répétitions', async ({ page }) => {
+    await demarrer(page, 'legs-b');
+    await page.evaluate(() => document.querySelector('[data-action="exec-skip-general-warmup"]').click()); await wait(450);
+    await passerActivations(page);
+    await toucher(page, '.f-exec-tools [data-action="exec-show-program"]');
+    await toucher(page, '[data-exercise-card="legs-b-plank"] [data-action="exercise-do-now"]');
+    await toucher(page, '.f-rir-choice [data-exec-field="rir"][data-value="2"]');
+    await toucher(page, '[data-action="exec-validate-set"]'); await wait(300);
+    const msg = await page.evaluate(() => document.querySelector('.f-field-error')?.textContent ?? '');
+    attendu(/secondes/.test(msg) && !/répétitions/.test(msg), 'message gainage : ' + msg);
+    return msg;
+  });
+
   console.log('\nRESUME ' + JSON.stringify({ total: resultats.length, ok: resultats.filter((r) => r.ok).length }));
   srv.kill(); process.exit(resultats.every((r) => r.ok) ? 0 : 1);
 })().catch((e) => { console.log('ECHEC', e.stack?.slice(0, 600)); process.exit(1); });
