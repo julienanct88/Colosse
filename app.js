@@ -443,6 +443,7 @@ export class ColosseApp {
         this.root.innerHTML = `
       <div class="app-shell ${executing ? 'is-executing' : ''} ${this.timer ? 'has-timer' : ''} ${this.timerCollapsed ? 'timer-is-mini' : ''} ${this.timer && this.renderTimerNote() ? 'has-timer-note' : ''} ${sheetOpen ? 'has-sheet' : ''}" data-current-tab="${escapeHtml(tab)}">
         ${this.renderHeader()}
+        ${executing ? this.renderUpdateBanner() : ''}
         <main class="page" id="main-content" ${sheetOpen ? 'inert' : ''}>${page}</main>
         ${sheetOpen ? '' : this.renderNavigation()}
         <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
@@ -450,12 +451,10 @@ export class ColosseApp {
         ${this.renderExecMenuSheet()}
         ${this.renderReorder()}
         ${this.renderExerciseSheetOverlay()}
-        <div id="update-banner" class="update-banner ${this.updateAvailable ? '' : 'hidden'}">
-          <span>Nouvelle version disponible</span>
-          <button data-action="reload-update">Mettre à jour</button>
-        </div>
+        ${executing ? '' : this.renderUpdateBanner()}
       </div>`;
         this.restoreForgeForm();
+        this.reframeOnStepChange(executing);
         const dayTabs = this.root.querySelector('.day-tabs');
         const activeDay = dayTabs?.querySelector('.day-tab.active');
         if (dayTabs && activeDay) dayTabs.scrollLeft = Math.max(0, activeDay.offsetLeft - dayTabs.offsetLeft - (dayTabs.clientWidth - activeDay.offsetWidth) / 2);
@@ -468,6 +467,41 @@ export class ColosseApp {
         }
     }
     renderHeader() { return renderForgeHeader(this); }
+    /** En mode guidé, la bannière est dans le flux en haut de page : elle ne recouvre jamais la série ni une fiche. */
+    renderUpdateBanner() {
+        return `<div id="update-banner" class="update-banner ${this.updateAvailable ? '' : 'hidden'}">
+          <span>Nouvelle version disponible</span>
+          <button data-action="reload-update">Mettre à jour</button>
+        </div>`;
+    }
+    /** Clé lisible de l'étape guidée affichée (exercice, série, côté, étape d'échauffement). */
+    guidedStepKey() {
+        const card = this.root.querySelector('.execution .exec-card');
+        if (!card)
+            return null;
+        return [...card.querySelectorAll('.exec-eyebrow, .exec-title, .exec-sub, .exec-side, .f-set-caption, [data-action="exec-validate-activation"]')]
+            .map((el) => el.dataset?.step ?? el.textContent.trim()).join('|');
+    }
+    /**
+     * Chaque NOUVELLE étape du mode guidé arrive cadrée : la série (ou le côté) suivante du même exercice sous
+     * l'en-tête, un nouvel exercice ou une étape d'échauffement depuis le haut (bouton principal collé en bas).
+     */
+    reframeOnStepChange(executing) {
+        if (!executing) {
+            this.lastGuidedStep = null;
+            return;
+        }
+        const key = this.guidedStepKey();
+        if (!key || key === this.lastGuidedStep?.key)
+            return;
+        const titre = this.root.querySelector('.execution .exec-title')?.textContent.trim() ?? '';
+        const precedent = this.lastGuidedStep;
+        this.lastGuidedStep = { key, titre };
+        const serie = this.root.querySelector('.exec-work .f-work-panel');
+        const dejaCommence = !/^0\//.test(this.root.querySelector('.exec-work .f-work-kicker > span')?.textContent.trim() ?? '0/') || !!this.root.querySelector('.exec-work .exec-side.right');
+        const memeExercice = precedent ? precedent.titre === titre : dejaCommence;
+        this.reframeGuidedSet(!(serie && memeExercice));
+    }
     renderNavigation() { return renderForgeNav(this.snapshot.settings.currentTab); }
     execState(session) {
         return normalizeExecutionState(session?.execution);

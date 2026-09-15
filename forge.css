@@ -487,3 +487,12 @@ h3 { font-size:18px; }
 .exec-work .f-cue-visible { margin:12px 0 4px; }
 .f-rir-choice > span > span { color:var(--muted); }
 .f-value-cell input::placeholder { color:#5d665c; }
+/* 3.6.4 — bouton principal de chaque étape guidée toujours atteignable à l'arrivée (échauffement, activation, montée en charge, cardio) */
+.execution .exec-card:not(.exec-work) > .exec-primary { position:sticky; bottom:calc(72px + var(--safe-bottom)); z-index:31; box-shadow:0 0 0 12px var(--panel); }
+.app-shell.has-timer .execution .exec-card:not(.exec-work) > .exec-primary { position:static; box-shadow:none; }
+@media (orientation:landscape) and (max-height:500px) { .execution .exec-card:not(.exec-work) > .exec-primary { position:static; box-shadow:none; } }
+/* Bannière de mise à jour : dans le flux en mode guidé ; sous les feuilles ouvertes ailleurs. */
+.app-shell.is-executing .update-banner { position:relative; top:auto; left:auto; transform:none; width:auto; margin:8px 0 0; z-index:1; }
+.app-shell.has-sheet .update-banner { z-index:105; }
+/* Bandeaux en mode guidé : sous l'en-tête de séance, jamais dessus. */
+.app-shell.is-executing .toast { top:calc(var(--safe-top) + 114px); }

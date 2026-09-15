@@ -1345,6 +1345,46 @@ async function scenario(nom, fn) {
     return msg;
   });
 
+  await scenario('S38 Relecture 3.6.4 (tour 3) : bouton de chaque étape atteignable à l’arrivée, série 1 cadrée après les montées, bannière de mise à jour et bandeaux hors de la série et de l’en-tête', async ({ page }) => {
+    const zones = () => page.addStyleTag({ content: ':root{--safe-top:59px!important;--safe-bottom:34px!important}' });
+    const vis = (sel) => page.evaluate((x) => window.__visible(document.querySelector(x)), sel);
+    await demarrer(page, 'push-a'); await zones(); await wait(300);
+    const warm = await vis('[data-action="exec-start-general-warmup"]');
+    attendu(warm.ok, 'échauffement : DÉMARRER non atteignable à l’arrivée : ' + JSON.stringify(warm));
+    await page.evaluate(() => document.querySelector('[data-action="exec-skip-general-warmup"]').click()); await wait(600);
+    const act = await vis('[data-action="exec-validate-activation"]');
+    attendu(act.ok, 'activation : VALIDÉ non atteignable : ' + JSON.stringify(act));
+    await passerActivations(page); await zones();
+    await page.fill('[data-exec-field="weightKg"]', '60');
+    await toucher(page, '[data-action="exec-start-ramps"]'); await wait(300);
+    const rampe = await vis('[data-action="exec-validate-ramp"]');
+    attendu(rampe.ok, 'montée en charge : SÉRIE FAITE non atteignable à l’arrivée : ' + JSON.stringify(rampe));
+    for (let i = 0; i < 10; i++) {
+      if (await page.evaluate(() => !!document.querySelector('.timer-overlay [data-action="timer-skip"]'))) { await toucher(page, '.timer-overlay [data-action="timer-skip"]'); continue; }
+      if (!(await page.evaluate(() => !!document.querySelector('[data-action="exec-validate-ramp"]')))) break;
+      await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight)); await wait(150);
+      await toucher(page, '[data-action="exec-validate-ramp"]');
+    }
+    await page.evaluate(() => document.querySelector('.timer-overlay [data-action="timer-skip"]')?.click()); await wait(400);
+    const s1 = await page.evaluate(() => ({ serie: document.querySelector('.f-set-caption')?.firstChild?.textContent?.trim(), charge: window.__visible(document.querySelector('[data-exec-field="weightKg"]')), caption: window.__visible(document.querySelector('.f-set-caption')) }));
+    attendu(s1.serie === 'Série 1 sur 4' && s1.charge.ok && s1.caption.ok, 'série 1 après les montées : ' + JSON.stringify(s1));
+    // Mise à jour disponible pendant la séance : la bannière ne cache ni la série ni l’en-tête.
+    await page.evaluate(() => window.dispatchEvent(new Event('colosse-update'))); await wait(300);
+    await page.fill('[data-exec-field="reps"]', '8'); await toucher(page, '.f-rir-choice [data-exec-field="rir"][data-value="2"]');
+    await toucher(page, '[data-action="exec-validate-set"]'); await wait(300);
+    await toucher(page, '.timer-overlay [data-action="timer-skip"]');
+    const maj = await page.evaluate(() => ({ caption: window.__visible(document.querySelector('.f-set-caption')), pastilles: window.__visible(document.querySelector('.f-set-steps')), entete: window.__visible(document.querySelector('.exec-day')), bouton: window.__atteindre(document.querySelector('#update-banner [data-action="reload-update"]')) }));
+    attendu(maj.bouton.ok, 'bannière de mise à jour inatteignable : ' + JSON.stringify(maj));
+    await page.evaluate(() => window.scrollTo(0, 0)); await wait(150);
+    await page.evaluate(() => document.querySelector('[data-action="exec-validate-set"]').scrollIntoView({ block: 'center' }));
+    const recadre = await page.evaluate(() => { const p = document.querySelector('.exec-work .f-work-panel'); const h = document.querySelector('.exec-header').getBoundingClientRect().bottom; window.scrollTo(0, p.getBoundingClientRect().top + scrollY - h - 2); return { caption: window.__visible(document.querySelector('.f-set-caption')), pastilles: window.__visible(document.querySelector('.f-set-steps')), entete: window.__visible(document.querySelector('.exec-day')) }; });
+    attendu(recadre.caption.ok && recadre.pastilles.ok && recadre.entete.ok, 'bannière par-dessus la série ou l’en-tête : ' + JSON.stringify(recadre));
+    // Un bandeau en mode guidé ne passe pas sur l’en-tête de séance.
+    const bandeau = await page.evaluate(() => { const t = document.getElementById('toast'); t.textContent = 'Essai'; t.className = 'toast info'; const r = t.getBoundingClientRect(); const h = document.querySelector('.exec-header').getBoundingClientRect(); return { haut: Math.round(r.top), basEntete: Math.round(h.bottom) }; });
+    attendu(bandeau.haut >= bandeau.basEntete, 'bandeau sur l’en-tête : ' + JSON.stringify(bandeau));
+    return 'DÉMARRER, VALIDÉ, SÉRIE FAITE atteignables à l’arrivée ; série 1 cadrée après les montées ; bannière dans le flux ; bandeau sous l’en-tête';
+  });
+
   console.log('\nRESUME ' + JSON.stringify({ total: resultats.length, ok: resultats.filter((r) => r.ok).length }));
   srv.kill(); process.exit(resultats.every((r) => r.ok) ? 0 : 1);
 })().catch((e) => { console.log('ECHEC', e.stack?.slice(0, 600)); process.exit(1); });
