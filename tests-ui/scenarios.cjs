@@ -1368,6 +1368,11 @@ async function scenario(nom, fn) {
     await page.evaluate(() => document.querySelector('.timer-overlay [data-action="timer-skip"]')?.click()); await wait(400);
     const s1 = await page.evaluate(() => ({ serie: document.querySelector('.f-set-caption')?.firstChild?.textContent?.trim(), charge: window.__visible(document.querySelector('[data-exec-field="weightKg"]')), caption: window.__visible(document.querySelector('.f-set-caption')) }));
     attendu(s1.serie === 'Série 1 sur 4' && s1.charge.ok && s1.caption.ok, 'série 1 après les montées : ' + JSON.stringify(s1));
+    // Mise à jour arrivée menu ⋯ déjà ouvert : la ligne « Mettre à jour » apparaît sans rouvrir le menu.
+    await toucher(page, '.f-exec-menu');
+    await page.evaluate(() => window.dispatchEvent(new Event('colosse-update'))); await wait(500);
+    attendu(await page.evaluate(() => window.__visible(document.querySelector('.sheet [data-action="reload-update"]')).ok), 'menu ouvert : « Mettre à jour » n’apparaît pas');
+    await toucher(page, '.sheet [data-action="exec-menu-close"]');
     // Mise à jour disponible EN PLEINE SAISIE : rien ne bouge (WebKit n'ancre pas le défilement), rien n'est recouvert ;
     // un point sur ⋯ et une ligne du menu permettent de mettre à jour quand on veut.
     await page.fill('[data-exec-field="reps"]', '8'); await toucher(page, '.f-rir-choice [data-exec-field="rir"][data-value="2"]');
@@ -1378,8 +1383,15 @@ async function scenario(nom, fn) {
     const avantMaj = await position();
     await page.evaluate(() => window.dispatchEvent(new Event('colosse-update'))); await wait(500);
     const apresMaj = await position();
-    const maj = await page.evaluate(() => ({ point: document.querySelector('.f-exec-menu')?.classList.contains('has-update'), caption: window.__visible(document.querySelector('.f-set-caption')).ok, pastilles: window.__visible(document.querySelector('.f-set-steps')).ok, entete: window.__visible(document.querySelector('.exec-day')).ok }));
-    attendu(JSON.stringify(avantMaj) === JSON.stringify(apresMaj) && maj.point && maj.caption && maj.pastilles && maj.entete, 'mise à jour en pleine saisie : ' + JSON.stringify({ avantMaj, apresMaj, maj }));
+    // Recouvrement mesuré géométriquement : un bandeau en pointer-events:none échappe à elementFromPoint.
+    const maj = await page.evaluate(() => {
+      const couvre = (a, b) => !!a && !!b && a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+      const t = document.getElementById('toast'); const tr = t && !t.classList.contains('hidden') && getComputedStyle(t).opacity !== '0' && t.textContent.trim() ? t.getBoundingClientRect() : null;
+      const b = document.getElementById('update-banner'); const br = b && getComputedStyle(b).display !== 'none' && !b.classList.contains('hidden') ? b.getBoundingClientRect() : null;
+      const cibles = ['.f-set-caption', '.f-set-steps', '.exec-work .exec-fields', '.f-rir-choice', '.exec-header'].map((x) => document.querySelector(x)?.getBoundingClientRect());
+      return { point: document.querySelector('.f-exec-menu')?.classList.contains('has-update'), recouvert: cibles.some((c) => couvre(tr, c) || couvre(br, c)) };
+    });
+    attendu(JSON.stringify(avantMaj) === JSON.stringify(apresMaj) && maj.point && !maj.recouvert, 'mise à jour en pleine saisie : ' + JSON.stringify({ avantMaj, apresMaj, maj }));
     await toucher(page, '.f-exec-menu');
     attendu(await page.evaluate(() => window.__visible(document.querySelector('.sheet [data-action="reload-update"]')).ok), '« Mettre à jour » absent du menu ⋯');
     await toucher(page, '.sheet [data-action="exec-menu-close"]');

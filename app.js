@@ -249,11 +249,17 @@ export class ColosseApp {
         });
         window.addEventListener('colosse-update', () => {
             this.updateAvailable = true;
-            this.showToast(this.shouldRenderExecution() ? 'Mise à jour de Colosse disponible : menu ⋯ quand tu veux (tes séries sont gardées).' : 'Une mise à jour de Colosse est disponible.', 'info', 6000);
             const banner = document.getElementById('update-banner');
             banner?.classList.remove('hidden');
-            // En séance : aucun rendu (saisie en cours préservée, rien ne bouge) — seulement le point sur ⋯.
+            if (!this.shouldRenderExecution()) {
+                this.showToast('Une mise à jour de Colosse est disponible.', 'info', 6000);
+                return;
+            }
+            // En séance : ni bandeau ni rendu (la série et la saisie en cours ne bougent pas et ne sont pas
+            // recouvertes) — un point sur ⋯ ; si le menu est déjà ouvert, sa ligne « Mettre à jour » apparaît.
             document.querySelector('.f-exec-menu')?.classList.add('has-update');
+            if (this.execMenuOpen)
+                this.render();
         });
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible' && this.currentContext().session.startedAt && !this.currentContext().session.endedAt) {
