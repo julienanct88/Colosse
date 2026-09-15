@@ -249,9 +249,11 @@ export class ColosseApp {
         });
         window.addEventListener('colosse-update', () => {
             this.updateAvailable = true;
-            this.showToast('Une mise à jour de Colosse est disponible.', 'info', 6000);
+            this.showToast(this.shouldRenderExecution() ? 'Mise à jour de Colosse disponible : menu ⋯ quand tu veux (tes séries sont gardées).' : 'Une mise à jour de Colosse est disponible.', 'info', 6000);
             const banner = document.getElementById('update-banner');
             banner?.classList.remove('hidden');
+            // En séance : aucun rendu (saisie en cours préservée, rien ne bouge) — seulement le point sur ⋯.
+            document.querySelector('.f-exec-menu')?.classList.add('has-update');
         });
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible' && this.currentContext().session.startedAt && !this.currentContext().session.endedAt) {
@@ -443,7 +445,6 @@ export class ColosseApp {
         this.root.innerHTML = `
       <div class="app-shell ${executing ? 'is-executing' : ''} ${this.timer ? 'has-timer' : ''} ${this.timerCollapsed ? 'timer-is-mini' : ''} ${this.timer && this.renderTimerNote() ? 'has-timer-note' : ''} ${sheetOpen ? 'has-sheet' : ''}" data-current-tab="${escapeHtml(tab)}">
         ${this.renderHeader()}
-        ${executing ? this.renderUpdateBanner() : ''}
         <main class="page" id="main-content" ${sheetOpen ? 'inert' : ''}>${page}</main>
         ${sheetOpen ? '' : this.renderNavigation()}
         <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
@@ -451,7 +452,7 @@ export class ColosseApp {
         ${this.renderExecMenuSheet()}
         ${this.renderReorder()}
         ${this.renderExerciseSheetOverlay()}
-        ${executing ? '' : this.renderUpdateBanner()}
+        ${this.renderUpdateBanner()}
       </div>`;
         this.restoreForgeForm();
         this.reframeOnStepChange(executing);
@@ -467,7 +468,7 @@ export class ColosseApp {
         }
     }
     renderHeader() { return renderForgeHeader(this); }
-    /** En mode guidé, la bannière est dans le flux en haut de page : elle ne recouvre jamais la série ni une fiche. */
+    /** Bannière de mise à jour. En mode guidé elle est masquée (CSS) : un point sur ⋯ et une ligne du menu la remplacent, sans rien décaler ni recouvrir. */
     renderUpdateBanner() {
         return `<div id="update-banner" class="update-banner ${this.updateAvailable ? '' : 'hidden'}">
           <span>Nouvelle version disponible</span>
@@ -547,6 +548,7 @@ export class ColosseApp {
             day: context.day,
             session: context.session,
             preferredWarmupEquipment: this.snapshot.settings.warmupEquipment ?? null,
+            updateAvailable: !!this.updateAvailable,
             nextExercise: prochain ? { id: prochain.id, name: prochain.name, variantLabel: varianteProchain?.label ?? '' } : null,
             progress,
             elapsedSec: sessionDurationSeconds(context.session),
@@ -2577,7 +2579,7 @@ export class ColosseApp {
             return '';
         const { step } = this.executionContext();
         const deferable = !!step.exerciseId && step.stage !== STAGES.CARDIO && step.stage !== STAGES.RECOVERY;
-        return renderExecMenu({ canDefer: deferable, exerciseName: step.exercise?.shortName ?? step.exercise?.name ?? null, canCancel: canCancelSession(this.currentContext().session) });
+        return renderExecMenu({ canDefer: deferable, exerciseName: step.exercise?.shortName ?? step.exercise?.name ?? null, canCancel: canCancelSession(this.currentContext().session), updateAvailable: !!this.updateAvailable });
     }
     /** Écrit un nouvel ordre pour LA SÉANCE DU JOUR uniquement. */
     async applySessionOrder(order, message) {

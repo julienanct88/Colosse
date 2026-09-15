@@ -1368,21 +1368,25 @@ async function scenario(nom, fn) {
     await page.evaluate(() => document.querySelector('.timer-overlay [data-action="timer-skip"]')?.click()); await wait(400);
     const s1 = await page.evaluate(() => ({ serie: document.querySelector('.f-set-caption')?.firstChild?.textContent?.trim(), charge: window.__visible(document.querySelector('[data-exec-field="weightKg"]')), caption: window.__visible(document.querySelector('.f-set-caption')) }));
     attendu(s1.serie === 'Série 1 sur 4' && s1.charge.ok && s1.caption.ok, 'série 1 après les montées : ' + JSON.stringify(s1));
-    // Mise à jour disponible pendant la séance : la bannière ne cache ni la série ni l’en-tête.
-    await page.evaluate(() => window.dispatchEvent(new Event('colosse-update'))); await wait(300);
+    // Mise à jour disponible EN PLEINE SAISIE : rien ne bouge (WebKit n'ancre pas le défilement), rien n'est recouvert ;
+    // un point sur ⋯ et une ligne du menu permettent de mettre à jour quand on veut.
     await page.fill('[data-exec-field="reps"]', '8'); await toucher(page, '.f-rir-choice [data-exec-field="rir"][data-value="2"]');
     await toucher(page, '[data-action="exec-validate-set"]'); await wait(300);
     await toucher(page, '.timer-overlay [data-action="timer-skip"]');
-    const maj = await page.evaluate(() => ({ caption: window.__visible(document.querySelector('.f-set-caption')), pastilles: window.__visible(document.querySelector('.f-set-steps')), entete: window.__visible(document.querySelector('.exec-day')), bouton: window.__atteindre(document.querySelector('#update-banner [data-action="reload-update"]')) }));
-    attendu(maj.bouton.ok, 'bannière de mise à jour inatteignable : ' + JSON.stringify(maj));
-    await page.evaluate(() => window.scrollTo(0, 0)); await wait(150);
-    await page.evaluate(() => document.querySelector('[data-action="exec-validate-set"]').scrollIntoView({ block: 'center' }));
-    const recadre = await page.evaluate(() => { const p = document.querySelector('.exec-work .f-work-panel'); const h = document.querySelector('.exec-header').getBoundingClientRect().bottom; window.scrollTo(0, p.getBoundingClientRect().top + scrollY - h - 2); return { caption: window.__visible(document.querySelector('.f-set-caption')), pastilles: window.__visible(document.querySelector('.f-set-steps')), entete: window.__visible(document.querySelector('.exec-day')) }; });
-    attendu(recadre.caption.ok && recadre.pastilles.ok && recadre.entete.ok, 'bannière par-dessus la série ou l’en-tête : ' + JSON.stringify(recadre));
+    await page.addStyleTag({ content: 'html,body{overflow-anchor:none!important}' });
+    const position = () => page.evaluate(() => ({ y: scrollY, caption: Math.round(document.querySelector('.f-set-caption').getBoundingClientRect().top), rir: Math.round(document.querySelector('.f-rir-choice [data-value="2"]').getBoundingClientRect().top) }));
+    const avantMaj = await position();
+    await page.evaluate(() => window.dispatchEvent(new Event('colosse-update'))); await wait(500);
+    const apresMaj = await position();
+    const maj = await page.evaluate(() => ({ point: document.querySelector('.f-exec-menu')?.classList.contains('has-update'), caption: window.__visible(document.querySelector('.f-set-caption')).ok, pastilles: window.__visible(document.querySelector('.f-set-steps')).ok, entete: window.__visible(document.querySelector('.exec-day')).ok }));
+    attendu(JSON.stringify(avantMaj) === JSON.stringify(apresMaj) && maj.point && maj.caption && maj.pastilles && maj.entete, 'mise à jour en pleine saisie : ' + JSON.stringify({ avantMaj, apresMaj, maj }));
+    await toucher(page, '.f-exec-menu');
+    attendu(await page.evaluate(() => window.__visible(document.querySelector('.sheet [data-action="reload-update"]')).ok), '« Mettre à jour » absent du menu ⋯');
+    await toucher(page, '.sheet [data-action="exec-menu-close"]');
     // Un bandeau en mode guidé ne passe pas sur l’en-tête de séance.
     const bandeau = await page.evaluate(() => { const t = document.getElementById('toast'); t.textContent = 'Essai'; t.className = 'toast info'; const r = t.getBoundingClientRect(); const h = document.querySelector('.exec-header').getBoundingClientRect(); return { haut: Math.round(r.top), basEntete: Math.round(h.bottom) }; });
     attendu(bandeau.haut >= bandeau.basEntete, 'bandeau sur l’en-tête : ' + JSON.stringify(bandeau));
-    return 'DÉMARRER, VALIDÉ, SÉRIE FAITE atteignables à l’arrivée ; série 1 cadrée après les montées ; bannière dans le flux ; bandeau sous l’en-tête';
+    return 'DÉMARRER, VALIDÉ, SÉRIE FAITE atteignables à l’arrivée ; série 1 cadrée après les montées ; mise à jour en pleine saisie : rien ne bouge, point sur ⋯ et « Mettre à jour » dans le menu ; bandeau sous l’en-tête';
   });
 
   console.log('\nRESUME ' + JSON.stringify({ total: resultats.length, ok: resultats.filter((r) => r.ok).length }));

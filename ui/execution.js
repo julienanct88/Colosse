@@ -14,9 +14,9 @@ const timerRunsKind = (ctx, kind) => ctx?.session?.activeTimer?.kind === kind;
 const rirScale = (target) => [0, 1, 2, 3, 4, 5, 6].map((v) => `<button type="button" class="chip-choice ${v === target ? 'is-target' : ''}" data-exec-field="rir" data-value="${v}" aria-pressed="false" aria-label="${v === 6 ? '6 répétitions ou plus' : `${v} répétition${v > 1 ? 's' : ''} encore possible${v > 1 ? 's' : ''}`}">${v === 6 ? '6+' : v}</button>`).join('');
 const painScale = () => Array.from({ length: 11 }, (_, v) => `<button type="button" class="chip-choice ${v === 0 ? 'selected' : ''}" data-exec-field="pain" data-value="${v}" aria-pressed="${v === 0}" aria-label="Douleur ${v} sur 10">${v}</button>`).join('');
 
-function header(day, progress, elapsedSec) {
+function header(day, progress, elapsedSec, ctxUpdate = false) {
     return `<div class="exec-header">
-    <div class="exec-header__top"><button class="f-exec-back" data-action="exec-show-program" aria-label="Revenir au programme sans terminer la séance">${icon('back')}</button><div class="f-exec-context"><span class="exec-day">${escapeHtml(day.name)}</span><span class="exec-clock"><span id="exec-elapsed">${formatClock(elapsedSec)}</span> · séance en cours</span></div><button class="f-exec-menu" data-action="exec-menu" aria-label="Options de la séance">${icon('dots')}</button></div>
+    <div class="exec-header__top"><button class="f-exec-back" data-action="exec-show-program" aria-label="Revenir au programme sans terminer la séance">${icon('back')}</button><div class="f-exec-context"><span class="exec-day">${escapeHtml(day.name)}</span><span class="exec-clock"><span id="exec-elapsed">${formatClock(elapsedSec)}</span> · séance en cours</span></div><button class="f-exec-menu ${ctxUpdate ? 'has-update' : ''}" data-action="exec-menu" aria-label="Options de la séance${ctxUpdate ? ' — mise à jour disponible' : ''}">${icon('dots')}</button></div>
     <div class="exec-progress"><i style="width:${progress.percent}%"></i></div>
     <div class="exec-progress__label"><span>${progress.done}/${progress.total} étapes</span><span>${progress.percent} %</span></div>
   </div>
@@ -47,9 +47,9 @@ function nextUp(ctx) {
     return next ? `<p class="f-next-up">Ensuite : <strong>${escapeHtml(next.name)}</strong>${next.variantLabel && !normalizeSearch(next.name).includes(normalizeSearch(next.variantLabel)) ? ` <span>· ${escapeHtml(next.variantLabel)}</span>` : ''}</p>` : '';
 }
 
-function shell(day, progress, elapsedSec, body) {
+function shell(day, progress, elapsedSec, body, updateAvailable = false) {
     return `<section class="execution">
-    ${header(day, progress, elapsedSec)}
+    ${header(day, progress, elapsedSec, updateAvailable)}
     ${body}
     <div class="exec-secondary">
       <button class="ghost-button" data-action="exec-show-program">${icon('list')} Exercices</button>
@@ -73,7 +73,7 @@ export function renderExecution(step, ctx) {
         case STAGES.SESSION_COMPLETE: body = renderComplete(ctx); break;
         default: body = '<p class="empty-state">Étape inconnue.</p>';
     }
-    return shell(day, progress, elapsedSec, body);
+    return shell(day, progress, elapsedSec, body, !!ctx.updateAvailable);
 }
 
 function renderGeneralWarmup(ctx) {
@@ -265,9 +265,10 @@ function renderComplete(ctx) {
 // ---------------------------------------------------------------------------
 
 /** Menu ⋯ du Mode Exécution. */
-export function renderExecMenu({ canDefer, exerciseName, canCancel = true }) {
+export function renderExecMenu({ canDefer, exerciseName, canCancel = true, updateAvailable = false }) {
     return `<div class="sheet-backdrop" data-action="exec-menu-close"></div>
   <section class="sheet exec-menu-sheet" role="dialog" aria-label="Options de la séance">
+    ${updateAvailable ? '<button class="sheet-item f-menu-update" data-action="reload-update">⟳&nbsp;&nbsp;Mettre à jour Colosse (tes séries sont gardées)</button>' : ''}
     <button class="sheet-item" data-action="exec-reorder">↕&nbsp;&nbsp;Réorganiser les exercices</button>
     ${canDefer ? `<button class="sheet-item" data-action="exec-defer">⏭&nbsp;&nbsp;Machine occupée — faire plus tard</button>` : ''}
     ${exerciseName ? `<button class="sheet-item sheet-item--danger" data-action="exec-skip">✕&nbsp;&nbsp;Passer ${escapeHtml(exerciseName)}</button>` : ''}

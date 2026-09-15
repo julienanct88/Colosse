@@ -64,10 +64,14 @@ const h = (s) => crypto.createHash('sha256').update(s).digest('hex').slice(0, 16
     await page.evaluate(async () => { const r = await navigator.serviceWorker.getRegistration(); await r.update(); });
     let banniere = false;
     for (let i = 0; i < 40 && !banniere; i++) { await wait(500); banniere = await page.evaluate(() => { const b = document.getElementById('update-banner'); return !!b && !b.classList.contains('hidden'); }); }
-    note(banniere, 'bannière « Nouvelle version disponible » affichée sans rechargement forcé');
+    // C'est la version PRÉCÉDENTE (encore chargée) qui signale la mise à jour. Depuis 3.6.4, en séance guidée,
+    // la bannière est masquée et remplacée par un point sur ⋯ et « Mettre à jour » dans le menu.
+    const viaMenu = await page.evaluate(() => { const b = document.getElementById('update-banner'); return !!document.querySelector('.f-exec-menu.has-update') && !!b && getComputedStyle(b).display === 'none'; });
+    note(banniere, viaMenu ? 'mise à jour signalée en séance (point sur ⋯) sans rechargement forcé' : 'bannière « Nouvelle version disponible » affichée sans rechargement forcé');
     const e2 = await empreinte(page); note(e1 === e2, 'aucune donnée modifiée par le simple téléchargement de la mise à jour');
     const nav = page.waitForNavigation({ waitUntil: 'load', timeout: 20000 }).catch(() => null);
-    await toucher(page, '#update-banner [data-action="reload-update"]');
+    if (viaMenu) { await toucher(page, '.f-exec-menu'); await toucher(page, '.sheet [data-action="reload-update"]'); }
+    else await toucher(page, '#update-banner [data-action="reload-update"]');
     await nav; await wait(3000);
     const apres = await page.evaluate(async () => ({ caches: await caches.keys(), version: (await (await fetch('./defaults.js')).text()).match(/APP_VERSION = '([^']+)'/)?.[1], drafts: (await fetch('./ui/drafts.js')).ok, outils: !!document.querySelector('.f-exec-tools [data-action="exec-show-program"]'), serie: document.body.innerText.match(/Série \d+ sur \d+/)?.[0] }));
     note(apres.caches.length === 1 && apres.caches[0] === NOUVEAU_CACHE, 'ancien cache supprimé, nouveau cache seul : ' + apres.caches.join(','));

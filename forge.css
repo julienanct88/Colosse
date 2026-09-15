@@ -492,7 +492,10 @@ h3 { font-size:18px; }
 .app-shell.has-timer .execution .exec-card:not(.exec-work) > .exec-primary { position:static; box-shadow:none; }
 @media (orientation:landscape) and (max-height:500px) { .execution .exec-card:not(.exec-work) > .exec-primary { position:static; box-shadow:none; } }
 /* Bannière de mise à jour : dans le flux en mode guidé ; sous les feuilles ouvertes ailleurs. */
-.app-shell.is-executing .update-banner { position:relative; top:auto; left:auto; transform:none; width:auto; margin:8px 0 0; z-index:1; }
+.app-shell.is-executing .update-banner { display:none; }
+.f-exec-menu { position:relative; }
+.f-exec-menu.has-update::after { content:""; position:absolute; top:6px; right:6px; width:10px; height:10px; border-radius:50%; background:#afd892; box-shadow:0 0 0 2px #141616; }
+.f-menu-update { color:#cfe8bd; }
 .app-shell.has-sheet .update-banner { z-index:105; }
 /* Bandeaux en mode guidé : sous l'en-tête de séance, jamais dessus. */
 .app-shell.is-executing .toast { top:calc(var(--safe-top) + 114px); }
