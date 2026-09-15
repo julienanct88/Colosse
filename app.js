@@ -249,9 +249,17 @@ export class ColosseApp {
         });
         window.addEventListener('colosse-update', () => {
             this.updateAvailable = true;
-            this.showToast('Une mise à jour de Colosse est disponible.', 'info', 6000);
             const banner = document.getElementById('update-banner');
             banner?.classList.remove('hidden');
+            if (!this.shouldRenderExecution()) {
+                this.showToast('Une mise à jour de Colosse est disponible.', 'info', 6000);
+                return;
+            }
+            // En séance : ni bandeau ni rendu (la série et la saisie en cours ne bougent pas et ne sont pas
+            // recouvertes) — un point sur ⋯ ; si le menu est déjà ouvert, sa ligne « Mettre à jour » apparaît.
+            document.querySelector('.f-exec-menu')?.classList.add('has-update');
+            if (this.execMenuOpen)
+                this.render();
         });
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible' && this.currentContext().session.startedAt && !this.currentContext().session.endedAt) {
@@ -441,7 +449,7 @@ export class ColosseApp {
         const executing = this.shouldRenderExecution();
         const sheetOpen = this.execMenuOpen || this.reorderOpen || !!this.exerciseSheet;
         this.root.innerHTML = `
-      <div class="app-shell ${executing ? 'is-executing' : ''} ${this.timer ? 'has-timer' : ''} ${this.timerCollapsed ? 'timer-is-mini' : ''} ${sheetOpen ? 'has-sheet' : ''}" data-current-tab="${escapeHtml(tab)}">
+      <div class="app-shell ${executing ? 'is-executing' : ''} ${this.timer ? 'has-timer' : ''} ${this.timerCollapsed ? 'timer-is-mini' : ''} ${this.timer && this.renderTimerNote() ? 'has-timer-note' : ''} ${sheetOpen ? 'has-sheet' : ''}" data-current-tab="${escapeHtml(tab)}">
         ${this.renderHeader()}
         <main class="page" id="main-content" ${sheetOpen ? 'inert' : ''}>${page}</main>
         ${sheetOpen ? '' : this.renderNavigation()}
@@ -450,12 +458,10 @@ export class ColosseApp {
         ${this.renderExecMenuSheet()}
         ${this.renderReorder()}
         ${this.renderExerciseSheetOverlay()}
-        <div id="update-banner" class="update-banner ${this.updateAvailable ? '' : 'hidden'}">
-          <span>Nouvelle version disponible</span>
-          <button data-action="reload-update">Mettre à jour</button>
-        </div>
+        ${this.renderUpdateBanner()}
       </div>`;
         this.restoreForgeForm();
+        this.reframeOnStepChange(executing);
         const dayTabs = this.root.querySelector('.day-tabs');
         const activeDay = dayTabs?.querySelector('.day-tab.active');
         if (dayTabs && activeDay) dayTabs.scrollLeft = Math.max(0, activeDay.offsetLeft - dayTabs.offsetLeft - (dayTabs.clientWidth - activeDay.offsetWidth) / 2);
@@ -468,6 +474,41 @@ export class ColosseApp {
         }
     }
     renderHeader() { return renderForgeHeader(this); }
+    /** Bannière de mise à jour. En mode guidé elle est masquée (CSS) : un point sur ⋯ et une ligne du menu la remplacent, sans rien décaler ni recouvrir. */
+    renderUpdateBanner() {
+        return `<div id="update-banner" class="update-banner ${this.updateAvailable ? '' : 'hidden'}">
+          <span>Nouvelle version disponible</span>
+          <button data-action="reload-update">Mettre à jour</button>
+        </div>`;
+    }
+    /** Clé lisible de l'étape guidée affichée (exercice, série, côté, étape d'échauffement). */
+    guidedStepKey() {
+        const card = this.root.querySelector('.execution .exec-card');
+        if (!card)
+            return null;
+        return [...card.querySelectorAll('.exec-eyebrow, .exec-title, .exec-sub, .exec-side, .f-set-caption, [data-action="exec-validate-activation"]')]
+            .map((el) => el.dataset?.step ?? el.textContent.trim()).join('|');
+    }
+    /**
+     * Chaque NOUVELLE étape du mode guidé arrive cadrée : la série (ou le côté) suivante du même exercice sous
+     * l'en-tête, un nouvel exercice ou une étape d'échauffement depuis le haut (bouton principal collé en bas).
+     */
+    reframeOnStepChange(executing) {
+        if (!executing) {
+            this.lastGuidedStep = null;
+            return;
+        }
+        const key = this.guidedStepKey();
+        if (!key || key === this.lastGuidedStep?.key)
+            return;
+        const titre = this.root.querySelector('.execution .exec-title')?.textContent.trim() ?? '';
+        const precedent = this.lastGuidedStep;
+        this.lastGuidedStep = { key, titre };
+        const serie = this.root.querySelector('.exec-work .f-work-panel');
+        const dejaCommence = !/^0\//.test(this.root.querySelector('.exec-work .f-work-kicker > span')?.textContent.trim() ?? '0/') || !!this.root.querySelector('.exec-work .exec-side.right');
+        const memeExercice = precedent ? precedent.titre === titre : dejaCommence;
+        this.reframeGuidedSet(!(serie && memeExercice));
+    }
     renderNavigation() { return renderForgeNav(this.snapshot.settings.currentTab); }
     execState(session) {
         return normalizeExecutionState(session?.execution);
@@ -513,6 +554,7 @@ export class ColosseApp {
             day: context.day,
             session: context.session,
             preferredWarmupEquipment: this.snapshot.settings.warmupEquipment ?? null,
+            updateAvailable: !!this.updateAvailable,
             nextExercise: prochain ? { id: prochain.id, name: prochain.name, variantLabel: varianteProchain?.label ?? '' } : null,
             progress,
             elapsedSec: sessionDurationSeconds(context.session),
@@ -1062,6 +1104,7 @@ export class ColosseApp {
         const remaining = this.timerRemainingSec();
         return `<section class="timer-overlay f-timer ${this.timerCollapsed ? 'is-mini' : ''}" aria-label="Chronomètre ${escapeHtml(timerLabel(this.timer.kind))}">
           <div class="f-timer-head">${icon('timer')}<span class="timer-label">${escapeHtml(timerLabel(this.timer.kind))}${this.timer.paused ? ' · Pause' : ''}</span><button class="f-timer-toggle" data-action="forge-timer-toggle" aria-expanded="${!this.timerCollapsed}" aria-label="${this.timerCollapsed ? 'Déployer le chronomètre' : 'Réduire le chronomètre'}">${icon(this.timerCollapsed ? 'plus' : 'minus')}</button></div>
+          ${this.renderTimerNote()}
           ${this.timer.kind === 'transition' ? (() => { const nom = this.transitionNextName(); return nom ? `<p class="f-timer-next">Ensuite : <b>${escapeHtml(nom)}</b></p>` : ''; })() : ''}
           <strong id="timer-remaining" role="timer" aria-live="off">${formatClock(remaining)}</strong>
           <div class="timer-progress"><i id="timer-progress" style="width:${Math.max(0, Math.min(100, remaining / this.timer.totalSec * 100))}%"></i></div>
@@ -1104,6 +1147,11 @@ export class ColosseApp {
             chip.closest('.chip-row')?.querySelectorAll('.chip-choice').forEach((el) => { el.classList.remove('selected'); el.setAttribute('aria-pressed', 'false'); });
             chip.classList.add('selected');
             chip.setAttribute('aria-pressed', 'true');
+            const manquant = chip.closest('.is-missing');
+            if (manquant) {
+                manquant.classList.remove('is-missing');
+                manquant.parentElement?.querySelector(':scope > .f-field-error')?.remove();
+            }
             if (chip.closest('[data-forge-step]'))
                 this.persistForgeDraft();
             return;
@@ -1116,7 +1164,10 @@ export class ColosseApp {
             case 'forge-step': {
                 const input = actionElement.closest('.f-value-cell')?.querySelector('input[data-exec-field]');
                 if (!input) break;
-                input.value = String(steppedValue(input.value || input.placeholder, Number(actionElement.dataset.delta), Number(input.min) || 0));
+                const depart = input.dataset.start ?? input.placeholder;
+                input.value = input.value === '' && Number(depart) > 0
+                    ? String(Number(depart))
+                    : String(steppedValue(input.value || depart, Number(actionElement.dataset.delta), Number(input.min) || 0));
                 input.dispatchEvent(new Event('input', { bubbles: true }));
                 break;
             }
@@ -1584,6 +1635,11 @@ export class ColosseApp {
     async handleInput(event) {
         const target = event.target;
         if (target instanceof Element && target.matches('input[data-exec-field]') && target.closest('[data-forge-step]')) {
+            const cellule = target.closest('.f-value-cell.is-missing');
+            if (cellule && Number(target.value) > 0) {
+                cellule.classList.remove('is-missing');
+                cellule.closest('.exec-fields')?.parentElement?.querySelector(':scope > .f-field-error')?.remove();
+            }
             this.persistForgeDraft();
             return;
         }
@@ -1770,15 +1826,21 @@ export class ColosseApp {
         const weightInput = readField('weightKg');
         const repsInput = readField('reps');
         const chosen = (group) => root?.querySelector(`[data-exec-group="${group}"] .chip-choice.selected`)?.dataset.value;
-        if (weightInput && weightInput.value !== '')
-            set.weightKg = Number(weightInput.value);
-        if (repsInput && repsInput.value !== '')
-            set.reps = Number(repsInput.value);
+        // Ce qui est enregistré est ce qui est AFFICHÉ : un champ vide (« — ») est un champ manquant, jamais
+        // l'ancienne valeur en mémoire. Rien n'est écrit tant que tout n'est pas renseigné ; ce qui manque est
+        // signalé SUR le champ concerné (et amené à l'écran), pas dans un bandeau en haut.
+        const variantCourante = exercise.variants.find((item) => item.id === log.variantId) ?? exercise.variants[0];
+        if (weightInput && (variantCourante?.loadMode ?? 'external') === 'external' && !(Number(weightInput.value) > 0))
+            return this.flagMissingField(weightInput.closest('.f-value-cell'), 'Indique la charge (kg) avant de valider.');
+        if (repsInput && !(Number(repsInput.value) > 0))
+            return this.flagMissingField(repsInput.closest('.f-value-cell'), getExercisePlan(exercise, ctx.weekIndex).metric === 'seconds' ? 'Indique la durée tenue (secondes) avant de valider.' : 'Indique les répétitions faites avant de valider.');
         const rir = chosen('rir');
-        if (rir === undefined) {
-            this.showToast('Indique ton RIR réel : toute la progression en dépend.', 'error');
-            return;
-        }
+        if (rir === undefined)
+            return this.flagMissingField(root?.querySelector('.f-rir-choice'), getExercisePlan(exercise, ctx.weekIndex).metric === 'seconds' ? 'Touche ton RIR juste au-dessus : ce que tu pouvais encore tenir.' : 'Touche ton RIR juste au-dessus : combien de répétitions tu pouvais encore faire.');
+        if (weightInput)
+            set.weightKg = weightInput.value === '' ? set.weightKg : Number(weightInput.value);
+        if (repsInput)
+            set.reps = Number(repsInput.value);
         set.rir = Number(rir);
         const technique = chosen('technique');
         if (technique !== undefined)
@@ -1788,6 +1850,88 @@ export class ColosseApp {
             set.pain = Number(pain);
         await saveSession(ctx.session);
         await this.toggleSet(exerciseId, setIndex);
+    }
+    /** Clé du chrono en mémoire : une note n'appartient qu'au chrono pour lequel elle a été écrite. */
+    timerNoteKey(timer = this.timer) {
+        return timer ? `${timer.kind}|${timer.context?.exerciseId ?? ''}|${timer.context?.setIndex ?? ''}` : null;
+    }
+    /** Messages de fin de série : dans le chrono déployé s'il y en a un, sinon en bandeau (comportement historique). */
+    announce(messages) {
+        if (!messages.length) {
+            this.timerNote = null;
+            return;
+        }
+        // Le chrono de fin d'exercice affiche déjà « Ensuite : … » : pas de doublon.
+        const utiles = this.timer?.kind === 'transition' ? messages.filter((message) => message.type !== 'success') : messages;
+        if (this.timer && this.shouldRenderExecution()) {
+            if (!utiles.length) {
+                this.timerNote = null;
+                return;
+            }
+            const note = { key: this.timerNoteKey(), messages: utiles };
+            this.timerNote = note;
+            this.render();
+            // Comme un bandeau : la note disparaît après sa durée, pour ne pas agrandir le chrono tout le repos.
+            const duree = Math.max(...utiles.map((message) => message.duration ?? 3500));
+            window.setTimeout(() => {
+                if (this.timerNote !== note)
+                    return;
+                this.timerNote = null;
+                this.root.querySelectorAll('.f-timer-note').forEach((el) => el.remove());
+                this.root.querySelector('.app-shell')?.classList.remove('has-timer-note');
+            }, duree);
+            return;
+        }
+        this.timerNote = null;
+        for (const message of messages)
+            this.showToast(message.text, message.type, message.duration);
+    }
+    renderTimerNote() {
+        const note = this.timerNote;
+        if (!note || note.key !== this.timerNoteKey() || !this.shouldRenderExecution())
+            return '';
+        return note.messages.map((message) => `<p class="f-timer-note ${message.type === 'error' ? 'is-error' : ''}" role="status">${escapeHtml(message.text)}</p>`).join('');
+    }
+    /** Mode guidé : la série (ou le côté) à faire est amenée juste sous l'en-tête ; un nouvel exercice s'affiche depuis le haut. */
+    reframeGuidedSet(depuisLeHaut = false) {
+        const panneau = depuisLeHaut ? null : this.root.querySelector('.exec-work .f-work-panel');
+        if (panneau)
+            window.scrollTo({ top: Math.max(0, panneau.getBoundingClientRect().top + window.scrollY - this.freeBand().haut - 2), behavior: 'instant' });
+        else
+            window.scrollTo({ top: 0, behavior: 'instant' });
+    }
+    /** Bande d'écran réellement libre : sous l'en-tête collant, au-dessus du chrono, du bouton collant et de la barre du bas. */
+    freeBand() {
+        const enTete = this.root.querySelector('.exec-header');
+        const haut = enTete && getComputedStyle(enTete).position === 'sticky' ? Math.max(0, enTete.getBoundingClientRect().bottom) : 0;
+        const bas = Math.min(window.innerHeight, ...['.timer-overlay', '.exec-secondary'].map((sel) => this.root.querySelector(sel)?.getBoundingClientRect().top ?? window.innerHeight),
+            ...[...this.root.querySelectorAll('.f-work-actions')].filter((el) => getComputedStyle(el).position === 'sticky').map((el) => el.getBoundingClientRect().top));
+        return { haut, bas };
+    }
+    /** Amène un bloc (du premier au dernier élément) au milieu de la bande libre. */
+    scrollIntoFreeBand(first, last = first) {
+        const { haut, bas } = this.freeBand();
+        const top = first.getBoundingClientRect().top, bottom = last.getBoundingClientRect().bottom;
+        const hauteurLibre = Math.max(0, bas - haut);
+        const decalage = bottom - top <= hauteurLibre ? top - haut - (hauteurLibre - (bottom - top)) / 2 : top - haut - 4;
+        window.scrollTo({ top: Math.max(0, window.scrollY + decalage), behavior: 'instant' });
+    }
+    /** Champ obligatoire manquant : entouré, message juste en dessous, amené au centre de l'écran. */
+    flagMissingField(field, message) {
+        if (!field) {
+            this.showToast(message, 'error');
+            return;
+        }
+        this.root.querySelectorAll('.is-missing').forEach((el) => el.classList.remove('is-missing'));
+        this.root.querySelectorAll('.f-field-error').forEach((el) => el.remove());
+        field.classList.add('is-missing');
+        const note = document.createElement('p');
+        note.className = 'f-field-error';
+        note.setAttribute('role', 'alert');
+        note.textContent = message;
+        (field.classList.contains('f-value-cell') ? field.closest('.exec-fields') ?? field : field).after(note);
+        this.scrollIntoFreeBand(field, note);
+        navigator.vibrate?.(60);
     }
     async execSkipCurrentExercise() {
         const { step } = this.executionContext();
@@ -2048,7 +2192,10 @@ export class ColosseApp {
                 await saveSession(context.session);
                 removeDraft(this.draftStorage(), draftKey({ sessionId: context.session.id, exerciseId: exercise.id, variantId: log.variantId, setIndex, side: 'left' }));
                 await this.startGenericTimer('side-switch', Math.max(5, planSide.sideSwitchSec || 15), { exerciseId: exercise.id, setIndex });
-                this.showToast('Côté gauche validé — passe au côté droit.', 'info');
+                this.announce([{ text: 'Côté gauche validé — passe au côté droit.', type: 'info' }]);
+                // Côté droit : charge et répétitions reprises du gauche, affichées à l'écran avant d'être validées.
+                if (this.shouldRenderExecution())
+                    this.reframeGuidedSet(false);
                 return;
             }
             // Côté droit : la série devient réellement faite, valeurs agrégées.
@@ -2072,15 +2219,18 @@ export class ColosseApp {
         if (nextSet && !nextSet.done && suggestion.loadKg > 0)
             nextSet.weightKg = suggestion.loadKg;
         await saveSession(context.session);
+        // Messages de fin de série : affichés DANS le chrono de repos qui démarre (là où l'on regarde),
+        // sinon en bandeau. Jamais par-dessus l'en-tête de la séance.
+        const messages = [];
         if (Number(set.pain) >= 4)
-            this.showToast('Douleur ≥ 4/10 : arrête cet exercice et choisis une variante indolore.', 'error', 6000);
+            messages.push({ text: 'Douleur ≥ 4/10 : arrête cet exercice et choisis une variante indolore.', type: 'error', duration: 6000 });
         else if (set.technique === 'degraded')
-            this.showToast('Technique dégradée : aucune hausse de charge ne sera autorisée.', 'info', 5000);
+            messages.push({ text: 'Technique dégradée : aucune hausse de charge ne sera autorisée.', type: 'info', duration: 5000 });
         const avecCharge = (variant?.loadMode ?? 'external') === 'external';
         const repsHorsFourchette = avecCharge && plan.metric !== 'seconds' && Number(set.reps) > plan.repMax + 2;
         const derniereSerie = setIndex >= plan.sets - 1;
         if (repsHorsFourchette && Number(set.pain) < 4 && set.technique !== 'degraded')
-            this.showToast(`${set.reps} répétitions pour ${plan.repMin}–${plan.repMax} prévues : ${derniereSerie ? 'la charge sera augmentée la prochaine fois' : 'augmente la charge à la prochaine série'}.`, 'info', 6000);
+            messages.push({ text: `${set.reps} répétitions pour ${plan.repMin}–${plan.repMax} prévues : ${derniereSerie ? 'la charge sera augmentée la prochaine fois' : 'augmente la charge à la prochaine série'}.`, type: 'info', duration: 6000 });
         // Repos entre séries, ou repos avant l'exercice suivant après la dernière série.
         const decision = this.restAfterSet(exercise, setIndex, context);
         const exerciceTermine = log.sets.slice(0, plan.sets).every((item) => item.done);
@@ -2090,11 +2240,13 @@ export class ColosseApp {
                 : { exerciseId: exercise.id, setIndex });
         }
         if (exerciceTermine && !repsHorsFourchette && Number(set.pain) < 4 && set.technique !== 'degraded')
-            this.showToast(decision.nextName ? `${exercise.name} terminé. Ensuite : ${decision.nextName}.` : `${exercise.name} terminé.`, 'success', 5000);
+            messages.push({ text: decision.nextName ? `${exercise.name} terminé. Ensuite : ${decision.nextName}.` : `${exercise.name} terminé.`, type: 'success', duration: 5000 });
+        this.announce(messages);
         this.render();
-        // En mode guidé, le nouvel exercice s'affiche depuis le haut (titre visible).
-        if (exerciceTermine && this.shouldRenderExecution())
-            window.scrollTo({ top: 0, behavior: 'instant' });
+        // En mode guidé, le nouvel exercice s'affiche depuis le haut (titre visible) ; la série suivante
+        // du même exercice est amenée juste sous l'en-tête (charge et répétitions visibles, jamais coupées).
+        if (this.shouldRenderExecution())
+            this.reframeGuidedSet(exerciceTermine);
     }
     /** Décision pure (engine) alimentée par l'ordre réel de la séance. */
     restAfterSet(exercise, setIndex, context) {
@@ -2122,15 +2274,22 @@ export class ColosseApp {
         await saveSession(context.session);
         this.render();
     }
-    async changeVariant(exerciseId, variantId) {
+    async changeVariant(exerciseId, variantId, { dejaConfirme = false } = {}) {
         const context = this.currentContext();
         const exercise = context.day.exercises.find((item) => item.id === exerciseId);
         const log = context.session.exercises[exerciseId];
         if (!exercise || !log || !exercise.variants.some((variant) => variant.id === variantId))
             return;
-        if (log.sets.some((set) => set.done) && !confirm('Changer de variante efface les séries de cet exercice pour éviter de mélanger les machines. Continuer ?')) {
+        // Un seul côté fait (unilatéral) est du travail réel : même critère que hasValidatedWork.
+        const travailFait = log.sets.some((set) => set.done || set.sides?.left?.done || set.sides?.right?.done);
+        if (travailFait && !dejaConfirme && !confirm('Changer de variante efface les séries de cet exercice (y compris un côté déjà fait) pour éviter de mélanger les machines. Continuer ?')) {
             this.render();
             return;
+        }
+        // Le changement de côté en cours portait sur une série effacée : il est simplement fermé (aucun effet à écrire).
+        if (this.timer?.kind === 'side-switch' && this.timer.context?.exerciseId === exerciseId && (this.timer.context?.sessionId ?? context.session.id) === context.session.id) {
+            await this.resolveActiveTimer(true);
+            return this.changeVariant(exerciseId, variantId, { dejaConfirme: true });
         }
         const plan = getExercisePlan(exercise, context.weekIndex);
         context.session.exercises[exerciseId] = resetExerciseLogForVariant(log, variantId, plan.sets, makeSet);
@@ -2426,7 +2585,7 @@ export class ColosseApp {
             return '';
         const { step } = this.executionContext();
         const deferable = !!step.exerciseId && step.stage !== STAGES.CARDIO && step.stage !== STAGES.RECOVERY;
-        return renderExecMenu({ canDefer: deferable, exerciseName: step.exercise?.shortName ?? step.exercise?.name ?? null, canCancel: canCancelSession(this.currentContext().session) });
+        return renderExecMenu({ canDefer: deferable, exerciseName: step.exercise?.shortName ?? step.exercise?.name ?? null, canCancel: canCancelSession(this.currentContext().session), updateAvailable: !!this.updateAvailable });
     }
     /** Écrit un nouvel ordre pour LA SÉANCE DU JOUR uniquement. */
     async applySessionOrder(order, message) {

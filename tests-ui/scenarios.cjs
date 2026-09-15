@@ -919,7 +919,7 @@ async function scenario(nom, fn) {
     await page.fill('[data-profile-field="programStartDate"]', jour);
     await page.evaluate(() => document.querySelector('[data-profile-field="programStartDate"]').dispatchEvent(new Event('change', { bubbles: true }))); await wait(800);
     const base = await lireBase(page);
-    const t = base.sessions.find((x) => x.id === '2026-08-31:pull-a'), c = base.sessions.find((x) => x.id === `${jour}:pull-a`);
+    const t = base.sessions.find((x) => x.id === '2026-08-31:pull-a'), c = base.sessions.find((x) => x.id === `${modele.date}:pull-a`);
     attendu(t.weekIndex === 3 && t.planWeekIndex === 3 && c.weekIndex === 1, 'réglage : ' + JSON.stringify({ t: t.weekIndex, c: c?.weekIndex }));
     return 'bandeau « Semaine 7 du programme · Décharge », carte « 2 × (décharge, au lieu de 3) », mode guidé « 2 séries au lieu de 3 » ; début changé → séance du jour semaine 1, séance terminée toujours semaine 3';
   });
@@ -1061,8 +1061,9 @@ async function scenario(nom, fn) {
   });
 
   await scenario('S30 Séance faite en décharge, figée par la mise à jour, puis « Annuler la séance » : elle revient au programme (3 séries, charges normales)', async ({ page }) => {
-    const jour = await aujourdHuiIso(page);
     const modele = await modeleSeance(page, 'pull-a');
+    // Date du Pull A de la semaine affichée (et non « aujourd'hui ») : le scénario ne dépend plus du jour où il tourne.
+    const jour = modele.date;
     const ex = modele.exerciseOrder[0];
     const enCours = JSON.parse(JSON.stringify(modele));
     Object.assign(enCours, { id: `${jour}:pull-a`, date: jour, weekIndex: 7, startedAt: Date.now() - 1800e3, endedAt: null, updatedAt: Date.now(), execution: { ...(enCours.execution ?? {}), active: false } });
@@ -1100,8 +1101,9 @@ async function scenario(nom, fn) {
   });
 
   await scenario('S32 Séance figée par la mise à jour : dévalider puis revalider la seule série ne la fait plus basculer en décharge', async ({ page }) => {
-    const jour = await aujourdHuiIso(page);
     const modele = await modeleSeance(page, 'pull-a');
+    // Date du Pull A de la semaine affichée (et non « aujourd'hui ») : le scénario ne dépend plus du jour où il tourne.
+    const jour = modele.date;
     const ex = modele.exerciseOrder[0];
     const enCours = JSON.parse(JSON.stringify(modele));
     Object.assign(enCours, { id: `${jour}:pull-a`, date: jour, weekIndex: 7, startedAt: Date.now() - 1800e3, endedAt: null, updatedAt: Date.now(), execution: { ...(enCours.execution ?? {}), active: false } });
@@ -1129,6 +1131,274 @@ async function scenario(nom, fn) {
     const vue = await page.evaluate((k) => ({ plan: document.querySelector(`${k} .exercise-plan`)?.textContent.replace(/\s+/g, ' '), banniere: !!document.querySelector('.f-deload-banner') }), carte);
     attendu(c.weekIndex === 2 && !('planWeekIndex' in c) && /^3 ×/.test(vue.plan ?? '') && !vue.banniere, 'revalidation : ' + JSON.stringify({ w: c.weekIndex, p: c.planWeekIndex, vue }));
     return `figée (7) → dévalidée : semaine 2, charges ${JSON.stringify(charges)} (60 kg soulevés gardés) → revalidée 72 kg × 8 : reste en semaine 2, 3 séries, sans décharge`;
+  });
+
+  // ---------------------------------------------------------------- 3.6.4 : retours du 15/09 (écran de série)
+  await scenario('S33 Parcours du 15/09 : accueil → démarrer → échauffement → série 1 lisible sans défiler, RIR introuvable impossible, annuler → série 1', async ({ page }) => {
+    // Zones de l'iPhone réel simulées (heure en haut, barre d'accueil en bas) : Chrome n'en a pas.
+    const zones = () => page.addStyleTag({ content: ':root{--safe-top:59px!important;--safe-bottom:34px!important}' });
+    await zones();
+    await toucher(page, '[data-action="forge-open"][data-tab="training"]');
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await toucher(page, '[data-action="start-session"]');
+    for (let i = 0; i < 25; i++) {
+      const e = await page.evaluate(() => ({ t: !!document.querySelector('.timer-overlay [data-action="timer-skip"]'), w: !!document.querySelector('[data-action="exec-skip-general-warmup"]'), a: !!document.querySelector('[data-action="exec-validate-activation"]'), s: !!document.querySelector('.exec-work [data-exec-field="reps"]') }));
+      if (e.s && !e.t) break;
+      if (e.t) await toucher(page, '.timer-overlay [data-action="timer-skip"]');
+      else if (e.w) await toucher(page, '[data-action="exec-skip-general-warmup"]');
+      else if (e.a) await toucher(page, '[data-action="exec-validate-activation"]');
+      else await wait(300);
+    }
+    await zones();
+    await page.evaluate(() => window.scrollTo(0, 0)); await wait(200);
+    // À l'arrivée, SANS défiler : série, charge, répétitions, RIR et bouton valider réellement visibles.
+    const arrivee = await page.evaluate(() => ({
+      serie: document.querySelector('.f-set-caption')?.firstChild?.textContent?.trim(),
+      charge: window.__visible(document.querySelector('.exec-work [data-exec-field="weightKg"]')).ok,
+      reps: window.__visible(document.querySelector('.exec-work [data-exec-field="reps"]')).ok,
+      rir: window.__visible(document.querySelector('.exec-work [data-exec-field="rir"][data-value="2"]')),
+      rirLibelle: /RIR/.test(document.querySelector('.f-rir-choice')?.textContent ?? ''),
+      valider: window.__visible(document.querySelector('[data-action="exec-validate-set"]')).ok,
+      pastilles: [...document.querySelectorAll('.f-set-steps li')].map((li) => li.className + ':' + li.textContent),
+      repsVide: document.querySelector('.exec-work [data-exec-field="reps"]').value === '' && document.querySelector('.exec-work [data-exec-field="reps"]').placeholder === '—',
+    }));
+    attendu(arrivee.serie === 'Série 1 sur 4' && arrivee.charge && arrivee.reps && arrivee.rir.ok && arrivee.rirLibelle && arrivee.valider, 'série 1 pas entièrement visible à l’arrivée : ' + JSON.stringify(arrivee));
+    attendu(arrivee.pastilles.join() === 'is-current:1,:2,:3,:4' && arrivee.repsVide, 'la série 1 paraît déjà faite ou un chiffre grisé fait croire à une saisie : ' + JSON.stringify(arrivee));
+    // Rendu réel : la série en cours n'est PAS une pastille pleine (elle se lisait « déjà faite »).
+    const rendu = await page.evaluate(() => { const li = document.querySelector('.f-set-steps li.is-current'); const cs = getComputedStyle(li); return { fond: cs.backgroundColor, bord: cs.borderTopColor, visible: window.__visible(li).ok }; });
+    attendu(rendu.visible && /rgba\(0, 0, 0, 0\)|transparent/.test(rendu.fond) && rendu.bord === 'rgb(255, 123, 74)', 'série en cours rendue comme déjà remplie : ' + JSON.stringify(rendu));
+    // Rien ne défile derrière l'heure : le haut de l'écran est couvert.
+    await page.evaluate(() => window.scrollTo(0, 500)); await wait(200);
+    // Le cache de la zone de l'heure ne capte pas les touches (pointer-events:none) : on vérifie son rendu calculé.
+    const haut = await page.evaluate(() => { const c = getComputedStyle(document.querySelector('.app-shell'), '::before'); const h = getComputedStyle(document.querySelector('.exec-header')); const opaque = /^rgb\(/.test(c.backgroundColor); return c.position === 'fixed' && c.top === '0px' && parseFloat(c.height) >= 59 && opaque && Number(c.zIndex) > Number(h.zIndex) ? 'ok' : 'contenu visible derrière l’heure : ' + JSON.stringify({ p: c.position, t: c.top, h: c.height, bg: c.backgroundColor, z: c.zIndex }); });
+    attendu(haut === 'ok', haut);
+    // Défilé : seul l'en-tête compact reste collé ; « Tous les exercices / Modifier l’ordre » ne coupe plus la série.
+    const colle = await page.evaluate(() => ({ outils: window.__visible(document.querySelector('.f-exec-tools [data-action="exec-show-program"]')), hauteur: Math.round(document.querySelector('.exec-header').getBoundingClientRect().bottom - 59) }));
+    attendu(!colle.outils.ok && colle.hauteur <= 125, 'zone collante trop haute en défilant : ' + JSON.stringify(colle));
+    await page.evaluate(() => window.scrollTo(0, 0)); await wait(150);
+    // Comme Julien : 2 kg, 7 répétitions (au doigt avec + depuis le champ vide), technique propre et douleur 1, sans RIR.
+    await page.fill('.exec-work [data-exec-field="weightKg"]', '2');
+    const repsPlus = '.exec-work .f-value-cell:nth-child(2) [data-action="forge-step"]:not([data-delta^="-"])';
+    await toucher(page, repsPlus);
+    attendu(await page.evaluate(() => document.querySelector('.exec-work [data-exec-field="reps"]').value) === '6', 'le premier + sur un champ vide doit partir du bas de la fourchette (6)');
+    await toucher(page, repsPlus);
+    await toucher(page, '.exec-work .f-feedback-details > summary');
+    await toucher(page, '.exec-work [data-exec-field="pain"][data-value="1"]');
+    await toucher(page, '[data-action="exec-validate-set"]'); await wait(600);
+    const bloque = await page.evaluate(() => ({
+      message: document.querySelector('.f-rir-choice + .f-field-error')?.textContent ?? null,
+      messageVisible: window.__visible(document.querySelector('.f-field-error')).ok,
+      casesVisibles: window.__visible(document.querySelector('.f-rir-choice [data-value="2"]')).ok,
+      bandeau: !!document.querySelector('.toast:not(.hidden)') && getComputedStyle(document.querySelector('.toast')).opacity !== '0' && (document.querySelector('.toast').textContent || '').length > 0,
+      entete: window.__visible(document.querySelector('.exec-day')).ok,
+    }));
+    let s = await seanceDu(page, 'push-a');
+    const log = s.exercises[s.exerciseOrder?.[0] ?? Object.keys(s.exercises)[0]];
+    attendu(!log.sets[0].done && /RIR/.test(bloque.message ?? '') && bloque.messageVisible && bloque.casesVisibles && !bloque.bandeau && bloque.entete, 'RIR manquant mal signalé : ' + JSON.stringify(bloque));
+    await toucher(page, '.f-rir-choice [data-exec-field="rir"][data-value="2"]');
+    attendu(await page.evaluate(() => !document.querySelector('.f-field-error') && !document.querySelector('.is-missing')), 'le signalement ne disparaît pas après avoir choisi le RIR');
+    await toucher(page, '[data-action="exec-validate-set"]'); await wait(500);
+    s = await seanceDu(page, 'push-a');
+    const l2 = s.exercises[s.exerciseOrder?.[0] ?? Object.keys(s.exercises)[0]];
+    attendu(l2.sets[0].done && l2.sets[0].weightKg === 2 && l2.sets[0].reps === 7 && l2.sets[0].rir === 2 && l2.sets[0].pain === 1, 'série 1 mal enregistrée : ' + JSON.stringify(l2.sets[0]));
+    const apres = await page.evaluate(() => ({ chrono: !!document.querySelector('.timer-overlay'), pastilles: [...document.querySelectorAll('.f-set-steps li')].map((li) => li.className + ':' + li.textContent).join(), charge: window.__visible(document.querySelector('.exec-work [data-exec-field="weightKg"]')).ok }));
+    attendu(apres.chrono && apres.pastilles === 'is-done:✓,is-current:2,:3,:4' && apres.charge, 'après la série 1 : ' + JSON.stringify(apres));
+    // Annuler la séance (menu ⋯) puis recommencer : on repart bien de la série 1.
+    await toucher(page, '.timer-overlay [data-action="timer-skip"]');
+    await toucher(page, '.f-exec-menu');
+    await toucher(page, '.sheet [data-action="cancel-session"]'); await wait(600);
+    s = await seanceDu(page, 'push-a');
+    attendu(!s.startedAt && Object.values(s.exercises).every((x) => x.sets.every((z) => !z.done)), 'annulation incomplète');
+    if (!(await page.evaluate(() => !!document.querySelector('[data-action="start-session"]')))) await toucher(page, '[data-action="forge-open"][data-tab="training"]');
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await toucher(page, '[data-action="start-session"]');
+    await jusquASerie(page);
+    const relance = await page.evaluate(() => ({ serie: document.querySelector('.f-set-caption')?.firstChild?.textContent?.trim(), pastilles: [...document.querySelectorAll('.f-set-steps li')].map((li) => li.className + ':' + li.textContent).join(), bouton: document.querySelector('[data-action="exec-validate-set"]')?.textContent.trim() }));
+    attendu(relance.serie === 'Série 1 sur 4' && relance.pastilles === 'is-current:1,:2,:3,:4' && /série 1/.test(relance.bouton), 'après annulation : ' + JSON.stringify(relance));
+    return `arrivée : série 1 + RIR + valider visibles sans défiler ; RIR manquant signalé sur les cases (pas de bandeau) ; 2 kg × 7 · RIR 2 · douleur 1 enregistrés ; annulation → ${relance.serie}`;
+  });
+
+  await scenario('S34 Messages de fin de série dans le chrono, jamais par-dessus l’en-tête ; série suivante non coupée', async ({ page }) => {
+    await page.addStyleTag({ content: ':root{--safe-top:59px!important;--safe-bottom:34px!important}' });
+    await demarrer(page, 'push-a'); await jusquASerie(page);
+    await page.addStyleTag({ content: ':root{--safe-top:59px!important;--safe-bottom:34px!important}' });
+    await saisirEtValider(page, { kg: 15, reps: 12, rir: 1 }); await wait(400);
+    const v = await page.evaluate(() => ({
+      note: document.querySelector('.timer-overlay .f-timer-note')?.textContent ?? null,
+      bandeau: (() => { const t = document.querySelector('.toast'); return !!t && !t.classList.contains('hidden') && (t.textContent || '').trim().length > 0; })(),
+      entete: window.__visible(document.querySelector('.exec-day')).ok,
+      caption: window.__visible(document.querySelector('.f-set-caption')).ok,
+      charge: window.__visible(document.querySelector('.exec-work [data-exec-field="weightKg"]')).ok,
+    }));
+    attendu(/12 répétitions/.test(v.note ?? '') && !v.bandeau && v.entete && v.caption && v.charge, 'message ou série suivante mal placés : ' + JSON.stringify(v));
+    await toucher(page, '.timer-overlay [data-action="timer-skip"]');
+    attendu(await page.evaluate(() => !document.querySelector('.f-timer-note')), 'note restée après la fin du chrono');
+    return 'note « 12 répétitions… » dans le chrono, en-tête et série 2 visibles';
+  });
+
+  await scenario('S35 Relecture 3.6.4 : champ vidé jamais validé en douce, RIR touchable et large, champ manquant visible pendant le repos, douleur visible chrono réduit, paysage', async ({ page }) => {
+    const zones = () => page.addStyleTag({ content: ':root{--safe-top:59px!important;--safe-bottom:34px!important}' });
+    await demarrer(page, 'push-a'); await jusquASerie(page); await zones();
+    await page.evaluate(() => window.scrollTo(0, 0)); await wait(150);
+    // Cases RIR : ≥ 44 px de large et touchables jusque dans leur bas (le dégradé du bouton ne capte rien).
+    const cases = await page.evaluate(() => [...document.querySelectorAll('.f-rir-choice .chip-choice')].map((b) => Math.floor(b.getBoundingClientRect().width)));
+    attendu(cases.length === 7 && Math.min(...cases) >= 44, 'cases RIR trop étroites : ' + cases);
+    const bas = await page.evaluate(() => { const b = document.querySelector('.f-rir-choice [data-value="4"]'); const r = b.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.bottom - 3 }; });
+    await page.touchscreen.tap(bas.x, bas.y); await wait(250);
+    attendu(await page.evaluate(() => document.querySelector('.f-rir-choice [data-value="4"]').classList.contains('selected')), 'le bas de la case RIR ne répond pas au doigt');
+    // Série 1 : 15 × 8 (RIR 4 déjà choisi au doigt).
+    await page.fill('[data-exec-field="weightKg"]', '15'); await page.fill('[data-exec-field="reps"]', '8');
+    await toucher(page, '[data-action="exec-validate-set"]');
+    await toucher(page, '.timer-overlay [data-action="timer-skip"]');
+    // Série 2 : charge pré-remplie puis EFFACÉE → refus signalé, rien d'enregistré.
+    attendu(await page.evaluate(() => document.querySelector('[data-exec-field="weightKg"]').value !== ''), 'série 2 non pré-remplie (hypothèse du test)');
+    await page.fill('[data-exec-field="weightKg"]', ''); await page.fill('[data-exec-field="reps"]', '8');
+    await toucher(page, '.f-rir-choice [data-exec-field="rir"][data-value="2"]');
+    await toucher(page, '[data-action="exec-validate-set"]'); await wait(300);
+    let log = (await seanceDu(page, 'push-a')).exercises['push-a-incline-smith'];
+    const refus1 = await page.evaluate(() => ({ msg: document.querySelector('.f-field-error')?.textContent ?? null, vu: window.__visible(document.querySelector('.f-field-error')).ok }));
+    attendu(!log.sets[1].done && /charge/.test(refus1.msg ?? '') && refus1.vu, 'charge effacée validée quand même : ' + JSON.stringify({ set: log.sets[1], refus1 }));
+    // Répétitions tapées, refus faute de RIR, puis répétitions effacées → toujours refusé (pas l'ancienne valeur).
+    await page.fill('[data-exec-field="weightKg"]', '15'); await page.fill('[data-exec-field="reps"]', '9');
+    await page.evaluate(() => document.querySelectorAll('.f-rir-choice .chip-choice').forEach((b) => b.classList.remove('selected')));
+    await toucher(page, '[data-action="exec-validate-set"]'); await wait(200);
+    await page.fill('[data-exec-field="reps"]', '');
+    await toucher(page, '.f-rir-choice [data-exec-field="rir"][data-value="1"]');
+    await toucher(page, '[data-action="exec-validate-set"]'); await wait(300);
+    log = (await seanceDu(page, 'push-a')).exercises['push-a-incline-smith'];
+    attendu(!log.sets[1].done && /répétitions/.test(await page.evaluate(() => document.querySelector('.f-field-error')?.textContent ?? '')), 'répétitions effacées validées avec l’ancienne valeur : ' + JSON.stringify(log.sets[1]));
+    // Douleur 5 : message visible dans le chrono, même RÉDUIT.
+    await page.fill('[data-exec-field="reps"]', '8');
+    await toucher(page, '.exec-work .f-feedback-details > summary');
+    await toucher(page, '.exec-work [data-exec-field="pain"][data-value="5"]');
+    await toucher(page, '[data-action="exec-validate-set"]'); await wait(300);
+    await toucher(page, '.timer-overlay [data-action="forge-timer-toggle"]');
+    const douleur = await page.evaluate(() => { const n = [...document.querySelectorAll('.f-timer-note')].find((x) => /Douleur/.test(x.textContent)); return { vu: n ? window.__visible(n).ok : false, mini: !!document.querySelector('.f-timer.is-mini') }; });
+    attendu(douleur.mini && douleur.vu, 'alerte douleur invisible chrono réduit : ' + JSON.stringify(douleur));
+    await toucher(page, '.timer-overlay [data-action="forge-timer-toggle"]');
+    // Pendant le repos (chrono déployé) : RIR manquant → message et cases visibles au-dessus du chrono.
+    await page.fill('[data-exec-field="weightKg"]', '15'); await page.fill('[data-exec-field="reps"]', '8');
+    await page.evaluate(() => document.querySelectorAll('.f-rir-choice .chip-choice').forEach((b) => b.classList.remove('selected')));
+    await page.evaluate(() => document.querySelector('[data-action="exec-validate-set"]').scrollIntoView({ block: 'center' })); await wait(150);
+    await page.evaluate(() => document.querySelector('[data-action="exec-validate-set"]').click()); await wait(300);
+    const pendantRepos = await page.evaluate(() => ({ chrono: !!document.querySelector('.timer-overlay:not(.is-mini)'), msg: window.__visible(document.querySelector('.f-field-error')), casePremiere: window.__visible(document.querySelector('.f-rir-choice [data-value="0"]')).ok }));
+    attendu(pendantRepos.chrono && pendantRepos.msg.ok && pendantRepos.casePremiere, 'champ manquant caché par le chrono : ' + JSON.stringify(pendantRepos));
+    // Paysage : après validation, la série suivante reste à l'écran.
+    await page.setViewportSize({ width: 852, height: 393 }); await wait(400);
+    await toucher(page, '.timer-overlay [data-action="timer-skip"]').catch(() => {});
+    await page.evaluate(() => document.querySelector('.timer-overlay [data-action="timer-skip"]')?.click()); await wait(300);
+    await page.fill('[data-exec-field="weightKg"]', '15'); await page.fill('[data-exec-field="reps"]', '8');
+    await page.evaluate(() => { document.querySelector('.f-rir-choice [data-value="2"]').click(); document.querySelector('[data-action="exec-validate-set"]').scrollIntoView({ block: 'center' }); }); await wait(200);
+    await page.evaluate(() => document.querySelector('[data-action="exec-validate-set"]').click()); await wait(600);
+    await page.evaluate(() => document.querySelector('.timer-overlay [data-action="timer-skip"]')?.click()); await wait(500);
+    const paysage = await page.evaluate(() => ({ serie: document.querySelector('.f-set-caption')?.firstChild?.textContent?.trim(), charge: window.__visible(document.querySelector('[data-exec-field="weightKg"]')) }));
+    attendu(paysage.charge.ok || paysage.charge.raison?.startsWith('recouvert'), 'paysage : charge de la série suivante hors écran : ' + JSON.stringify(paysage));
+    attendu(paysage.charge.raison !== 'hors écran', 'paysage hors écran');
+    return `cases RIR ${Math.min(...cases)} px et touchables en bas ; charge effacée et répétitions effacées refusées sur place ; douleur visible chrono réduit ; RIR manquant visible pendant le repos ; paysage : ${paysage.serie} à l’écran`;
+  });
+
+  await scenario('S36 Relecture 3.6.4 (tour 2) : côté droit recadré après défilement, variante changée après le seul côté gauche = confirmation, gainage en secondes', async ({ page, setDialogues, dialoguesVus }) => {
+    const zones = () => page.addStyleTag({ content: ':root{--safe-top:59px!important;--safe-bottom:34px!important}' });
+    await demarrer(page, 'pull-a');
+    await page.evaluate(() => document.querySelector('[data-action="exec-skip-general-warmup"]').click()); await wait(450);
+    await passerActivations(page);
+    await toucher(page, '.f-exec-tools [data-action="exec-show-program"]');
+    await toucher(page, '[data-exercise-card="pull-a-unilateral"] [data-action="exercise-do-now"]');
+    await zones();
+    await page.fill('[data-exec-field="weightKg"]', '20'); await page.fill('[data-exec-field="reps"]', '12');
+    await toucher(page, '.f-rir-choice [data-exec-field="rir"][data-value="2"]');
+    // Julien descend jusqu'en bas (consigne, démonstration) puis valide le côté gauche.
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight)); await wait(200);
+    await toucher(page, '[data-action="exec-validate-set"]'); await wait(300);
+    const droit = await page.evaluate(() => ({ cote: document.querySelector('.exec-side')?.textContent, charge: window.__visible(document.querySelector('[data-exec-field="weightKg"]')), reps: window.__visible(document.querySelector('[data-exec-field="reps"]')), valeurs: [document.querySelector('[data-exec-field="weightKg"]').value, document.querySelector('[data-exec-field="reps"]').value] }));
+    attendu(/DROIT/.test(droit.cote ?? '') && droit.charge.ok && droit.reps.ok, 'côté droit : charge/répétitions reprises du gauche cachées : ' + JSON.stringify(droit));
+    // Pendant le changement de côté : changer de variante → confirmation demandée ; refus → le côté gauche est gardé.
+    await toucher(page, '.f-exec-tools [data-action="exec-show-program"]');
+    await toucher(page, '[data-exercise-card="pull-a-unilateral"] details.f-exercise-detail > summary');
+    const choix = await page.evaluate(() => [...document.querySelectorAll('[data-exercise-variant="pull-a-unilateral"] option')].map((o) => o.value));
+    const avantVus = dialoguesVus.length;
+    setDialogues('refuser');
+    const courante = await page.evaluate(() => document.querySelector('[data-exercise-variant="pull-a-unilateral"]').value);
+    await page.selectOption('[data-exercise-variant="pull-a-unilateral"]', choix.find((v) => v !== courante)); await wait(700);
+    setDialogues('accepter');
+    const s = await seanceDu(page, 'pull-a');
+    const l = s.exercises['pull-a-unilateral'];
+    attendu(dialoguesVus.length > avantVus && /côté déjà fait/.test(dialoguesVus.at(-1)) && l.variantId === courante && l.sets[0].sides?.left?.done && l.sets[0].sides.left.reps === 12, 'côté gauche effacé sans confirmation : ' + JSON.stringify({ vus: dialoguesVus.slice(avantVus), variante: l.variantId, set: l.sets[0] }));
+    // Acceptée pendant le changement de côté : variante changée, chrono de changement de côté fermé, aucune erreur.
+    const encoreChrono = (await seanceDu(page, 'pull-a')).activeTimer?.kind;
+    await page.selectOption('[data-exercise-variant="pull-a-unilateral"]', choix.find((v) => v !== courante)); await wait(900);
+    const s2 = await seanceDu(page, 'pull-a');
+    attendu(s2.exercises['pull-a-unilateral'].variantId !== courante && !s2.activeTimer && !s2.exercises['pull-a-unilateral'].sets[0].sides?.left?.done, 'changement accepté mal appliqué : ' + JSON.stringify({ encoreChrono, v: s2.exercises['pull-a-unilateral'].variantId, t: s2.activeTimer?.kind }));
+    return `côté droit : ${droit.valeurs.join(' kg × ')} visibles ; variante refusée → gauche 20 kg × 12 gardé ; message « ${dialoguesVus.at(-1).slice(0, 60)}… »`;
+  });
+
+  await scenario('S37 Gainage (secondes) : champ vide signalé en secondes, jamais en répétitions', async ({ page }) => {
+    await demarrer(page, 'legs-b');
+    await page.evaluate(() => document.querySelector('[data-action="exec-skip-general-warmup"]').click()); await wait(450);
+    await passerActivations(page);
+    await toucher(page, '.f-exec-tools [data-action="exec-show-program"]');
+    await toucher(page, '[data-exercise-card="legs-b-plank"] [data-action="exercise-do-now"]');
+    await toucher(page, '.f-rir-choice [data-exec-field="rir"][data-value="2"]');
+    await toucher(page, '[data-action="exec-validate-set"]'); await wait(300);
+    const msg = await page.evaluate(() => document.querySelector('.f-field-error')?.textContent ?? '');
+    attendu(/secondes/.test(msg) && !/répétitions/.test(msg), 'message gainage : ' + msg);
+    return msg;
+  });
+
+  await scenario('S38 Relecture 3.6.4 (tour 3) : bouton de chaque étape atteignable à l’arrivée, série 1 cadrée après les montées, bannière de mise à jour et bandeaux hors de la série et de l’en-tête', async ({ page }) => {
+    const zones = () => page.addStyleTag({ content: ':root{--safe-top:59px!important;--safe-bottom:34px!important}' });
+    const vis = (sel) => page.evaluate((x) => window.__visible(document.querySelector(x)), sel);
+    await demarrer(page, 'push-a'); await zones(); await wait(300);
+    const warm = await vis('[data-action="exec-start-general-warmup"]');
+    attendu(warm.ok, 'échauffement : DÉMARRER non atteignable à l’arrivée : ' + JSON.stringify(warm));
+    await page.evaluate(() => document.querySelector('[data-action="exec-skip-general-warmup"]').click()); await wait(600);
+    const act = await vis('[data-action="exec-validate-activation"]');
+    attendu(act.ok, 'activation : VALIDÉ non atteignable : ' + JSON.stringify(act));
+    await passerActivations(page); await zones();
+    await page.fill('[data-exec-field="weightKg"]', '60');
+    await toucher(page, '[data-action="exec-start-ramps"]'); await wait(300);
+    const rampe = await vis('[data-action="exec-validate-ramp"]');
+    attendu(rampe.ok, 'montée en charge : SÉRIE FAITE non atteignable à l’arrivée : ' + JSON.stringify(rampe));
+    for (let i = 0; i < 10; i++) {
+      if (await page.evaluate(() => !!document.querySelector('.timer-overlay [data-action="timer-skip"]'))) { await toucher(page, '.timer-overlay [data-action="timer-skip"]'); continue; }
+      if (!(await page.evaluate(() => !!document.querySelector('[data-action="exec-validate-ramp"]')))) break;
+      await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight)); await wait(150);
+      await toucher(page, '[data-action="exec-validate-ramp"]');
+    }
+    await page.evaluate(() => document.querySelector('.timer-overlay [data-action="timer-skip"]')?.click()); await wait(400);
+    const s1 = await page.evaluate(() => ({ serie: document.querySelector('.f-set-caption')?.firstChild?.textContent?.trim(), charge: window.__visible(document.querySelector('[data-exec-field="weightKg"]')), caption: window.__visible(document.querySelector('.f-set-caption')) }));
+    attendu(s1.serie === 'Série 1 sur 4' && s1.charge.ok && s1.caption.ok, 'série 1 après les montées : ' + JSON.stringify(s1));
+    // Mise à jour arrivée menu ⋯ déjà ouvert : la ligne « Mettre à jour » apparaît sans rouvrir le menu.
+    await toucher(page, '.f-exec-menu');
+    await page.evaluate(() => window.dispatchEvent(new Event('colosse-update'))); await wait(500);
+    attendu(await page.evaluate(() => window.__visible(document.querySelector('.sheet [data-action="reload-update"]')).ok), 'menu ouvert : « Mettre à jour » n’apparaît pas');
+    await toucher(page, '.sheet [data-action="exec-menu-close"]');
+    // Mise à jour disponible EN PLEINE SAISIE : rien ne bouge (WebKit n'ancre pas le défilement), rien n'est recouvert ;
+    // un point sur ⋯ et une ligne du menu permettent de mettre à jour quand on veut.
+    await page.fill('[data-exec-field="reps"]', '8'); await toucher(page, '.f-rir-choice [data-exec-field="rir"][data-value="2"]');
+    await toucher(page, '[data-action="exec-validate-set"]'); await wait(300);
+    await toucher(page, '.timer-overlay [data-action="timer-skip"]');
+    await page.addStyleTag({ content: 'html,body{overflow-anchor:none!important}' });
+    const position = () => page.evaluate(() => ({ y: scrollY, caption: Math.round(document.querySelector('.f-set-caption').getBoundingClientRect().top), rir: Math.round(document.querySelector('.f-rir-choice [data-value="2"]').getBoundingClientRect().top) }));
+    const avantMaj = await position();
+    await page.evaluate(() => window.dispatchEvent(new Event('colosse-update'))); await wait(500);
+    const apresMaj = await position();
+    // Recouvrement mesuré géométriquement : un bandeau en pointer-events:none échappe à elementFromPoint.
+    const maj = await page.evaluate(() => {
+      const couvre = (a, b) => !!a && !!b && a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+      const t = document.getElementById('toast'); const tr = t && !t.classList.contains('hidden') && getComputedStyle(t).opacity !== '0' && t.textContent.trim() ? t.getBoundingClientRect() : null;
+      const b = document.getElementById('update-banner'); const br = b && getComputedStyle(b).display !== 'none' && !b.classList.contains('hidden') ? b.getBoundingClientRect() : null;
+      const cibles = ['.f-set-caption', '.f-set-steps', '.exec-work .exec-fields', '.f-rir-choice', '.exec-header'].map((x) => document.querySelector(x)?.getBoundingClientRect());
+      return { point: document.querySelector('.f-exec-menu')?.classList.contains('has-update'), recouvert: cibles.some((c) => couvre(tr, c) || couvre(br, c)) };
+    });
+    attendu(JSON.stringify(avantMaj) === JSON.stringify(apresMaj) && maj.point && !maj.recouvert, 'mise à jour en pleine saisie : ' + JSON.stringify({ avantMaj, apresMaj, maj }));
+    await toucher(page, '.f-exec-menu');
+    attendu(await page.evaluate(() => window.__visible(document.querySelector('.sheet [data-action="reload-update"]')).ok), '« Mettre à jour » absent du menu ⋯');
+    await toucher(page, '.sheet [data-action="exec-menu-close"]');
+    // Un bandeau en mode guidé ne passe pas sur l’en-tête de séance.
+    const bandeau = await page.evaluate(() => { const t = document.getElementById('toast'); t.textContent = 'Essai'; t.className = 'toast info'; const r = t.getBoundingClientRect(); const h = document.querySelector('.exec-header').getBoundingClientRect(); return { haut: Math.round(r.top), basEntete: Math.round(h.bottom) }; });
+    attendu(bandeau.haut >= bandeau.basEntete, 'bandeau sur l’en-tête : ' + JSON.stringify(bandeau));
+    return 'DÉMARRER, VALIDÉ, SÉRIE FAITE atteignables à l’arrivée ; série 1 cadrée après les montées ; mise à jour en pleine saisie : rien ne bouge, point sur ⋯ et « Mettre à jour » dans le menu ; bandeau sous l’en-tête';
   });
 
   console.log('\nRESUME ' + JSON.stringify({ total: resultats.length, ok: resultats.filter((r) => r.ok).length }));
