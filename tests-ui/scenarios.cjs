@@ -1316,7 +1316,6 @@ async function scenario(nom, fn) {
     await toucher(page, '.f-exec-tools [data-action="exec-show-program"]');
     await toucher(page, '[data-exercise-card="pull-a-unilateral"] details.f-exercise-detail > summary');
     const choix = await page.evaluate(() => [...document.querySelectorAll('[data-exercise-variant="pull-a-unilateral"] option')].map((o) => o.value));
-    const autre = choix.find((v) => v !== (document.querySelector('[data-exercise-variant="pull-a-unilateral"]')?.value));
     const avantVus = dialoguesVus.length;
     setDialogues('refuser');
     const courante = await page.evaluate(() => document.querySelector('[data-exercise-variant="pull-a-unilateral"]').value);
@@ -1325,9 +1324,11 @@ async function scenario(nom, fn) {
     const s = await seanceDu(page, 'pull-a');
     const l = s.exercises['pull-a-unilateral'];
     attendu(dialoguesVus.length > avantVus && /côté déjà fait/.test(dialoguesVus.at(-1)) && l.variantId === courante && l.sets[0].sides?.left?.done && l.sets[0].sides.left.reps === 12, 'côté gauche effacé sans confirmation : ' + JSON.stringify({ vus: dialoguesVus.slice(avantVus), variante: l.variantId, set: l.sets[0] }));
-    // Gainage : champ en secondes vide → message en secondes.
-    await page.evaluate(() => document.querySelector('.timer-overlay [data-action="timer-skip"]')?.click()); await wait(300);
-    await toucher(page, '[data-exercise-card="pull-a-unilateral"] [data-action="exercise-do-now"]').catch(() => {});
+    // Acceptée pendant le changement de côté : variante changée, chrono de changement de côté fermé, aucune erreur.
+    const encoreChrono = (await seanceDu(page, 'pull-a')).activeTimer?.kind;
+    await page.selectOption('[data-exercise-variant="pull-a-unilateral"]', choix.find((v) => v !== courante)); await wait(900);
+    const s2 = await seanceDu(page, 'pull-a');
+    attendu(s2.exercises['pull-a-unilateral'].variantId !== courante && !s2.activeTimer && !s2.exercises['pull-a-unilateral'].sets[0].sides?.left?.done, 'changement accepté mal appliqué : ' + JSON.stringify({ encoreChrono, v: s2.exercises['pull-a-unilateral'].variantId, t: s2.activeTimer?.kind }));
     return `côté droit : ${droit.valeurs.join(' kg × ')} visibles ; variante refusée → gauche 20 kg × 12 gardé ; message « ${dialoguesVus.at(-1).slice(0, 60)}… »`;
   });
 
