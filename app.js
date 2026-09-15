@@ -1817,9 +1817,24 @@ export class ColosseApp {
             this.timerNote = null;
             return;
         }
+        // Le chrono de fin d'exercice affiche déjà « Ensuite : … » : pas de doublon.
+        const utiles = this.timer?.kind === 'transition' ? messages.filter((message) => message.type !== 'success') : messages;
         if (this.timer && !this.timerCollapsed && this.shouldRenderExecution()) {
-            this.timerNote = { key: this.timerNoteKey(), messages };
+            if (!utiles.length) {
+                this.timerNote = null;
+                return;
+            }
+            const note = { key: this.timerNoteKey(), messages: utiles };
+            this.timerNote = note;
             this.render();
+            // Comme un bandeau : la note disparaît après sa durée, pour ne pas agrandir le chrono tout le repos.
+            const duree = Math.max(...utiles.map((message) => message.duration ?? 3500));
+            window.setTimeout(() => {
+                if (this.timerNote !== note)
+                    return;
+                this.timerNote = null;
+                this.root.querySelectorAll('.f-timer-note').forEach((el) => el.remove());
+            }, duree);
             return;
         }
         this.timerNote = null;
@@ -1828,7 +1843,7 @@ export class ColosseApp {
     }
     renderTimerNote() {
         const note = this.timerNote;
-        if (!note || note.key !== this.timerNoteKey())
+        if (!note || note.key !== this.timerNoteKey() || !this.shouldRenderExecution())
             return '';
         return note.messages.map((message) => `<p class="f-timer-note ${message.type === 'error' ? 'is-error' : ''}" role="status">${escapeHtml(message.text)}</p>`).join('');
     }

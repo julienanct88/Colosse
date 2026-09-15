@@ -919,7 +919,7 @@ async function scenario(nom, fn) {
     await page.fill('[data-profile-field="programStartDate"]', jour);
     await page.evaluate(() => document.querySelector('[data-profile-field="programStartDate"]').dispatchEvent(new Event('change', { bubbles: true }))); await wait(800);
     const base = await lireBase(page);
-    const t = base.sessions.find((x) => x.id === '2026-08-31:pull-a'), c = base.sessions.find((x) => x.id === `${jour}:pull-a`);
+    const t = base.sessions.find((x) => x.id === '2026-08-31:pull-a'), c = base.sessions.find((x) => x.id === `${modele.date}:pull-a`);
     attendu(t.weekIndex === 3 && t.planWeekIndex === 3 && c.weekIndex === 1, 'réglage : ' + JSON.stringify({ t: t.weekIndex, c: c?.weekIndex }));
     return 'bandeau « Semaine 7 du programme · Décharge », carte « 2 × (décharge, au lieu de 3) », mode guidé « 2 séries au lieu de 3 » ; début changé → séance du jour semaine 1, séance terminée toujours semaine 3';
   });
