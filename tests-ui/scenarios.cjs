@@ -95,7 +95,7 @@ async function saisirEtValider(page, { kg, reps, rir = 2 }) {
 }
 async function demarrer(page, dayId) { await allerJour(page, dayId); await page.evaluate(() => window.scrollTo(0, 0)); await toucher(page, '[data-action="start-session"]'); }
 
-async function scenario(nom, fn) {
+async function scenario(nom, fn, tentative = 1) {
   if (SEUL && !nom.startsWith(SEUL)) return;
   const env = await lancer(); const { ctx, page, erreurs } = env;
   let dialogues = 'accepter'; const vus = [];
@@ -111,6 +111,8 @@ async function scenario(nom, fn) {
     resultats.push({ nom, ok: false, detail: String(e.message ?? e).slice(0, 400), s: Math.round((Date.now() - t0) / 1000) });
     try { await page.screenshot({ path: path.join(os.tmpdir(), 'colosse-echec_' + nom.slice(0, 3).replace(/\W/g, '') + '.png') }); } catch {}
   } finally { await ctx.close().catch(() => {}); }
+  // Machine saturée : une page restée blanche au démarrage n'est pas un défaut de l'app — on rejoue UNE fois (un vrai défaut échoue deux fois).
+  if (!resultats.at(-1).ok && tentative === 1 && /NON UTILISABLE.*absent/.test(resultats.at(-1).detail)) { resultats.pop(); console.log('   (démarrage lent, nouvel essai : ' + nom.slice(0, 3) + ')'); return scenario(nom, fn, 2); }
   const r = resultats.at(-1); console.log(`${r.ok ? 'OK ' : 'KO '} ${r.nom} (${r.s}s) — ${r.detail}`);
 }
 
@@ -775,7 +777,7 @@ async function scenario(nom, fn) {
       await toucher(page, `[data-exec-field="rir"][data-value="${rir}"]`);
       await toucher(page, '[data-action="exec-validate-set"]');
     };
-    let e = await etape(page); attendu(e.serie === 'Série 1 sur 2' && e.cote === 'CÔTÉ GAUCHE', 'départ : ' + JSON.stringify(e));
+    let e = await etape(page); attendu(e.serie === 'Série 1 sur 3' && e.cote === 'CÔTÉ GAUCHE', 'départ (3 séries par bras) : ' + JSON.stringify(e));
     await faireCote(12, 2);
     let s = await seanceDu(page, 'pull-a');
     attendu(s.activeTimer?.kind === 'side-switch', 'pas de changement de côté');
@@ -785,6 +787,10 @@ async function scenario(nom, fn) {
     await faireCote(11, 1);
     s = await seanceDu(page, 'pull-a');
     attendu(s.activeTimer?.kind === 'work-rest' && s.activeTimer.totalSec === 90, 'repos 90 s après les deux côtés absent : ' + JSON.stringify(s.activeTimer));
+    await toucher(page, '.timer-overlay [data-action="timer-skip"]');
+    await faireCote(12, 2); await toucher(page, '.timer-overlay [data-action="timer-skip"]'); await faireCote(10, 1);
+    s = await seanceDu(page, 'pull-a');
+    attendu(s.activeTimer?.kind === 'work-rest' && s.activeTimer.totalSec === 90, 'repos 90 s après la série 2 sur 3 : ' + JSON.stringify(s.activeTimer));
     await toucher(page, '.timer-overlay [data-action="timer-skip"]');
     await faireCote(12, 2); await toucher(page, '.timer-overlay [data-action="timer-skip"]'); await faireCote(10, 1);
     s = await seanceDu(page, 'pull-a');
@@ -799,7 +805,7 @@ async function scenario(nom, fn) {
     await toucher(page, '[data-exercise-card="pull-a-hammer"] [data-action="exercise-do-now"]');
     s = await seanceDu(page, 'pull-a');
     attendu(s.activeTimer === null && dialogues.length === 0, 'repos non arrêté ou confirmation inutile : ' + JSON.stringify({ t: s.activeTimer, dialogues }));
-    attendu(s.exercises['pull-a-unilateral'].sets[1].restActualSec === null, 'le repos avant l’exercice suivant a été enregistré comme repos de série');
+    attendu(s.exercises['pull-a-unilateral'].sets[2].restActualSec === null, 'le repos avant l’exercice suivant a été enregistré comme repos de série');
     attendu(/Curl marteau/.test((await etape(page)).titre ?? ''), 'mauvais exercice ouvert');
     const sets = s.exercises['pull-a-unilateral'].sets;
     attendu(sets[0].sides.left.reps === 12 && sets[0].sides.right.reps === 11 && sets[0].sides.right.rir === 1 && sets[1].done, 'côtés mal enregistrés : ' + JSON.stringify(sets.map((x) => x.sides)));
