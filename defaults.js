@@ -1,7 +1,7 @@
-import { defaultDayForDate, findDay, getExercisePlan } from './program.js';
+import { defaultDayForDate, findDay, getExercisePlan, SETS_REVISION } from './program.js';
 import { isoDate, uid } from './engine/math.js';
 import { trainingWeekIndex } from './engine/session.js';
-export const APP_VERSION = '3.6.4';
+export const APP_VERSION = '3.6.5';
 export const SCHEMA_VERSION = 7;
 export function defaultProfile(today = new Date()) {
     return {
@@ -75,6 +75,7 @@ export function makeSession(dayId, date, profile) {
         endedAt: null,
         notes: '',
         readiness: { energy: 3, fatigue: 2, sleepHours: null },
+        setsRevision: SETS_REVISION,
         exerciseOrder: day.exercises.map((exercise) => exercise.id),
         warmup: { general: { done: false, skipped: false, durationSec: 0 }, activation: {}, ramps: {} },
         execution: { active: false, stage: null, exerciseId: null, setIndex: null, side: null, stepKey: null, updatedAt: 0 },

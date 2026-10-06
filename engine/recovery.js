@@ -1,4 +1,4 @@
-import { findDay, getExercisePlan } from '../program.js';
+import { findDay, getExercisePlanForSession } from '../program.js';
 import { mean } from './math.js';
 import { summarizeSession } from './progression.js';
 export function analyzeRecovery(logs) {
@@ -23,7 +23,7 @@ function primarySessionScore(session) {
         const log = session.exercises[exercise.id];
         if (!log)
             return;
-        const plan = getExercisePlan(exercise, session.weekIndex);
+        const plan = getExercisePlanForSession(exercise, session);
         const summary = summarizeSession(log.sets, plan);
         if (summary.e1rm > 0)
             values.push(summary.e1rm);

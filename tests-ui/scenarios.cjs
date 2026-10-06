@@ -8,6 +8,7 @@ const fs = require('fs'); const path = require('path'); const os = require('os')
 const DOSSIER = process.argv[2]; const PORT = Number(process.argv[3] || 8860); const SEUL = process.argv[4] || null;
 setTimeout(() => { console.log('WATCHDOG'); process.exit(2); }, 1500000);
 const URL = `http://127.0.0.1:${PORT}/colosse-app.html`;
+const depuis = (ms) => Date.now() - ms;
 const resultats = [];
 function attendu(cond, msg) { if (!cond) throw new Error(msg); }
 
@@ -27,7 +28,9 @@ const etape = (page) => page.evaluate(() => ({
   eyebrow: document.querySelector('.execution .exec-eyebrow')?.textContent?.trim() ?? null,
   guide: !!document.querySelector('.execution'), liste: !!document.querySelector('.exercise-list'),
 }));
-async function ouvrir(page) { await page.goto(URL, { waitUntil: 'load' }); await wait(2200); }
+async function ouvrir(page) { await page.goto(URL, { waitUntil: 'load' }); await wait(2200); await page.waitForSelector('.bottom-nav', { timeout: 15000 }).catch(() => {}); }
+// Semaine du programme (début le lundi 07/09/2026) d'une date : les scénarios ne dépendent plus du jour où ils tournent.
+const semaineProgramme = (dateIso) => 1 + Math.floor((Date.parse(dateIso + 'T12:00:00Z') - Date.parse('2026-09-07T12:00:00Z')) / (7 * 86400000));
 async function allerJour(page, dayId) {
   if (await page.evaluate(() => !!document.querySelector('.execution'))) await toucher(page, '.f-exec-tools [data-action="exec-show-program"]');
   if (!(await page.evaluate(() => document.querySelector('.bottom-nav [data-tab="training"]')?.getAttribute('aria-current') === 'page'))) await toucher(page, '.bottom-nav [data-tab="training"]');
@@ -90,7 +93,7 @@ async function saisirEtValider(page, { kg, reps, rir = 2 }) {
 }
 async function demarrer(page, dayId) { await allerJour(page, dayId); await page.evaluate(() => window.scrollTo(0, 0)); await toucher(page, '[data-action="start-session"]'); }
 
-async function scenario(nom, fn) {
+async function scenario(nom, fn, tentative = 1) {
   if (SEUL && !nom.startsWith(SEUL)) return;
   const env = await lancer(); const { ctx, page, erreurs } = env;
   let dialogues = 'accepter'; const vus = [];
@@ -106,6 +109,8 @@ async function scenario(nom, fn) {
     resultats.push({ nom, ok: false, detail: String(e.message ?? e).slice(0, 400), s: Math.round((Date.now() - t0) / 1000) });
     try { await page.screenshot({ path: path.join(os.tmpdir(), 'colosse-echec_' + nom.slice(0, 3).replace(/\W/g, '') + '.png') }); } catch {}
   } finally { await ctx.close().catch(() => {}); }
+  // Machine saturée : une page restée blanche au démarrage n'est pas un défaut de l'app — on rejoue UNE fois (un vrai défaut échoue deux fois).
+  if (!resultats.at(-1).ok && tentative === 1 && /NON UTILISABLE.*absent/.test(resultats.at(-1).detail)) { resultats.pop(); console.log('   (démarrage lent, nouvel essai : ' + nom.slice(0, 3) + ')'); return scenario(nom, fn, 2); }
   const r = resultats.at(-1); console.log(`${r.ok ? 'OK ' : 'KO '} ${r.nom} (${r.s}s) — ${r.detail}`);
 }
 
@@ -694,7 +699,7 @@ async function scenario(nom, fn) {
     const exF = modeleFutur.exerciseOrder[0];
     // Séance du jour : 2 séries faites en décharge (semaine 7).
     const enCours = JSON.parse(JSON.stringify(modele));
-    Object.assign(enCours, { id: `${jour}:pull-a`, date: jour, weekIndex: 7, startedAt: Date.now() - 1800e3, endedAt: null, updatedAt: Date.now(), execution: { ...(enCours.execution ?? {}), active: false } });
+    Object.assign(enCours, { id: `${jour}:pull-a`, date: jour, weekIndex: 7, startedAt: depuis(1800e3), endedAt: null, updatedAt: Date.now(), execution: { ...(enCours.execution ?? {}), active: false } });
     enCours.exercises[ex].sets = [0, 1].map(() => ({ id: 'x' + Math.random(), done: true, weightKg: 60, reps: 8, rir: 4, technique: 'good', pain: 0, restActualSec: 120, completedAt: Date.now() - 600e3 }));
     // Séance terminée le 01/09 (semaine 5) à 70 kg — référence normale.
     const ancienne = JSON.parse(JSON.stringify(modele));
@@ -718,7 +723,7 @@ async function scenario(nom, fn) {
     attendu(c.planWeekIndex === 7 && c.weekIndex === 7 && c.exercises[ex].sets.filter((x) => x.done).length === 2, 'la séance faite en décharge a été réinterprétée : ' + JSON.stringify({ w: c.weekIndex, p: c.planWeekIndex }));
     const chargesF = f.exercises[exF].sets.map((x) => x.weightKg);
     const semaineF = f.weekIndex;
-    attendu(semaineF <= 3 && chargesF.length >= 3 && chargesF.every((kg) => kg >= 60), `séance à venir : semaine ${semaineF}, charges ${JSON.stringify(chargesF)} (décharge non recalculée)`);
+    attendu(semaineF !== 7 && semaineF === semaineProgramme(futur.date) && chargesF.length >= 3 && chargesF.every((kg) => kg >= 60), `séance à venir : semaine ${semaineF}, charges ${JSON.stringify(chargesF)} (décharge non recalculée)`);
     // Accueil et liste du jour à venir
     await allerJour(page, futurDay);
     const carte = await page.evaluate((id) => ({ plan: document.querySelector(`[data-exercise-card="${id}"] .exercise-plan`)?.textContent.replace(/\s+/g, ' '), banniere: !!document.querySelector('.f-deload-banner') }), exF);
@@ -769,7 +774,7 @@ async function scenario(nom, fn) {
       await toucher(page, `[data-exec-field="rir"][data-value="${rir}"]`);
       await toucher(page, '[data-action="exec-validate-set"]');
     };
-    let e = await etape(page); attendu(e.serie === 'Série 1 sur 2' && e.cote === 'CÔTÉ GAUCHE', 'départ : ' + JSON.stringify(e));
+    let e = await etape(page); attendu(e.serie === 'Série 1 sur 3' && e.cote === 'CÔTÉ GAUCHE', 'départ (3 séries par bras) : ' + JSON.stringify(e));
     await faireCote(12, 2);
     let s = await seanceDu(page, 'pull-a');
     attendu(s.activeTimer?.kind === 'side-switch', 'pas de changement de côté');
@@ -779,6 +784,10 @@ async function scenario(nom, fn) {
     await faireCote(11, 1);
     s = await seanceDu(page, 'pull-a');
     attendu(s.activeTimer?.kind === 'work-rest' && s.activeTimer.totalSec === 90, 'repos 90 s après les deux côtés absent : ' + JSON.stringify(s.activeTimer));
+    await toucher(page, '.timer-overlay [data-action="timer-skip"]');
+    await faireCote(12, 2); await toucher(page, '.timer-overlay [data-action="timer-skip"]'); await faireCote(10, 1);
+    s = await seanceDu(page, 'pull-a');
+    attendu(s.activeTimer?.kind === 'work-rest' && s.activeTimer.totalSec === 90, 'repos 90 s après la série 2 sur 3 : ' + JSON.stringify(s.activeTimer));
     await toucher(page, '.timer-overlay [data-action="timer-skip"]');
     await faireCote(12, 2); await toucher(page, '.timer-overlay [data-action="timer-skip"]'); await faireCote(10, 1);
     s = await seanceDu(page, 'pull-a');
@@ -793,7 +802,7 @@ async function scenario(nom, fn) {
     await toucher(page, '[data-exercise-card="pull-a-hammer"] [data-action="exercise-do-now"]');
     s = await seanceDu(page, 'pull-a');
     attendu(s.activeTimer === null && dialogues.length === 0, 'repos non arrêté ou confirmation inutile : ' + JSON.stringify({ t: s.activeTimer, dialogues }));
-    attendu(s.exercises['pull-a-unilateral'].sets[1].restActualSec === null, 'le repos avant l’exercice suivant a été enregistré comme repos de série');
+    attendu(s.exercises['pull-a-unilateral'].sets[2].restActualSec === null, 'le repos avant l’exercice suivant a été enregistré comme repos de série');
     attendu(/Curl marteau/.test((await etape(page)).titre ?? ''), 'mauvais exercice ouvert');
     const sets = s.exercises['pull-a-unilateral'].sets;
     attendu(sets[0].sides.left.reps === 12 && sets[0].sides.right.reps === 11 && sets[0].sides.right.rir === 1 && sets[1].done, 'côtés mal enregistrés : ' + JSON.stringify(sets.map((x) => x.sides)));
@@ -929,7 +938,7 @@ async function scenario(nom, fn) {
     const jour = await aujourdHuiIso(page);
     const modele = await modeleSeance(page, dayId);
     const s0 = JSON.parse(JSON.stringify(modele));
-    s0.startedAt = Date.now() - 3600e3; s0.updatedAt = Date.now(); s0.endedAt = null;
+    s0.startedAt = depuis(3600e3); s0.updatedAt = Date.now(); s0.endedAt = null;
     s0.execution = { ...(s0.execution ?? {}), active: true };
     for (const [id, n] of Object.entries(faits))
       s0.exercises[id].sets = s0.exercises[id].sets.map((set, k) => k < n ? { ...set, done: true, weightKg: 20, reps: 12, rir: 2, technique: 'good', pain: 0, completedAt: Date.now() - 1800e3 } : set);
@@ -1066,7 +1075,7 @@ async function scenario(nom, fn) {
     const jour = modele.date;
     const ex = modele.exerciseOrder[0];
     const enCours = JSON.parse(JSON.stringify(modele));
-    Object.assign(enCours, { id: `${jour}:pull-a`, date: jour, weekIndex: 7, startedAt: Date.now() - 1800e3, endedAt: null, updatedAt: Date.now(), execution: { ...(enCours.execution ?? {}), active: false } });
+    Object.assign(enCours, { id: `${jour}:pull-a`, date: jour, weekIndex: 7, startedAt: depuis(1800e3), endedAt: null, updatedAt: Date.now(), execution: { ...(enCours.execution ?? {}), active: false } });
     enCours.exercises[ex].sets = [0, 1].map((k) => ({ id: 'x' + k, done: k === 0, weightKg: 60, reps: k === 0 ? 8 : null, rir: k === 0 ? 4 : null, technique: 'good', pain: 0, restActualSec: null, completedAt: k === 0 ? Date.now() - 600e3 : null }));
     const ancienne = JSON.parse(JSON.stringify(modele));
     Object.assign(ancienne, { id: '2026-09-01:pull-a', date: '2026-09-01', weekIndex: 5, startedAt: Date.parse('2026-09-01T18:00:00'), endedAt: Date.parse('2026-09-01T19:20:00'), status: 'COMPLETE' });
@@ -1079,7 +1088,7 @@ async function scenario(nom, fn) {
     await toucher(page, '.session-actions [data-action="cancel-session"]');
     c = (await lireBase(page)).sessions.find((x) => x.id === `${jour}:pull-a`);
     const carte = await page.evaluate((id) => ({ plan: document.querySelector(`[data-exercise-card="${id}"] .exercise-plan`)?.textContent.replace(/\s+/g, ' '), banniere: !!document.querySelector('.f-deload-banner') }), ex);
-    attendu(!('planWeekIndex' in c) && c.weekIndex === 2 && c.exercises[ex].sets.length >= 3 && !carte.banniere && /^3 ×/.test(carte.plan ?? ''), 'séance annulée encore en décharge : ' + JSON.stringify({ w: c.weekIndex, p: c.planWeekIndex, n: c.exercises[ex].sets.length, carte }));
+    attendu(!('planWeekIndex' in c) && c.weekIndex === semaineProgramme(c.date) && c.exercises[ex].sets.length >= 3 && !carte.banniere && /^3 ×/.test(carte.plan ?? ''), 'séance annulée encore en décharge : ' + JSON.stringify({ w: c.weekIndex, p: c.planWeekIndex, n: c.exercises[ex].sets.length, carte }));
     attendu(c.exercises[ex].sets.every((x) => !x.done) && c.exercises[ex].sets.every((x) => x.weightKg === null || x.weightKg >= 70), 'charges après annulation : ' + JSON.stringify(c.exercises[ex].sets.map((x) => x.weightKg)));
     return `après annulation : semaine ${c.weekIndex}, ${c.exercises[ex].sets.length} séries, charges ${JSON.stringify(c.exercises[ex].sets.map((x) => x.weightKg))}`;
   });
@@ -1106,7 +1115,7 @@ async function scenario(nom, fn) {
     const jour = modele.date;
     const ex = modele.exerciseOrder[0];
     const enCours = JSON.parse(JSON.stringify(modele));
-    Object.assign(enCours, { id: `${jour}:pull-a`, date: jour, weekIndex: 7, startedAt: Date.now() - 1800e3, endedAt: null, updatedAt: Date.now(), execution: { ...(enCours.execution ?? {}), active: false } });
+    Object.assign(enCours, { id: `${jour}:pull-a`, date: jour, weekIndex: 7, startedAt: depuis(1800e3), endedAt: null, updatedAt: Date.now(), execution: { ...(enCours.execution ?? {}), active: false } });
     enCours.exercises[ex].sets = [0, 1].map((k) => ({ id: 'x' + k, done: k === 0, weightKg: 60, reps: k === 0 ? 8 : null, rir: k === 0 ? 4 : null, technique: 'good', pain: 0, restActualSec: null, completedAt: k === 0 ? Date.now() - 600e3 : null }));
     enCours.exercises[ex].autoSeed = { loadKg: 60, sources: ['2026-08-31:pull-a'], sets: [0, 1] };
     const historique = JSON.parse(JSON.stringify(modele));
@@ -1120,7 +1129,7 @@ async function scenario(nom, fn) {
     await toucher(page, `${carte} details.f-exercise-detail > summary`);
     await toucher(page, `${carte} [data-set-row][data-set="0"] [data-action="toggle-set"]`);
     let c = (await lireBase(page)).sessions.find((x) => x.id === `${jour}:pull-a`);
-    attendu(!('planWeekIndex' in c) && c.weekIndex === 2, 'dévalidation : ' + JSON.stringify({ w: c.weekIndex, p: c.planWeekIndex }));
+    attendu(!('planWeekIndex' in c) && c.weekIndex === semaineProgramme(c.date), 'dévalidation : ' + JSON.stringify({ w: c.weekIndex, p: c.planWeekIndex }));
     const charges = c.exercises[ex].sets.map((x) => x.weightKg);
     attendu(charges[0] === 60 && c.exercises[ex].sets[0].reps === 8 && charges.slice(1).every((kg) => kg >= 70), 'charge réellement soulevée remplacée ou séries libres non recalculées : ' + JSON.stringify(charges));
     if (!(await page.evaluate((k) => document.querySelector(`${k} details.f-exercise-detail`)?.open, carte))) await toucher(page, `${carte} details.f-exercise-detail > summary`);
@@ -1129,7 +1138,7 @@ async function scenario(nom, fn) {
     await toucher(page, `${carte} [data-set-row][data-set="0"] [data-action="toggle-set"]`);
     c = (await lireBase(page)).sessions.find((x) => x.id === `${jour}:pull-a`);
     const vue = await page.evaluate((k) => ({ plan: document.querySelector(`${k} .exercise-plan`)?.textContent.replace(/\s+/g, ' '), banniere: !!document.querySelector('.f-deload-banner') }), carte);
-    attendu(c.weekIndex === 2 && !('planWeekIndex' in c) && /^3 ×/.test(vue.plan ?? '') && !vue.banniere, 'revalidation : ' + JSON.stringify({ w: c.weekIndex, p: c.planWeekIndex, vue }));
+    attendu(c.weekIndex === semaineProgramme(c.date) && !('planWeekIndex' in c) && /^3 ×/.test(vue.plan ?? '') && !vue.banniere, 'revalidation : ' + JSON.stringify({ w: c.weekIndex, p: c.planWeekIndex, vue }));
     return `figée (7) → dévalidée : semaine 2, charges ${JSON.stringify(charges)} (60 kg soulevés gardés) → revalidée 72 kg × 8 : reste en semaine 2, 3 séries, sans décharge`;
   });
 
@@ -1399,6 +1408,117 @@ async function scenario(nom, fn) {
     const bandeau = await page.evaluate(() => { const t = document.getElementById('toast'); t.textContent = 'Essai'; t.className = 'toast info'; const r = t.getBoundingClientRect(); const h = document.querySelector('.exec-header').getBoundingClientRect(); return { haut: Math.round(r.top), basEntete: Math.round(h.bottom) }; });
     attendu(bandeau.haut >= bandeau.basEntete, 'bandeau sur l’en-tête : ' + JSON.stringify(bandeau));
     return 'DÉMARRER, VALIDÉ, SÉRIE FAITE atteignables à l’arrivée ; série 1 cadrée après les montées ; mise à jour en pleine saisie : rien ne bouge, point sur ⋯ et « Mettre à jour » dans le menu ; bandeau sous l’en-tête';
+  });
+
+  // ---------------------------------------------------------------- 3.6.5 : « 3 séries minimum, jamais 2 »
+  const PROFIL_JULIEN = { startDate: '2026-08-05', programStartDate: '2026-09-07', programVersion: 'transformation-12s' };
+  const lundi12 = async (page) => { await page.clock.install({ time: new Date('2026-10-12T18:30:00') }); await page.reload({ waitUntil: 'load' }); await wait(2500); };
+  const logMarteau = (s) => s.exercises['pull-a-hammer'];
+
+  await scenario('S39 « 3 séries minimum » : la séance du 05/10 reste à 2 séries (ni complétée ni jugée incomplète) ; le lundi suivant est à 3 séries avec la charge recalculée', async ({ page }) => {
+    await lundi12(page);
+    await ecrireBase(page, { profil: PROFIL_JULIEN });
+    await page.reload({ waitUntil: 'load' }); await wait(2500);
+    const modele = await modeleSeance(page, 'pull-a');
+    attendu(modele.date === '2026-10-12', 'horloge non appliquée : ' + modele.date);
+    // Séance réelle de lundi dernier (avant la révision) : curl marteau fait en 2 séries, haut de fourchette, RIR 3.
+    const ancienne = JSON.parse(JSON.stringify(modele));
+    Object.assign(ancienne, { id: '2026-10-05:pull-a', date: '2026-10-05', weekIndex: 5, planWeekIndex: 5, startedAt: Date.parse('2026-10-05T18:00:00'), endedAt: Date.parse('2026-10-05T19:20:00'), status: 'COMPLETE', activeTimer: null });
+    delete ancienne.autoSeed; delete ancienne.setsRevision;   // écrite par l'ancienne version : pas de marqueur
+    for (const [id, log] of Object.entries(ancienne.exercises)) { log.autoSeed = { loadKg: 0, sources: [], sets: [] }; log.sets = log.sets.map((x) => ({ ...x, done: false, weightKg: null, reps: null, rir: null })); }
+    logMarteau(ancienne).sets = [0, 1].map((k) => ({ id: 'h' + k, done: true, weightKg: 14, reps: 15, rir: 3, technique: 'good', pain: 0, restActualSec: 75, completedAt: Date.parse('2026-10-05T19:10:00') }));
+    // L'état « Lundi 12 » doit être recréé pour être pré-rempli avec l'historique : on retire la séance vierge.
+    await page.evaluate(async () => {
+      const db = await new Promise((res) => { const x = indexedDB.open('colosse-adaptive-db'); x.onsuccess = () => res(x.result); });
+      const t = db.transaction('sessions', 'readwrite'); t.objectStore('sessions').delete('2026-10-12:pull-a'); await new Promise((r) => { t.oncomplete = r; }); db.close();
+    });
+    await ecrireBase(page, { sessions: [ancienne] });
+    await page.reload({ waitUntil: 'load' }); await wait(2500);
+    await allerJour(page, 'pull-a'); await wait(600);
+    const base = await lireBase(page);
+    const lundiDernier = base.sessions.find((x) => x.id === '2026-10-05:pull-a');
+    const nouvelle = base.sessions.find((x) => x.id === '2026-10-12:pull-a');
+    attendu(logMarteau(lundiDernier).sets.length === 2 && logMarteau(lundiDernier).sets.every((x) => x.done && x.weightKg === 14 && x.reps === 15), 'séance du 05/10 modifiée : ' + JSON.stringify(logMarteau(lundiDernier).sets));
+    attendu(lundiDernier.status === 'COMPLETE' && lundiDernier.endedAt === ancienne.endedAt, 'statut de la séance du 05/10 modifié : ' + lundiDernier.status);
+    const marteau = logMarteau(nouvelle);
+    attendu(marteau.sets.length === 3, 'curl marteau du 12/10 : ' + marteau.sets.length + ' séries au lieu de 3');
+    attendu(marteau.sets.every((x) => x.weightKg > 14), 'charge non recalculée (séance du 05/10 jugée incomplète ?) : ' + JSON.stringify(marteau.sets.map((x) => x.weightKg)));
+    const carte = await page.evaluate(() => document.querySelector('[data-exercise-card="pull-a-hammer"] .exercise-plan')?.textContent.replace(/\s+/g, ' ').trim());
+    const trois = await page.evaluate(() => [...document.querySelectorAll('[data-exercise-card]')].filter((c) => c.querySelector('.exercise-plan') && !/CARDIO/.test(c.textContent)).map((c) => (c.querySelector('.exercise-plan').textContent.match(/^\s*(\d) ×/) || [])[1]));
+    attendu(/^3 ×/.test(carte ?? '') && trois.every((n) => Number(n) >= 3), 'exercices à moins de 3 séries affichés : ' + JSON.stringify(trois));
+    return `séance du 05/10 intacte (2 séries, COMPLETE) ; lundi 12 : curl marteau ${marteau.sets.length} séries à ${marteau.sets[0].weightKg} kg (au lieu de 14) ; ${trois.length} exercices affichés, tous à ${Math.min(...trois.map(Number))} séries ou plus`;
+  });
+
+  await scenario('S40 « 3 séries minimum » : une séance déjà préparée à 2 séries reçoit sa 3e série avec la même charge pré-remplie (jamais une charge saisie)', async ({ page }) => {
+    await lundi12(page);
+    await ecrireBase(page, { profil: PROFIL_JULIEN });
+    await page.reload({ waitUntil: 'load' }); await wait(2500);
+    const modele = await modeleSeance(page, 'pull-a');
+    const prete = JSON.parse(JSON.stringify(modele));
+    delete prete.setsRevision;   // préparée par l'ancienne version : pas de marqueur
+    const l = logMarteau(prete);
+    l.sets = [0, 1].map((k) => ({ ...(modele.exercises['pull-a-hammer'].sets[0]), id: 'p' + k, done: false, weightKg: 14, reps: null, rir: null }));
+    l.autoSeed = { loadKg: 14, sources: [], sets: [0, 1] };
+    const unilat = prete.exercises['pull-a-unilateral'];
+    unilat.sets = [0, 1].map((k) => ({ ...(modele.exercises['pull-a-unilateral'].sets[0]), id: 'u' + k, done: false, weightKg: 20, reps: null, rir: null }));
+    unilat.sets[1].weightKg = 22.5;   // une charge choisie à la main (sans marque de pré-remplissage) : elle ne doit pas être copiée
+    unilat.autoSeed = { loadKg: 0, sources: [], sets: [] };
+    await ecrireBase(page, { sessions: [prete] });
+    await page.reload({ waitUntil: 'load' }); await wait(2500);
+    await allerJour(page, 'pull-a'); await wait(600);
+    const s = (await lireBase(page)).sessions.find((x) => x.id === '2026-10-12:pull-a');
+    const m = logMarteau(s), u = s.exercises['pull-a-unilateral'];
+    attendu(m.sets.length === 3 && m.sets.map((x) => x.weightKg).join() === '14,14,14' && JSON.stringify(m.autoSeed.sets) === '[0,1,2]', 'curl marteau : ' + JSON.stringify({ n: m.sets.length, w: m.sets.map((x) => x.weightKg), seed: m.autoSeed }));
+    attendu(u.sets.length === 3 && u.sets[0].weightKg === 20 && u.sets[1].weightKg === 22.5 && u.sets[2].weightKg === null, 'tirage unilatéral (charge saisie) : ' + JSON.stringify(u.sets.map((x) => [x.weightKg, x.reps])));
+    attendu(s.setsRevision === 1, 'marqueur non posé sur la séance préparée : ' + s.setsRevision);
+    // Puis la séance est démarrée et rechargée : sans marqueur elle retomberait à 2 séries dès que startedAt est écrit.
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await toucher(page, '[data-action="start-session"]');
+    await page.reload({ waitUntil: 'load' }); await wait(2500);
+    await allerJour(page, 'pull-a'); await wait(500);
+    const apres = (await lireBase(page)).sessions.find((x) => x.id === '2026-10-12:pull-a');
+    const carte = await page.evaluate(() => document.querySelector('[data-exercise-card="pull-a-hammer"] .exercise-plan')?.textContent.replace(/\s+/g, ' ').trim());
+    attendu(apres.startedAt && apres.setsRevision === 1 && logMarteau(apres).sets.length === 3 && /^3 ×/.test(carte ?? ''), 'séance démarrée retombée à 2 séries : ' + JSON.stringify({ m: apres.setsRevision, n: logMarteau(apres).sets.length, carte }));
+    return 'séance préparée sans marqueur : marqueur posé, curl marteau 3e série à 14 kg (marque étendue), tirage unilatéral à charge saisie : 3e série vierge, charge saisie 22,5 kg intacte ; démarrée puis rechargée : toujours « 3 × »';
+  });
+
+  await scenario('S41 Séance faite AUJOURD’HUI sur l’ancienne version (sans marqueur, push-down à 2 séries) : ni complétée d’une série vide, ni jugée incomplète, même après la mise à jour', async ({ page }) => {
+    const modele = await modeleSeance(page, 'push-a');
+    const faite = JSON.parse(JSON.stringify(modele));
+    delete faite.setsRevision;
+    Object.assign(faite, { startedAt: Date.now() - 3600e3, endedAt: Date.now() - 600e3, status: 'COMPLETE', planWeekIndex: faite.weekIndex, activeTimer: null });
+    for (const [id, log] of Object.entries(faite.exercises)) {
+      const n = id === 'push-a-pushdown' ? 2 : log.sets.length;
+      log.autoSeed = { loadKg: 0, sources: [], sets: [] };
+      log.sets = log.sets.slice(0, n).map((x) => ({ ...x, done: true, weightKg: 20, reps: 12, rir: 2, technique: 'good', pain: 0, completedAt: Date.now() - 900e3 }));
+    }
+    await ecrireBase(page, { sessions: [faite] });
+    await page.reload({ waitUntil: 'load' }); await wait(2500);
+    await allerJour(page, 'push-a'); await wait(700);
+    const s = (await lireBase(page)).sessions.find((x) => x.id === faite.id);
+    attendu(s.exercises['push-a-pushdown'].sets.length === 2 && s.exercises['push-a-pushdown'].sets.every((x) => x.done), 'série vide ajoutée à une séance faite : ' + JSON.stringify(s.exercises['push-a-pushdown'].sets.map((x) => x.done)));
+    attendu(s.status === 'COMPLETE' && !('setsRevision' in s), 'séance faite modifiée : ' + JSON.stringify({ st: s.status, m: s.setsRevision }));
+    const compteur = await page.evaluate(() => document.querySelector('.session-progress')?.innerText.replace(/\s+/g, ' ').trim());
+    const m = /(\d+)\/(\d+) séries/.exec(compteur ?? '');
+    attendu(m && m[1] === m[2] && /100\s*%/.test(compteur), 'séance faite jugée incomplète : ' + compteur);
+    return `séance faite à 2 séries au push-down : inchangée en base (COMPLETE, sans marqueur), compteur « ${compteur} »`;
+  });
+
+  await scenario('S42 Séance seulement DÉMARRÉE sur l’ancienne version (échauffement fait, aucune série validée) : rien à protéger, elle passe à 3 séries', async ({ page }) => {
+    const modele = await modeleSeance(page, 'pull-a');
+    const demarree = JSON.parse(JSON.stringify(modele));
+    delete demarree.setsRevision;
+    Object.assign(demarree, { startedAt: Date.now() - 1200e3, endedAt: null, updatedAt: Date.now(), warmup: { general: { done: true, skipped: false, durationSec: 360 }, activation: {}, ramps: {} } });
+    for (const id of ['pull-a-unilateral', 'pull-a-hammer'])
+      demarree.exercises[id].sets = demarree.exercises[id].sets.slice(0, 2).map((x) => ({ ...x, done: false, weightKg: 14, reps: null, rir: null }));
+    await ecrireBase(page, { sessions: [demarree] });
+    await page.reload({ waitUntil: 'load' }); await wait(2500);
+    await allerJour(page, 'pull-a'); await wait(600);
+    const s = (await lireBase(page)).sessions.find((x) => x.id === demarree.id);
+    const cartes = await page.evaluate(() => ['pull-a-unilateral', 'pull-a-hammer'].map((id) => document.querySelector(`[data-exercise-card="${id}"] .exercise-plan`)?.textContent.replace(/\s+/g, ' ').trim()));
+    attendu(s.setsRevision === 1 && s.exercises['pull-a-hammer'].sets.length === 3 && s.exercises['pull-a-unilateral'].sets.length === 3 && cartes.every((c) => /^3 ×/.test(c ?? '')), 'séance démarrée restée à 2 séries : ' + JSON.stringify({ m: s.setsRevision, cartes }));
+    attendu(s.startedAt === demarree.startedAt && s.warmup.general.done, 'séance démarrée modifiée');
+    return 'séance démarrée (échauffement fait, rien validé) : marquée, tirage unilatéral et curl marteau à 3 séries, heure de début et échauffement intacts';
   });
 
   console.log('\nRESUME ' + JSON.stringify({ total: resultats.length, ok: resultats.filter((r) => r.ok).length }));

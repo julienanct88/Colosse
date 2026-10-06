@@ -36,6 +36,8 @@ async function lancer(profil) {
 }
 // Clic « au doigt » : l'élément doit être réellement visible, sinon échec explicite.
 async function toucher(page, selecteur, { index = 0 } = {}) {
+  // Démarrage lent de l'app (machine chargée) : on attend la présence de l'élément avant de le juger absent.
+  await page.waitForSelector(selecteur, { state: 'attached', timeout: 8000 }).catch(() => {});
   const res = await page.evaluate(({ s, i }) => { const el = [...document.querySelectorAll(s)][i]; const v = window.__atteindre(el); return { v, texte: el?.textContent?.replace(/\s+/g, ' ').trim().slice(0, 60) }; }, { s: selecteur, i: index });
   await wait(150);
   const v2 = await page.evaluate(({ s, i }) => window.__visible([...document.querySelectorAll(s)][i]), { s: selecteur, i: index });

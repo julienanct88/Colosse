@@ -2,6 +2,7 @@
 // Fonctions de RENDU pures : elles reçoivent l'étape et renvoient du HTML.
 import { escapeHtml, formatClock } from './templates.js';
 import { STAGES } from '../engine/execution.js';
+import { regularSetsForSession } from '../program.js';
 import { GENERAL_WARMUP, WARMUP_EQUIPMENT, resolveWarmupEquipment } from '../engine/warmup.js';
 import { formatSeconds } from '../engine/session.js';
 import { icon, demoSearch, renderDemoButton, variantDisplay, normalizeSearch } from './forge.js';
@@ -182,7 +183,7 @@ function renderWorkSet(step, ctx) {
     <div class="f-work-kicker">EXERCICE ${String(position).padStart(2,'0')} / ${String(order.length).padStart(2,'0')}<span>${doneCount}/${totalSets} séries validées</span></div>
     <h2 class="exec-title">${escapeHtml(exercise.name)}</h2>
     <p class="f-work-variant">${escapeHtml(step.variant ? variantText(step.variant) : 'Variante du programme')}${needsLoad ? '' : ' · poids du corps'}</p>
-    ${plan.deload && Number(exercise.sets) > totalSets ? `<p class="f-deload-inline">Semaine de décharge : ${totalSets} série${totalSets > 1 ? 's' : ''} au lieu de ${exercise.sets}, charges allégées.</p>` : ''}
+    ${plan.deload && regularSetsForSession(exercise, ctx.session) > totalSets ? `<p class="f-deload-inline">Semaine de décharge : ${totalSets} série${totalSets > 1 ? 's' : ''} au lieu de ${regularSetsForSession(exercise, ctx.session)}, charges allégées.</p>` : ''}
     ${step.rampOffer ? `<div class="f-ramp-offer"><span>Échauffement conseillé\u00a0: ${step.rampOffer.count} séries légères<small>calculées sur ta charge</small></span><button type="button" class="ghost-button" data-action="exec-start-ramps" data-exercise="${exercise.id}">Faire l’échauffement</button></div>` : ''}
     ${side ? `<div class="exec-side ${side}">${side === 'left' ? 'CÔTÉ GAUCHE' : 'CÔTÉ DROIT'}</div>` : ''}
     ${side === 'right' && log?.sets?.[setIndex]?.sides?.left?.done ? `<p class="f-side-summary">✓ Gauche fait\u00a0: ${escapeHtml(String(log.sets[setIndex].sides.left.weightKg ?? 0))} kg × ${escapeHtml(String(log.sets[setIndex].sides.left.reps ?? '?'))}</p>` : ''}

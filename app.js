@@ -3,7 +3,7 @@ import { renderForgeHeader, renderForgeNav, renderForgeHome, renderForgeTools, n
 import { draftKey, readDraft, saveDraft, removeDraft, pruneStoredDrafts, removeSessionDrafts } from './ui/drafts.js';
 import { APP_VERSION, defaultSnapshot, emptyDailyLog, makeExerciseLog, makeSession, makeSet, } from './defaults.js';
 import { clearAllData, deleteSession, loadSnapshot, saveAdjustment, saveDailyLog, saveProfile, saveSession, saveSettings, saveSnapshot, storageMode, } from './data/database.js';
-import { defaultDayForDate, findDay, findExercise, getExercisePlan, getTrainingPhase, TRAINING_DAYS, STRENGTH_DAYS } from './program.js';
+import { defaultDayForDate, findDay, findExercise, getExercisePlan, getExercisePlanForSession, markSetsRevision, regularSetsForSession, getTrainingPhase, TRAINING_DAYS, STRENGTH_DAYS } from './program.js';
 import { nextPrescription, prescriptionFromHistory, suggestNextSet, summarizeSession, } from './engine/progression.js';
 import { estimateSessionDuration, remainingSessionSeconds, } from './engine/duration.js';
 import { aggregateSides, currentSide, bothSidesDone, countSessionSets, isSessionComplete as isSessionCompletePure, countCompletedStrengthSessions, weekdayOffset, targetRirForSet, isSetValid, countsForHistory, finishStatus, formatSeconds, closeSession, trainingWeekIndex, sessionWeekIndex, migrateProgramStart, hasValidatedWork, cancelSessionSummary, cancelSessionMessage, cancelSession, canCancelSession, seededSetIndices, legacySeededSetIndices, withoutSeedMark, resetExerciseLogForVariant, timedExerciseStatus, timedExerciseActions, timedStopRequest, } from './engine/session.js';
@@ -148,8 +148,8 @@ export class ColosseApp {
             const log = session.exercises?.[exercise.id];
             if (!log)
                 continue;
-            const oldPlan = getExercisePlan(exercise, oldWeek);
-            const newPlan = getExercisePlan(exercise, session.weekIndex);
+            const oldPlan = getExercisePlanForSession(exercise, session, oldWeek);
+            const newPlan = getExercisePlanForSession(exercise, session, session.weekIndex);
             if (oldPlan.deload === newPlan.deload && oldPlan.sets === newPlan.sets)
                 continue;
             // Série « libre » = jamais utilisée : ni validée, ni côté fait, ni répétitions ou ressenti saisis.
@@ -200,7 +200,7 @@ export class ColosseApp {
         }
         const day = findDay(session.dayId);
         const weekIndex = sessionWeekIndex(session, this.snapshot.profile);
-        const count = countSessionSets(session, day, (exercise) => getExercisePlan(exercise, weekIndex));
+        const count = countSessionSets(session, day, (exercise) => getExercisePlanForSession(exercise, session, weekIndex));
         const outcome = finishStatus(count);
         const closed = closeSession({ ...session, weekIndex, execution: this.execState(session) }, { now: Date.now(), status: outcome.status });
         this.replaceSession(closed);
@@ -295,6 +295,7 @@ export class ColosseApp {
         await saveSession(context.session);
     }
     syncSession(session, day, weekIndex) {
+        markSetsRevision(session);
         session.weekIndex = weekIndex;
         session.exerciseOrder = pickSessionOrder({
             sessionOrder: Array.isArray(session.exerciseOrder) ? session.exerciseOrder : [],
@@ -303,7 +304,7 @@ export class ColosseApp {
             day,
         });
         day.exercises.forEach((exercise) => {
-            const plan = getExercisePlan(exercise, weekIndex);
+            const plan = getExercisePlanForSession(exercise, session, weekIndex);
             let log = session.exercises[exercise.id];
             if (!log) {
                 log = makeExerciseLog(exercise.id, exercise.variants[0].id, plan.sets);
@@ -311,8 +312,19 @@ export class ColosseApp {
             }
             if (!exercise.variants.some((variant) => variant.id === log.variantId))
                 log.variantId = exercise.variants[0].id;
-            while (log.sets.length < plan.sets)
-                log.sets.push(makeSet());
+            while (log.sets.length < plan.sets) {
+                // Série ajoutée par une révision du programme : elle reprend la charge PRÉ-REMPLIE des autres séries
+                // (jamais une charge saisie ou soulevée) et suit la même marque de pré-remplissage.
+                const ajoutee = makeSet();
+                const precedente = log.sets[log.sets.length - 1];
+                const marque = log.autoSeed;
+                if (marque && Array.isArray(marque.sets) && marque.loadKg > 0 && precedente && !precedente.done
+                    && marque.sets.includes(log.sets.length - 1) && precedente.weightKg === marque.loadKg) {
+                    ajoutee.weightKg = marque.loadKg;
+                    marque.sets.push(log.sets.length);
+                }
+                log.sets.push(ajoutee);
+            }
             log.sets.forEach((set) => {
                 if (set.technique !== 'good' && set.technique !== 'degraded' && set.technique !== null)
                     set.technique = null;
@@ -331,7 +343,7 @@ export class ColosseApp {
         const recoveryAlert = analyzeRecovery(this.snapshot.dailyLogs).alert;
         day.exercises.forEach((exercise) => {
             const log = session.exercises[exercise.id];
-            const plan = getExercisePlan(exercise, weekIndex);
+            const plan = getExercisePlanForSession(exercise, session, weekIndex);
             if (!log || log.sets.some((set) => set.done || set.weightKg !== null || set.reps !== null))
                 return;
             const variant = exercise.variants.find((item) => item.id === log.variantId) ?? exercise.variants[0];
@@ -361,28 +373,28 @@ export class ColosseApp {
                     date: session.date,
                     weekIndex: session.weekIndex,
                     sets: log.sets,
-                    plan: getExercisePlan(exercise, session.weekIndex),
+                    plan: getExercisePlanForSession(exercise, session),
                     variantId,
                 }];
         });
     }
     prescriptionFor(context, exercise, log) {
-        const plan = getExercisePlan(exercise, context.weekIndex);
+        const plan = getExercisePlanForSession(exercise, context.session, context.weekIndex);
         const variant = exercise.variants.find((item) => item.id === log.variantId) ?? exercise.variants[0];
         const history = this.exerciseHistory(exercise.id, log.variantId, context.date, context.session.id);
         return prescriptionFromHistory(history, plan, exercise, variant.incrementKg, analyzeRecovery(this.snapshot.dailyLogs).alert);
     }
     activeSetCount(session, day) {
-        return countSessionSets(session, day, (exercise) => getExercisePlan(exercise, session.weekIndex));
+        return countSessionSets(session, day, (exercise) => getExercisePlanForSession(exercise, session));
     }
     isSessionComplete(session, day) {
-        return isSessionCompletePure(session, day, (exercise) => getExercisePlan(exercise, session.weekIndex));
+        return isSessionCompletePure(session, day, (exercise) => getExercisePlanForSession(exercise, session));
     }
     completedWeekSessions() {
         return countCompletedStrengthSessions(STRENGTH_DAYS, (day) => {
             const date = this.dayDate(day);
             return this.snapshot.sessions.find((item) => item.id === `${date}:${day.id}`);
-        }, (exercise, session) => getExercisePlan(exercise, session.weekIndex));
+        }, (exercise, session) => getExercisePlanForSession(exercise, session));
     }
     captureForgeForm() {
         const form = this.root.querySelector('[data-forge-step]');
@@ -523,7 +535,7 @@ export class ColosseApp {
     }
     executionContext() {
         const context = this.currentContext();
-        const resolvePlan = (exercise) => getExercisePlan(exercise, context.weekIndex);
+        const resolvePlan = (exercise) => getExercisePlanForSession(exercise, context.session, context.weekIndex);
         const step = computeExecutionStep({ day: context.day, session: context.session, resolvePlan });
         const progress = executionProgress({ day: context.day, session: context.session, resolvePlan });
         return { context, resolvePlan, step, progress };
@@ -597,21 +609,21 @@ export class ColosseApp {
         const orderedExercises = this.orderedExercises(context.day, context.session);
         const phase = getTrainingPhase(context.weekIndex);
         const target = weeklyTargets(this.snapshot.profile, 1, weekIndexFromStart(this.snapshot.profile.startDate, context.date))[0];
-        const planned = estimateSessionDuration(context.day, (exercise) => getExercisePlan(exercise, context.weekIndex));
+        const planned = estimateSessionDuration(context.day, (exercise) => getExercisePlanForSession(exercise, context.session, context.weekIndex));
         const setCount = this.activeSetCount(context.session, context.day);
         const progress = setCount.total ? Math.round((setCount.done / setCount.total) * 100) : 0;
         const skippedCount = context.day.exercises.filter((exercise) => context.session.exercises[exercise.id]?.skipped).length;
         const elapsed = sessionDurationSeconds(context.session);
         const completedCounts = {};
         orderedExercises.forEach((exercise) => {
-            const plan = getExercisePlan(exercise, context.weekIndex);
+            const plan = getExercisePlanForSession(exercise, context.session, context.weekIndex);
             const log = context.session.exercises[exercise.id];
             completedCounts[exercise.id] = log?.skipped ? 0 : (log?.sets.slice(0, plan.sets).filter((set) => set.done).length ?? 0);
         });
-        const remaining = remainingSessionSeconds(context.day, (exercise) => getExercisePlan(exercise, context.weekIndex), completedCounts);
+        const remaining = remainingSessionSeconds(context.day, (exercise) => getExercisePlanForSession(exercise, context.session, context.weekIndex), completedCounts);
         const projected = context.session.startedAt ? elapsed + remaining : planned.seconds;
                 const complete = this.isSessionComplete(context.session, context.day);
-        const nextPendingId = context.session.endedAt ? null : (orderedExercises.find((exercise) => isExercisePending(exercise, context.session.exercises[exercise.id], getExercisePlan(exercise, context.weekIndex)))?.id ?? null);
+        const nextPendingId = context.session.endedAt ? null : (orderedExercises.find((exercise) => isExercisePending(exercise, context.session.exercises[exercise.id], getExercisePlanForSession(exercise, context.session, context.weekIndex)))?.id ?? null);
         const executing = this.execState(context.session).active && !context.session.endedAt;
         return `
       <details class="f-program-phase" data-forge-detail="phase-plan">
@@ -694,7 +706,7 @@ export class ColosseApp {
         if (exercise.kind === 'cardio')
             return this.renderCardioCard(context, exercise, index);
 
-        const plan = getExercisePlan(exercise, context.weekIndex);
+        const plan = getExercisePlanForSession(exercise, context.session, context.weekIndex);
         const log = context.session.exercises[exercise.id];
         const variant = exercise.variants.find((item) => item.id === log.variantId) ?? exercise.variants[0];
         const prescription = this.prescriptionFor(context, exercise, log);
@@ -727,7 +739,7 @@ export class ColosseApp {
         <div class="exercise-index">${String(index + 1).padStart(2, '0')}</div>
         <div class="exercise-title">
           <div class="exercise-name-row"><h3>${escapeHtml(exercise.name)}</h3>${exercise.optional ? '<span class="badge">BONUS</span>' : ''}${exercise.superset ? `<span class="badge muted">SUPERSET ${escapeHtml(exercise.superset.split('-').at(-1) ?? '')}</span>` : ''}</div>
-          <div class="exercise-plan"><b>${plan.sets} ×${plan.deload && exercise.sets !== plan.sets ? ` <small class="f-deload-note">(décharge, au lieu de ${exercise.sets})</small>` : ''} ${plan.metric === 'seconds' ? `${formatSeconds(plan.repMin)}\u2013${formatSeconds(plan.repMax)}` : `${plan.repMin}\u2013${plan.repMax} reps`}</b><span>garde ${plan.targetRir} reps</span><span>repos ${formatClock(plan.restSec)}</span>${plan.tempo ? `<span class="tempo-hint" title="Tempo ${escapeHtml(plan.tempo)} : secondes de descente \u2013 pause basse \u2013 mont\u00e9e \u2013 pause haute">tempo ${escapeHtml(plan.tempo)}</span>` : ''}</div>
+          <div class="exercise-plan"><b>${plan.sets} ×${plan.deload && regularSetsForSession(exercise, context.session) !== plan.sets ? ` <small class="f-deload-note">(décharge, au lieu de ${regularSetsForSession(exercise, context.session)})</small>` : ''} ${plan.metric === 'seconds' ? `${formatSeconds(plan.repMin)}\u2013${formatSeconds(plan.repMax)}` : `${plan.repMin}\u2013${plan.repMax} reps`}</b><span>garde ${plan.targetRir} reps</span><span>repos ${formatClock(plan.restSec)}</span>${plan.tempo ? `<span class="tempo-hint" title="Tempo ${escapeHtml(plan.tempo)} : secondes de descente \u2013 pause basse \u2013 mont\u00e9e \u2013 pause haute">tempo ${escapeHtml(plan.tempo)}</span>` : ''}</div>
         </div>
         <a class="video-link" href="${escapeHtml(demoSearch({ name: exercise.name, variantLabel: variant.label }).url)}" target="_blank" rel="noopener noreferrer" aria-label="Rechercher une démonstration de ${escapeHtml(exercise.name)} (YouTube)">▶</a>
       </div>
@@ -789,7 +801,7 @@ export class ColosseApp {
     </article>`;
     }
     renderCardioCard(context, exercise, index) {
-        const plan = getExercisePlan(exercise, context.weekIndex);
+        const plan = getExercisePlanForSession(exercise, context.session, context.weekIndex);
         const log = context.session.exercises[exercise.id];
         const set = log?.sets?.[0];
         const doneSec = Number(set?.reps) || 0;
@@ -1117,7 +1129,7 @@ export class ColosseApp {
         const owner = this.timerOwner();
         const context = this.currentContext();
         if (owner && owner.id === context.session.id) {
-            const next = this.orderedExercises(context.day, context.session).find((item) => isExercisePending(item, context.session.exercises[item.id], getExercisePlan(item, context.weekIndex)));
+            const next = this.orderedExercises(context.day, context.session).find((item) => isExercisePending(item, context.session.exercises[item.id], getExercisePlanForSession(item, context.session, context.weekIndex)));
             return next?.name ?? null;
         }
         return this.timer?.context?.nextName ?? null;
@@ -1833,10 +1845,10 @@ export class ColosseApp {
         if (weightInput && (variantCourante?.loadMode ?? 'external') === 'external' && !(Number(weightInput.value) > 0))
             return this.flagMissingField(weightInput.closest('.f-value-cell'), 'Indique la charge (kg) avant de valider.');
         if (repsInput && !(Number(repsInput.value) > 0))
-            return this.flagMissingField(repsInput.closest('.f-value-cell'), getExercisePlan(exercise, ctx.weekIndex).metric === 'seconds' ? 'Indique la durée tenue (secondes) avant de valider.' : 'Indique les répétitions faites avant de valider.');
+            return this.flagMissingField(repsInput.closest('.f-value-cell'), getExercisePlanForSession(exercise, ctx.session, ctx.weekIndex).metric === 'seconds' ? 'Indique la durée tenue (secondes) avant de valider.' : 'Indique les répétitions faites avant de valider.');
         const rir = chosen('rir');
         if (rir === undefined)
-            return this.flagMissingField(root?.querySelector('.f-rir-choice'), getExercisePlan(exercise, ctx.weekIndex).metric === 'seconds' ? 'Touche ton RIR juste au-dessus : ce que tu pouvais encore tenir.' : 'Touche ton RIR juste au-dessus : combien de répétitions tu pouvais encore faire.');
+            return this.flagMissingField(root?.querySelector('.f-rir-choice'), getExercisePlanForSession(exercise, ctx.session, ctx.weekIndex).metric === 'seconds' ? 'Touche ton RIR juste au-dessus : ce que tu pouvais encore tenir.' : 'Touche ton RIR juste au-dessus : combien de répétitions tu pouvais encore faire.');
         if (weightInput)
             set.weightKg = weightInput.value === '' ? set.weightKg : Number(weightInput.value);
         if (repsInput)
@@ -2047,7 +2059,7 @@ export class ColosseApp {
                 if (log.autoSeed)
                     continue;
                 const variant = exercise.variants.find((v) => v.id === log.variantId) ?? exercise.variants[0];
-                const plan = getExercisePlan(exercise, item.weekIndex);
+                const plan = getExercisePlanForSession(exercise, item);
                 const avec = this.exerciseHistory(exercise.id, log.variantId, item.date, item.id);
                 if (!avec.some((entry) => entry.sessionId === session.id))
                     continue;
@@ -2071,7 +2083,7 @@ export class ColosseApp {
         if (!exercise || !log)
             return;
         const variant = exercise.variants.find((v) => v.id === log.variantId) ?? exercise.variants[0];
-        const plan = getExercisePlan(exercise, item.weekIndex);
+        const plan = getExercisePlanForSession(exercise, item);
         const history = this.exerciseHistory(exerciseId, log.variantId, item.date, item.id);
         const prescription = prescriptionFromHistory(history, plan, exercise, variant.incrementKg, analyzeRecovery(this.snapshot.dailyLogs).alert);
         indices.forEach((index) => { if (log.sets[index]) log.sets[index].weightKg = prescription.loadKg > 0 ? prescription.loadKg : null; });
@@ -2139,7 +2151,7 @@ export class ColosseApp {
             this.render();
             return;
         }
-        const planForCheck = getExercisePlan(exercise, context.weekIndex);
+        const planForCheck = getExercisePlanForSession(exercise, context.session, context.weekIndex);
         const variantForCheck = exercise.variants.find((item) => item.id === log.variantId) ?? exercise.variants[0];
         const loadMode = variantForCheck?.loadMode ?? 'external';
         const needsExternalLoad = loadMode === 'external';
@@ -2168,7 +2180,7 @@ export class ColosseApp {
             context.session.endedAt = null;
             await this.acquireWakeLock();
         }
-        const planSide = getExercisePlan(exercise, context.weekIndex);
+        const planSide = getExercisePlanForSession(exercise, context.session, context.weekIndex);
         // --- Unilatéral : gauche -> changement -> droite -> repos.
         // Chaque côté conserve SES valeurs ; la série globale reste UNE série.
         if (planSide.perSide) {
@@ -2212,7 +2224,7 @@ export class ColosseApp {
         this.unmarkSeededSet(log, setIndex);
         context.session.updatedAt = Date.now();
         removeDraft(this.draftStorage(), draftKey({ sessionId: context.session.id, exerciseId: exercise.id, variantId: log.variantId, setIndex, side: planSide.perSide ? 'right' : null }));
-        const plan = getExercisePlan(exercise, context.weekIndex);
+        const plan = getExercisePlanForSession(exercise, context.session, context.weekIndex);
         const variant = exercise.variants.find((item) => item.id === log.variantId) ?? exercise.variants[0];
         const suggestion = suggestNextSet(set, plan, exercise, variant.incrementKg);
         const nextSet = log.sets[setIndex + 1];
@@ -2250,15 +2262,15 @@ export class ColosseApp {
     }
     /** Décision pure (engine) alimentée par l'ordre réel de la séance. */
     restAfterSet(exercise, setIndex, context) {
-        const plan = getExercisePlan(exercise, context.weekIndex);
+        const plan = getExercisePlanForSession(exercise, context.session, context.weekIndex);
         const ordered = this.orderedExercises(context.day, context.session);
         const group = exercise.superset ? ordered.filter((item) => item.superset === exercise.superset) : [];
-        const next = ordered.find((item) => item.id !== exercise.id && isExercisePending(item, context.session.exercises[item.id], getExercisePlan(item, context.weekIndex)));
+        const next = ordered.find((item) => item.id !== exercise.id && isExercisePending(item, context.session.exercises[item.id], getExercisePlanForSession(item, context.session, context.weekIndex)));
         return restAfterSetDecision({
             plan, setIndex,
             inSuperset: !!exercise.superset,
             isLastOfSuperset: !exercise.superset || group.at(-1)?.id === exercise.id,
-            maxSupersetSets: group.length ? Math.max(...group.map((item) => getExercisePlan(item, context.weekIndex).sets)) : null,
+            maxSupersetSets: group.length ? Math.max(...group.map((item) => getExercisePlanForSession(item, context.session, context.weekIndex).sets)) : null,
             nextExercise: next ? { id: next.id, name: next.name } : null,
         });
     }
@@ -2291,7 +2303,7 @@ export class ColosseApp {
             await this.resolveActiveTimer(true);
             return this.changeVariant(exerciseId, variantId, { dejaConfirme: true });
         }
-        const plan = getExercisePlan(exercise, context.weekIndex);
+        const plan = getExercisePlanForSession(exercise, context.session, context.weekIndex);
         context.session.exercises[exerciseId] = resetExerciseLogForVariant(log, variantId, plan.sets, makeSet);
         // Une montée en charge calculée pour une autre machine ne doit JAMAIS
         // être réutilisée : incréments et charges diffèrent.
@@ -2435,7 +2447,7 @@ export class ColosseApp {
         const exercise = context.day.exercises.find((item) => item.id === sheet.id) ?? findExercise(sheet.id);
         if (!exercise)
             return '';
-        const plan = getExercisePlan(exercise, context.weekIndex);
+        const plan = getExercisePlanForSession(exercise, context.session, context.weekIndex);
         const log = context.session.exercises[exercise.id];
         const variant = exercise.variants?.find((item) => item.id === log?.variantId) ?? exercise.variants?.[0];
         const pending = isExercisePending(exercise, log, plan);
@@ -2473,7 +2485,7 @@ export class ColosseApp {
         const exercise = context.day.exercises.find((item) => item.id === exerciseId);
         if (!exercise)
             return;
-        const resolvePlan = (ex) => getExercisePlan(ex, context.weekIndex);
+        const resolvePlan = (ex) => getExercisePlanForSession(ex, context.session, context.weekIndex);
         const log = context.session.exercises[exerciseId];
         if (context.session.endedAt) {
             this.showToast('Cette séance est terminée : touche « Reprendre » pour la rouvrir.', 'info', 5000);
@@ -2552,7 +2564,7 @@ export class ColosseApp {
     reorderRows(context) {
         const ordered = this.orderedExercises(context.day, context.session);
         return ordered.map((exercise) => {
-            const plan = getExercisePlan(exercise, context.weekIndex);
+            const plan = getExercisePlanForSession(exercise, context.session, context.weekIndex);
             const log = context.session.exercises[exercise.id];
             const pending = isExercisePending(exercise, log, plan);
             const isCardio = exercise.kind === 'cardio';
@@ -2634,7 +2646,7 @@ export class ColosseApp {
         }
         const context = this.currentContext();
         const pendingIds = new Set(context.day.exercises
-            .filter((exercise) => isExercisePending(exercise, context.session.exercises[exercise.id], getExercisePlan(exercise, context.weekIndex)))
+            .filter((exercise) => isExercisePending(exercise, context.session.exercises[exercise.id], getExercisePlanForSession(exercise, context.session, context.weekIndex)))
             .map((exercise) => exercise.id));
         const result = deferExercise(context.session.exerciseOrder, exerciseId, { isPending: (id) => pendingIds.has(id), day: context.day });
         if (!result.moved) {
@@ -2826,12 +2838,12 @@ export class ColosseApp {
             if (sessionProjected) {
                 const completedCounts = {};
                 context.day.exercises.forEach((exercise) => {
-                    const plan = getExercisePlan(exercise, context.weekIndex);
+                    const plan = getExercisePlanForSession(exercise, context.session, context.weekIndex);
                     const log = context.session.exercises[exercise.id];
                     completedCounts[exercise.id] = log?.skipped ? 0 : (log?.sets.slice(0, plan.sets).filter((set) => set.done).length ?? 0);
                 });
-                const remaining = remainingSessionSeconds(context.day, (exercise) => getExercisePlan(exercise, context.weekIndex), completedCounts);
-                const planned = estimateSessionDuration(context.day, (exercise) => getExercisePlan(exercise, context.weekIndex));
+                const remaining = remainingSessionSeconds(context.day, (exercise) => getExercisePlanForSession(exercise, context.session, context.weekIndex), completedCounts);
+                const planned = estimateSessionDuration(context.day, (exercise) => getExercisePlanForSession(exercise, context.session, context.weekIndex));
                 sessionProjected.textContent = formatClock(context.session.startedAt ? elapsed + remaining : planned.seconds);
             }
         }
