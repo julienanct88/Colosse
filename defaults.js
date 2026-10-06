@@ -1,7 +1,7 @@
 import { defaultDayForDate, findDay, getExercisePlan, SETS_REVISION } from './program.js';
 import { isoDate, uid } from './engine/math.js';
 import { trainingWeekIndex } from './engine/session.js';
-export const APP_VERSION = '3.6.5';
+export const APP_VERSION = '3.6.6';
 export const SCHEMA_VERSION = 7;
 export function defaultProfile(today = new Date()) {
     return {
@@ -21,6 +21,7 @@ export function defaultProfile(today = new Date()) {
         dailyStepTarget: 8000,
         stepsOnlyTarget: 12000,
         bikeMinutesTarget: 25,
+        bikeStepsPerMinute: 160,
         sessionLimitMinutes: 120,
         programVersion: 'transformation-12s',
     };

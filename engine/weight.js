@@ -1,4 +1,5 @@
 import { addDays, clamp, daysBetween, isoDate, linearRegression, mean, parseLocalDate, round, roundTo50, startOfWeek, } from './math.js';
+import { bikeStepsPerMinute } from './activity.js';
 function sortedWeightLogs(logs) {
     return logs
         .filter((log) => Number.isFinite(log.weightKg) && Number(log.weightKg) > 0)
@@ -97,7 +98,9 @@ export function analyzeWeightTrend(logs, profile, adjustments, options = {}) {
             calorieDelta = 0;
             status = 'ACTIVITY';
             action = 'HOLD'; // plus d'escalade automatique du cardio (audit, point 9)
-            reason = 'Plancher calorique atteint : ajoute 5 minutes de vélo modéré ou 1 000 à 1 500 pas par jour plutôt que de couper davantage.';
+            // Même équivalence que la jauge d'activité (1 min de vélo modéré = N pas) : le conseil et la jauge disent la même chose.
+            const parMinute = bikeStepsPerMinute(profile);
+            reason = `Plancher calorique atteint : ajoute 1 000 à 1 500 pas par jour (ou ${Math.round(1000 / parMinute)} à ${Math.round(1500 / parMinute)} minutes de vélo modéré) plutôt que de couper davantage.`;
         }
         else if (profile.currentCalories + calorieDelta > profile.maximumCalories) {
             calorieDelta = 0;

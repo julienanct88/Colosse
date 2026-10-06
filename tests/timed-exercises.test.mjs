@@ -156,12 +156,12 @@ test('2c. un kind inconnu ne casse rien', () => {
 // partout ailleurs dans l'app (toLocaleString('fr-FR')).
 const plat = (texte) => texte.replace(/[\u202f\u00a0]/g, ' ');
 
-test('3. le texte des réglages dit que le vélo ne remplace pas les pas', () => {
+test('3. le texte des réglages dit que le vélo compte dans la jauge, avec son équivalence', () => {
     const help = activityGoalHelp({ dailyStepTarget: 8000, stepsOnlyTarget: 12000 });
-    assert.equal(plat(help), 'Objectif quotidien : 8 000 à 12 000 pas. Le vélo est suivi séparément et ne remplace pas automatiquement les pas.');
+    assert.equal(plat(help), 'Objectif quotidien : 8 000 à 12 000 pas. Le vélo compte dans la jauge : 1 min de vélo modéré = 160 pas.');
     assert.doesNotMatch(help, /socle/i, 'plus de vocabulaire « socle + vélo »');
-    assert.doesNotMatch(help, /valide l’activité/);
-    assert.match(help, /ne remplace pas automatiquement les pas/);
+    assert.doesNotMatch(help, /ne remplace pas/);
+    assert.match(plat(activityGoalHelp({ bikeStepsPerMinute: 120 })), /= 120 pas/, 'suit le réglage');
 });
 
 test('3b. le texte suit les valeurs réelles du profil', () => {
@@ -171,11 +171,13 @@ test('3b. le texte suit les valeurs réelles du profil', () => {
     assert.match(plat(activityGoalHelp({})), /8 000 à 12 000 pas/, 'valeurs par défaut');
 });
 
-test('3c. le texte est cohérent avec le moteur : le vélo ne complète jamais les pas', () => {
+test('3c. le texte est cohérent avec le moteur : 1 min de vélo modéré = 160 pas dans la jauge', () => {
     const profile = { dailyStepTarget: 8000, stepsOnlyTarget: 12000 };
-    const avecVelo = activityProgress({ steps: 3000, bikeMinutes: 60, bikeIntensity: 'vigorous' }, profile);
-    assert.equal(avecVelo.complete, false, '60 min de vélo ne valident pas 3 000 pas');
-    assert.equal(avecVelo.bikeMinutes, 60, 'mais le vélo reste enregistré');
+    const avecVelo = activityProgress({ steps: 3000, bikeMinutes: 20 }, profile);
+    assert.equal(avecVelo.totalSteps, 3000 + 20 * 160);
+    assert.equal(avecVelo.complete, false, '6 200 pas comptés : pas encore 8 000');
+    assert.equal(activityProgress({ steps: 3000, bikeMinutes: 30 }, profile).complete, false, '3 000 + 4 800 = 7 800 : pas encore 8 000');
+    assert.equal(activityProgress({ steps: 3000, bikeMinutes: 32 }, profile).complete, true, '3 000 + 5 120 = 8 120');
     assert.equal(activityProgress({ steps: 8000 }, profile).complete, true);
 });
 
@@ -248,5 +250,5 @@ test('7. donnée héritée (validée à la main avant v3.5.3) : affichage align�
 
 test('8. activityGoalHelp tolère un profil absent ou nul', () => {
     for (const entree of [null, undefined, {}, { dailyStepTarget: 'x' }, { dailyStepTarget: -5 }])
-        assert.match(activityGoalHelp(entree), /ne remplace pas automatiquement les pas/);
+        assert.match(plat(activityGoalHelp(entree)), /Le vélo compte dans la jauge : 1 min de vélo modéré = 160 pas\./);
 });

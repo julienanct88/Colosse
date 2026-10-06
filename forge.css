@@ -499,3 +499,10 @@ h3 { font-size:18px; }
 .app-shell.has-sheet .update-banner { z-index:105; }
 /* Bandeaux en mode guidé : sous l'en-tête de séance, jamais dessus. */
 .app-shell.is-executing .toast { top:calc(var(--safe-top) + 114px); }
+/* 3.6.6 — le vélo compte dans la jauge d'activité */
+.activity-total { margin:2px 0 6px; font-size:14px; color:var(--text); }
+.activity-total span { color:var(--muted); font-size:12px; }
+/* 3.6.6 — Réglages : la page ne déborde plus de l'écran (les champs de date imposaient une largeur minimale et élargissaient la page de 13 px) */
+.form-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.form-grid > label, .input-unit { min-width:0; }
+.input-unit input[type="date"] { min-width:0; max-width:100%; }
