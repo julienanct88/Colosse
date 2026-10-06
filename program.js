@@ -63,7 +63,7 @@ export const TRAINING_DAYS = [
             exercise({
                 id: 'pull-a-unilateral', name: 'Tirage unilatéral poulie vers la hanche', shortName: 'Tirage unilatéral',
                 perSide: true, sideSwitchSec: 15, roundRestSec: 90,
-                category: 'upper_compound', sets: 2, repMin: 10, repMax: 12, targetRir: 1, restSec: 90,
+                category: 'upper_compound', sets: 3, repMin: 10, repMax: 12, targetRir: 1, restSec: 90,
                 tempo: '3-1-1-1',
                 executionSec: 45, transitionSec: 50, warmupSec: 0, priority: 3,
                 coachingCue: 'Par bras. Cherche l’étirement du grand dorsal. 15 s entre les deux côtés, 90 s après les deux.',
@@ -98,7 +98,7 @@ export const TRAINING_DAYS = [
             }),
             exercise({
                 id: 'pull-a-hammer', name: 'Curl marteau', shortName: 'Curl marteau',
-                category: 'isolation', sets: 2, repMin: 10, repMax: 15, targetRir: 1, restSec: 75,
+                category: 'isolation', sets: 3, repMin: 10, repMax: 15, targetRir: 1, restSec: 75,
                 tempo: '2-1-1-1',
                 executionSec: 30, transitionSec: 45, warmupSec: 0, priority: 5,
                 coachingCue: 'Prise neutre, coudes fixes. Travaille le brachial et le long supinateur.',
@@ -200,7 +200,7 @@ export const TRAINING_DAYS = [
             }),
             exercise({
                 id: 'push-a-pushdown', name: 'Push-down corde', shortName: 'Push-down',
-                category: 'isolation', sets: 2, repMin: 12, repMax: 15, targetRir: 1, restSec: 75,
+                category: 'isolation', sets: 3, repMin: 12, repMax: 15, targetRir: 1, restSec: 75,
                 tempo: '2-1-1-1',
                 executionSec: 30, transitionSec: 45, warmupSec: 0, priority: 5,
                 coachingCue: 'Coudes au corps, verrouillage complet en bas.',
@@ -364,7 +364,7 @@ export const TRAINING_DAYS = [
             }),
             exercise({
                 id: 'pull-b-high-row', name: 'Rowing haut coudes ouverts', shortName: 'Rowing haut',
-                category: 'upper_compound', sets: 2, repMin: 10, repMax: 15, targetRir: 1, restSec: 90,
+                category: 'upper_compound', sets: 3, repMin: 10, repMax: 15, targetRir: 1, restSec: 90,
                 tempo: '2-1-2-1',
                 executionSec: 40, transitionSec: 50, warmupSec: 0, priority: 3,
                 coachingCue: 'Coudes ouverts, cible le haut du dos et l’arrière d’épaule.',
@@ -398,7 +398,7 @@ export const TRAINING_DAYS = [
             }),
             exercise({
                 id: 'pull-b-cable-curl', name: 'Curl câble', shortName: 'Curl câble',
-                category: 'isolation', sets: 2, repMin: 12, repMax: 15, targetRir: 1, restSec: 75,
+                category: 'isolation', sets: 3, repMin: 12, repMax: 15, targetRir: 1, restSec: 75,
                 tempo: '2-1-2-1',
                 executionSec: 30, transitionSec: 45, warmupSec: 0, priority: 5,
                 coachingCue: 'Tension continue. Dernière série à l’échec technique autorisée dès la semaine 3.',
@@ -452,7 +452,7 @@ export const TRAINING_DAYS = [
             }),
             exercise({
                 id: 'push-b-fly', name: 'Écartés poulie', shortName: 'Écartés',
-                category: 'isolation', sets: 2, repMin: 12, repMax: 20, targetRir: 1, restSec: 75,
+                category: 'isolation', sets: 3, repMin: 12, repMax: 20, targetRir: 1, restSec: 75,
                 tempo: '3-1-2-1',
                 executionSec: 30, transitionSec: 45, warmupSec: 0, priority: 3,
                 coachingCue: 'Étirement contrôlé, coudes légèrement fléchis.',
@@ -558,7 +558,7 @@ export const TRAINING_DAYS = [
             }),
             exercise({
                 id: 'legs-b-press-high', name: 'Presse pieds légèrement plus hauts', shortName: 'Presse pieds hauts',
-                category: 'lower_compound', sets: 2, repMin: 12, repMax: 15, targetRir: 1, restSec: 120,
+                category: 'lower_compound', sets: 3, repMin: 12, repMax: 15, targetRir: 1, restSec: 120,
                 tempo: '3-1-1-0',
                 executionSec: 45, transitionSec: 60, warmupSec: 0, priority: 3,
                 coachingCue: 'Pieds hauts sur la plateforme pour cibler ischios et fessiers.',
@@ -568,7 +568,7 @@ export const TRAINING_DAYS = [
             }),
             exercise({
                 id: 'legs-b-leg-ext', name: 'Leg extension', shortName: 'Leg extension',
-                category: 'isolation', sets: 2, repMin: 15, repMax: 20, targetRir: 1, restSec: 75,
+                category: 'isolation', sets: 3, repMin: 15, repMax: 20, targetRir: 1, restSec: 75,
                 tempo: '2-1-2-1',
                 executionSec: 30, transitionSec: 45, warmupSec: 0, priority: 4,
                 coachingCue: 'Finition quadriceps, contraction marquée.',
@@ -723,6 +723,27 @@ export function getExercisePlan(exerciseDef, weekIndex) {
         deload,
         loadFactor: deload ? DELOAD_LOAD_FACTOR : 1,
     };
+}
+// Révision du 6 octobre 2026 : « 3 séries minimum, jamais 2 » — 8 exercices sont passés de 2 à 3 séries.
+// Une séance COMMENCÉE ou terminée avant cette mise en ligne garde ses séries prévues d'alors : elle n'est jamais
+// jugée « incomplète » et ses séries ne sont ni complétées ni effacées (l'historique ne se mélange pas).
+// Le critère est le moment réel où la séance a été faite, pas sa date : une séance est rangée à la date du jour
+// PRÉVU (le Pull A du lundi), qu'elle soit faite le lundi ou plus tard.
+export const SETS_REVISION_TIMESTAMP = 1791282520000;
+export const SETS_BEFORE_REVISION = {
+    'pull-a-unilateral': 2, 'pull-a-hammer': 2, 'push-a-pushdown': 2, 'pull-b-high-row': 2,
+    'pull-b-cable-curl': 2, 'push-b-fly': 2, 'legs-b-press-high': 2, 'legs-b-leg-ext': 2,
+};
+export function isPreRevisionSession(session) {
+    const traces = [session?.startedAt, session?.endedAt].filter(Number.isFinite);
+    return traces.length > 0 && Math.min(...traces) < SETS_REVISION_TIMESTAMP;
+}
+/** Plan d'un exercice POUR UNE SÉANCE : le plan actuel, ou celui d'avant la révision pour une séance déjà faite avant. */
+export function getExercisePlanForSession(exerciseDef, session, weekIndex = session?.weekIndex) {
+    const avant = SETS_BEFORE_REVISION[exerciseDef.id];
+    if (avant && isPreRevisionSession(session))
+        return getExercisePlan({ ...exerciseDef, sets: avant }, weekIndex);
+    return getExercisePlan(exerciseDef, weekIndex);
 }
 export function findDay(dayId) {
     return TRAINING_DAYS.find((day) => day.id === dayId) ?? TRAINING_DAYS[0];

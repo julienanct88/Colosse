@@ -24,7 +24,7 @@ test('Semaine du programme : le 14/09 n’est plus une décharge (3 séries, pas
     assert.equal(week, 2);
     assert.notEqual(getTrainingPhase(week).name, 'Décharge');
     const pullA = findDay('pull-a');
-    assert.deepEqual(pullA.exercises.filter((ex) => ex.kind !== 'cardio').map((ex) => getExercisePlan(ex, week).sets), [3, 3, 2, 3, 3, 2]);
+    assert.deepEqual(pullA.exercises.filter((ex) => ex.kind !== 'cardio').map((ex) => getExercisePlan(ex, week).sets), [3, 3, 3, 3, 3, 3], 'Pull A : plus aucun exercice à 2 séries (révision du 06/10)');
     assert.equal(getTrainingPhase(trainingWeekIndex(profile, '2026-10-19')).name, 'Décharge', 'la décharge revient en semaine 7 du programme');
 });
 

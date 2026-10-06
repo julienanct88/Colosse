@@ -149,7 +149,7 @@ test('11. unilatéral : gauche -> changement -> droite -> repos', () => {
 
 test('12. une série unilatérale reste UNE seule série', () => {
   const plan = getExercisePlan(findExercise('pull-a-unilateral'), 3);
-  assert.equal(plan.sets, 2);
+  assert.equal(plan.sets, 3, '3 séries PAR BRAS : une série reste un passage gauche + droite');
   assert.equal(plan.perSide, true);
   const bulgarian = getExercisePlan(findExercise('legs-a-bulgarian'), 3);
   assert.equal(bulgarian.sets, 3);
