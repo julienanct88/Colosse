@@ -168,10 +168,11 @@ test('13. une séance incomplète garde le statut INCOMPLETE après validation',
 });
 
 // 15 — aucune escalade automatique du vélo
-test('15. le vélo ne remplace plus les pas et n’escalade jamais', () => {
+test('15. le vélo compte dans la jauge mais n’escalade jamais', () => {
   const profile = { dailyStepTarget: 8000, stepsOnlyTarget: 12000, bikeMinutesTarget: 25 };
   const bikeOnly = activityProgress({ steps: 2000, bikeMinutes: 60 }, profile);
-  assert.equal(bikeOnly.complete, false, '60 min de vélo ne valident pas 2 000 pas');
+  assert.equal(bikeOnly.complete, true, '2 000 pas + 60 min de vélo modéré = 11 600 pas comptés');
+  assert.equal(activityProgress({ steps: 2000, bikeMinutes: 10 }, profile).complete, false, '2 000 pas + 10 min = 3 600 : pas encore')
   const walked = activityProgress({ steps: 9000 }, profile);
   assert.equal(walked.complete, true);
   assert.equal(walked.inZone, true);

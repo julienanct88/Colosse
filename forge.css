@@ -499,3 +499,6 @@ h3 { font-size:18px; }
 .app-shell.has-sheet .update-banner { z-index:105; }
 /* Bandeaux en mode guidé : sous l'en-tête de séance, jamais dessus. */
 .app-shell.is-executing .toast { top:calc(var(--safe-top) + 114px); }
+/* 3.6.6 — le vélo compte dans la jauge d'activité */
+.activity-total { margin:2px 0 6px; font-size:14px; color:var(--text); }
+.activity-total span { color:var(--muted); font-size:12px; }

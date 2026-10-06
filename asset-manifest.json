@@ -1,6 +1,6 @@
 {
-  "version": "3.6.5",
-  "cacheVersion": "colosse-adaptive-v3-forge-365",
+  "version": "3.6.6",
+  "cacheVersion": "colosse-adaptive-v3-forge-366",
   "assets": [
     "./",
     "./app.js",

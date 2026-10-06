@@ -923,6 +923,7 @@ export class ColosseApp {
           <span class="activity-status">${activity.complete ? '✓ Objectif atteint' : `${activity.percent}%`}</span>
         </div>
         <p class="activity-rule">${escapeHtml(activityGoalLabel(this.snapshot.profile))}</p>
+        <p class="activity-total"><b>${activity.totalSteps.toLocaleString('fr-FR')} pas comptés</b>${activity.bikeSteps ? ` <span>(${activity.steps.toLocaleString('fr-FR')} pas + vélo ≈ ${activity.bikeSteps.toLocaleString('fr-FR')})</span>` : ''}</p>
         <div class="progress-track activity-progress"><i style="width:${activity.percent}%"></i></div>
         <div class="form-grid activity-fields">
           ${this.dailyField('steps', 'Pas mesurés par l’iPhone', 'pas', log.steps, '1', 0)}
@@ -934,7 +935,7 @@ export class ColosseApp {
               <option value="vigorous" ${log.bikeIntensity === 'vigorous' ? 'selected' : ''}>Soutenue</option>
             </select>
           </label>
-          <div class="activity-mode"><span>Mode détecté</span><strong>${activityModeLabel(log)}</strong><small>${activity.bikeMinutes ? `${activity.bikeEquivalentMinutes} min modérées comptées` : 'Saisie manuelle'}</small></div>
+          <div class="activity-mode"><span>Mode détecté</span><strong>${activityModeLabel(log)}</strong><small>${activity.bikeMinutes ? `${activity.bikeEquivalentMinutes} min modérées ≈ ${activity.bikeSteps.toLocaleString('fr-FR')} pas comptés` : 'Saisie manuelle'}</small></div>
         </div>
         <p class="activity-help">Pas de vitesse imposée : modérée = tu peux parler, pas chanter ; soutenue = seulement quelques mots.</p>
       </section>
@@ -1076,6 +1077,7 @@ export class ColosseApp {
           ${this.profileField('dailyStepTarget', 'Bas de la zone de pas', profile.dailyStepTarget, 'pas', '250', 1000, 20000)}
           ${this.profileField('stepsOnlyTarget', 'Haut de la zone de pas', profile.stepsOnlyTarget, 'pas', '250', 3000, 30000)}
           ${this.profileField('bikeMinutesTarget', 'Vélo modéré', profile.bikeMinutesTarget, 'min', '5', 5, 120)}
+          ${this.profileField('bikeStepsPerMinute', 'Pas par minute de vélo modéré', profile.bikeStepsPerMinute ?? 160, 'pas/min', '10', 40, 400)}
         </div>
         <p class="subtle-block settings-help">${escapeHtml(activityGoalHelp(profile))}</p>
       </section>
