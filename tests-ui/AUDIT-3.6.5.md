@@ -11,15 +11,20 @@ Vérifications en **émulation iPhone 15 dans Chrome** (393×852), pas sur un vr
 
 ## Ce qui est protégé
 
+Règle (marqueur `setsRevision` écrit sur chaque séance par la nouvelle version, `getExercisePlanForSession`) : une séance **sans marqueur et avec des traces de travail** (début, fin, série validée, côté fait, répétitions saisies) a été faite avec l'ancien programme et garde ses 2 séries prévues. Une séance sans trace de travail reçoit le marqueur et suit le programme actuel. Une séance créée par la nouvelle version a le marqueur dès sa création.
+
+Ni la date de la séance (c'est le jour *prévu*) ni une heure de mise en ligne ne sont utilisées : un premier essai avec un repère horaire a été écarté par la relecture (une séance faite aujourd'hui sur l'ancienne version, avant la mise à jour de l'appareil, aurait été rejugée sur 3 séries ; les séances importées de Colosse v2, sans heure de début, aussi).
+
 | Risque | Protection |
 |---|---|
-| Une séance déjà faite (2 séries) rejugée sur 3 → « trop incomplète », charge bloquée (`HOLD_INCOMPLETE`) | `getExercisePlanForSession` : une séance antérieure à la révision (`date < 2026-10-06`, ou terminée avant `SETS_REVISION_TIMESTAMP`) garde son plan d'alors ; utilisée par l'historique, les comptes de séries, le statut, la récupération, le pré-remplissage |
-| Une séance terminée « complétée » d'une série vide en la consultant | Le plan d'une séance antérieure reste à 2 : `syncSession` n'ajoute rien |
-| Une séance préparée à 2 séries | Elle reçoit sa 3e série ; si les séries précédentes portent la charge **pré-remplie**, la 3e la reprend (marque `autoSeed` étendue) ; une charge saisie à la main n'est jamais copiée |
-| Décharge (semaine 7) | 3 séries → 2 (50 %), comme avant pour les exercices à 3 ; séance de décharge antérieure à 1 série conservée |
+| Une séance déjà faite (2 séries) rejugée sur 3 → « trop incomplète », charge bloquée (`HOLD_INCOMPLETE`) | plan d'avant pour toute séance faite sans marqueur : historique, comptes de séries, statut, récupération, pré-remplissage |
+| Une séance terminée « complétée » d'une série vide en la consultant | son plan reste à 2 : `syncSession` n'ajoute rien |
+| Une séance préparée à 2 séries | elle reçoit le marqueur et sa 3e série ; si les séries précédentes portent la charge **pré-remplie**, la 3e la reprend (marque `autoSeed` étendue) ; une charge saisie n'est jamais copiée |
+| Séance faite sur l'ancienne version après la mise en ligne, appareil pas encore mis à jour | pas de marqueur + traces → ancien plan |
+| Décharge (semaine 7) | 3 séries → 2 (50 %) ; séance de décharge antérieure à 1 série conservée |
 
 ## Tests
 
 - `tests/trois-series.test.mjs` (comportement) : 43 exercices de musculation ≥ 3 séries hors décharge ; 8 passent à 3, 35 inchangés ; répétitions/repos inchangés ; décharge ; plan d'une séance antérieure ; historique d'une exposition à 2 séries non « incomplète » et charge qui monte.
-- Scénarios d'interface S39 (séance du 05/10 intacte, lundi 12 à 3 séries avec charge recalculée) et S40 (3e série ajoutée avec la charge pré-remplie, charge saisie non copiée), sur horloge simulée.
+- Scénarios d'interface S39 (séance du 05/10 intacte, lundi 12 à 3 séries avec charge recalculée), S40 (3e série ajoutée avec la charge pré-remplie, charge saisie non copiée) et S41 (séance faite aujourd'hui sur l'ancienne version : inchangée, 22/22), sur horloge simulée pour S39/S40. Chaque protection est vérifiée par mutation (retirée → le scénario échoue).
 - Ancien tests « 2 séries » mis à jour (tirage unilatéral, Pull A).

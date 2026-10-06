@@ -8,9 +8,7 @@ const fs = require('fs'); const path = require('path'); const os = require('os')
 const DOSSIER = process.argv[2]; const PORT = Number(process.argv[3] || 8860); const SEUL = process.argv[4] || null;
 setTimeout(() => { console.log('WATCHDOG'); process.exit(2); }, 1500000);
 const URL = `http://127.0.0.1:${PORT}/colosse-app.html`;
-// Séances de test « commencées il y a X » : toujours APRÈS la mise en ligne de la révision « 3 séries minimum » (sinon elles garderaient l'ancien plan).
-let REVISION_TS = 0;
-const depuis = (ms) => Math.max(Date.now() - ms, REVISION_TS + 60000);
+const depuis = (ms) => Date.now() - ms;
 const resultats = [];
 function attendu(cond, msg) { if (!cond) throw new Error(msg); }
 
@@ -117,7 +115,6 @@ async function scenario(nom, fn, tentative = 1) {
 }
 
 (async () => {
-  REVISION_TS = (await import(require('url').pathToFileURL(path.join(path.resolve(DOSSIER), 'program.js')).href)).SETS_REVISION_TIMESTAMP;
   const srv = await serveur(DOSSIER, PORT);
 
   // ---------------------------------------------------------------- 1. VÉLO
@@ -1427,7 +1424,7 @@ async function scenario(nom, fn, tentative = 1) {
     // Séance réelle de lundi dernier (avant la révision) : curl marteau fait en 2 séries, haut de fourchette, RIR 3.
     const ancienne = JSON.parse(JSON.stringify(modele));
     Object.assign(ancienne, { id: '2026-10-05:pull-a', date: '2026-10-05', weekIndex: 5, planWeekIndex: 5, startedAt: Date.parse('2026-10-05T18:00:00'), endedAt: Date.parse('2026-10-05T19:20:00'), status: 'COMPLETE', activeTimer: null });
-    delete ancienne.autoSeed;
+    delete ancienne.autoSeed; delete ancienne.setsRevision;   // écrite par l'ancienne version : pas de marqueur
     for (const [id, log] of Object.entries(ancienne.exercises)) { log.autoSeed = { loadKg: 0, sources: [], sets: [] }; log.sets = log.sets.map((x) => ({ ...x, done: false, weightKg: null, reps: null, rir: null })); }
     logMarteau(ancienne).sets = [0, 1].map((k) => ({ id: 'h' + k, done: true, weightKg: 14, reps: 15, rir: 3, technique: 'good', pain: 0, restActualSec: 75, completedAt: Date.parse('2026-10-05T19:10:00') }));
     // L'état « Lundi 12 » doit être recréé pour être pré-rempli avec l'historique : on retire la séance vierge.
@@ -1473,6 +1470,28 @@ async function scenario(nom, fn, tentative = 1) {
     attendu(m.sets.length === 3 && m.sets.map((x) => x.weightKg).join() === '14,14,14' && JSON.stringify(m.autoSeed.sets) === '[0,1,2]', 'curl marteau : ' + JSON.stringify({ n: m.sets.length, w: m.sets.map((x) => x.weightKg), seed: m.autoSeed }));
     attendu(u.sets.length === 3 && u.sets[0].weightKg === 20 && u.sets[1].weightKg === 22.5 && u.sets[1].reps === 12 && u.sets[2].weightKg === null, 'tirage unilatéral (charge saisie) : ' + JSON.stringify(u.sets.map((x) => [x.weightKg, x.reps])));
     return 'curl marteau : 3e série à 14 kg (marque de pré-remplissage étendue) ; tirage unilatéral à charge saisie : 3e série vierge, saisie 22,5 kg × 12 intacte';
+  });
+
+  await scenario('S41 Séance faite AUJOURD’HUI sur l’ancienne version (sans marqueur, push-down à 2 séries) : ni complétée d’une série vide, ni jugée incomplète, même après la mise à jour', async ({ page }) => {
+    const modele = await modeleSeance(page, 'push-a');
+    const faite = JSON.parse(JSON.stringify(modele));
+    delete faite.setsRevision;
+    Object.assign(faite, { startedAt: Date.now() - 3600e3, endedAt: Date.now() - 600e3, status: 'COMPLETE', planWeekIndex: faite.weekIndex, activeTimer: null });
+    for (const [id, log] of Object.entries(faite.exercises)) {
+      const n = id === 'push-a-pushdown' ? 2 : log.sets.length;
+      log.autoSeed = { loadKg: 0, sources: [], sets: [] };
+      log.sets = log.sets.slice(0, n).map((x) => ({ ...x, done: true, weightKg: 20, reps: 12, rir: 2, technique: 'good', pain: 0, completedAt: Date.now() - 900e3 }));
+    }
+    await ecrireBase(page, { sessions: [faite] });
+    await page.reload({ waitUntil: 'load' }); await wait(2500);
+    await allerJour(page, 'push-a'); await wait(700);
+    const s = (await lireBase(page)).sessions.find((x) => x.id === faite.id);
+    attendu(s.exercises['push-a-pushdown'].sets.length === 2 && s.exercises['push-a-pushdown'].sets.every((x) => x.done), 'série vide ajoutée à une séance faite : ' + JSON.stringify(s.exercises['push-a-pushdown'].sets.map((x) => x.done)));
+    attendu(s.status === 'COMPLETE' && !('setsRevision' in s), 'séance faite modifiée : ' + JSON.stringify({ st: s.status, m: s.setsRevision }));
+    const compteur = await page.evaluate(() => document.querySelector('.session-progress')?.innerText.replace(/\s+/g, ' ').trim());
+    const m = /(\d+)\/(\d+) séries/.exec(compteur ?? '');
+    attendu(m && m[1] === m[2] && /100\s*%/.test(compteur), 'séance faite jugée incomplète : ' + compteur);
+    return `séance faite à 2 séries au push-down : inchangée en base (COMPLETE, sans marqueur), compteur « ${compteur} »`;
   });
 
   console.log('\nRESUME ' + JSON.stringify({ total: resultats.length, ok: resultats.filter((r) => r.ok).length }));

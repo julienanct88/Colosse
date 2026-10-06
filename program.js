@@ -725,18 +725,32 @@ export function getExercisePlan(exerciseDef, weekIndex) {
     };
 }
 // Révision du 6 octobre 2026 : « 3 séries minimum, jamais 2 » — 8 exercices sont passés de 2 à 3 séries.
-// Une séance COMMENCÉE ou terminée avant cette mise en ligne garde ses séries prévues d'alors : elle n'est jamais
-// jugée « incomplète » et ses séries ne sont ni complétées ni effacées (l'historique ne se mélange pas).
-// Le critère est le moment réel où la séance a été faite, pas sa date : une séance est rangée à la date du jour
-// PRÉVU (le Pull A du lundi), qu'elle soit faite le lundi ou plus tard.
-export const SETS_REVISION_TIMESTAMP = 1791282520000;
+// Une séance FAITE avant cette révision garde ses séries prévues d'alors : elle n'est jamais jugée « incomplète »,
+// ses séries ne sont ni complétées ni effacées, et l'historique ne se mélange pas.
+// Le critère n'est ni la date de la séance (c'est le jour PRÉVU) ni une heure de mise en ligne (un appareil peut
+// rester sur l'ancienne version) : c'est un MARQUEUR écrit sur la séance par la nouvelle version.
+//   · séance sans marqueur ET avec des traces de travail (début, fin, série validée, répétitions saisies) = faite avant ;
+//   · séance sans trace de travail = préparée : elle reçoit le marqueur et suit le programme actuel ;
+//   · séance créée par la nouvelle version = marqueur dès sa création.
+export const SETS_REVISION = 1;
 export const SETS_BEFORE_REVISION = {
     'pull-a-unilateral': 2, 'pull-a-hammer': 2, 'push-a-pushdown': 2, 'pull-b-high-row': 2,
     'pull-b-cable-curl': 2, 'push-b-fly': 2, 'legs-b-press-high': 2, 'legs-b-leg-ext': 2,
 };
+/** La séance porte-t-elle des traces de travail réel (même sans heure de début : séances importées de Colosse v2) ? */
+export function hasWorkTraces(session) {
+    if (Number.isFinite(session?.startedAt) || Number.isFinite(session?.endedAt))
+        return true;
+    return Object.values(session?.exercises ?? {}).some((log) => (log?.sets ?? []).some((set) => set?.done || set?.sides?.left?.done || set?.sides?.right?.done || Number(set?.reps) > 0));
+}
 export function isPreRevisionSession(session) {
-    const traces = [session?.startedAt, session?.endedAt].filter(Number.isFinite);
-    return traces.length > 0 && Math.min(...traces) < SETS_REVISION_TIMESTAMP;
+    return !!session && !session.setsRevision && hasWorkTraces(session);
+}
+/** Pose le marqueur sur une séance préparée (sans trace de travail) : elle suit désormais le programme actuel. */
+export function markSetsRevision(session) {
+    if (session && !session.setsRevision && !hasWorkTraces(session))
+        session.setsRevision = SETS_REVISION;
+    return session;
 }
 /** Plan d'un exercice POUR UNE SÉANCE : le plan actuel, ou celui d'avant la révision pour une séance déjà faite avant. */
 export function getExercisePlanForSession(exerciseDef, session, weekIndex = session?.weekIndex) {

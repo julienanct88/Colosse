@@ -3,7 +3,7 @@ import { renderForgeHeader, renderForgeNav, renderForgeHome, renderForgeTools, n
 import { draftKey, readDraft, saveDraft, removeDraft, pruneStoredDrafts, removeSessionDrafts } from './ui/drafts.js';
 import { APP_VERSION, defaultSnapshot, emptyDailyLog, makeExerciseLog, makeSession, makeSet, } from './defaults.js';
 import { clearAllData, deleteSession, loadSnapshot, saveAdjustment, saveDailyLog, saveProfile, saveSession, saveSettings, saveSnapshot, storageMode, } from './data/database.js';
-import { defaultDayForDate, findDay, findExercise, getExercisePlan, getExercisePlanForSession, getTrainingPhase, TRAINING_DAYS, STRENGTH_DAYS } from './program.js';
+import { defaultDayForDate, findDay, findExercise, getExercisePlan, getExercisePlanForSession, markSetsRevision, getTrainingPhase, TRAINING_DAYS, STRENGTH_DAYS } from './program.js';
 import { nextPrescription, prescriptionFromHistory, suggestNextSet, summarizeSession, } from './engine/progression.js';
 import { estimateSessionDuration, remainingSessionSeconds, } from './engine/duration.js';
 import { aggregateSides, currentSide, bothSidesDone, countSessionSets, isSessionComplete as isSessionCompletePure, countCompletedStrengthSessions, weekdayOffset, targetRirForSet, isSetValid, countsForHistory, finishStatus, formatSeconds, closeSession, trainingWeekIndex, sessionWeekIndex, migrateProgramStart, hasValidatedWork, cancelSessionSummary, cancelSessionMessage, cancelSession, canCancelSession, seededSetIndices, legacySeededSetIndices, withoutSeedMark, resetExerciseLogForVariant, timedExerciseStatus, timedExerciseActions, timedStopRequest, } from './engine/session.js';
@@ -295,6 +295,7 @@ export class ColosseApp {
         await saveSession(context.session);
     }
     syncSession(session, day, weekIndex) {
+        markSetsRevision(session);
         session.weekIndex = weekIndex;
         session.exerciseOrder = pickSessionOrder({
             sessionOrder: Array.isArray(session.exerciseOrder) ? session.exerciseOrder : [],

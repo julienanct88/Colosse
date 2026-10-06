@@ -1,8 +1,9 @@
 // 3.6.5 — « 3 séries minimum, jamais 2 » (demande du 06/10/2026). Tests de COMPORTEMENT.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { TRAINING_DAYS, findExercise, getExercisePlan, getExercisePlanForSession, isPreRevisionSession,
-    SETS_REVISION_TIMESTAMP, SETS_BEFORE_REVISION } from '../program.js';
+import { TRAINING_DAYS, findExercise, getExercisePlan, getExercisePlanForSession, isPreRevisionSession, markSetsRevision,
+    hasWorkTraces, SETS_REVISION, SETS_BEFORE_REVISION } from '../program.js';
+import { makeSession } from '../defaults.js';
 import { prescriptionFromHistory, summarizeSession } from '../engine/progression.js';
 
 const timed = (ex) => ex.kind === 'cardio' || ex.kind === 'recovery';
@@ -43,38 +44,75 @@ test('Semaine 7 (décharge) : la moitié des séries, jamais moins de 1 ; les 3 
     assert.equal(getExercisePlan(findExercise('pull-a-hammer'), 7).sets, 2);
 });
 
-const AVANT = SETS_REVISION_TIMESTAMP - 3600e3, APRES = SETS_REVISION_TIMESTAMP + 3600e3;
-test('Une séance faite avant la révision garde ses 2 séries prévues ; une séance faite après a 3 séries', () => {
+const fait = (n) => Array.from({ length: n }, () => ({ done: true, weightKg: 14, reps: 15, rir: 3 }));
+const seance = (extra = {}) => ({ date: '2026-10-06', weekIndex: 5, exercises: { 'pull-a-hammer': { sets: [] } }, ...extra });
+
+test('Une séance faite SANS marqueur (écrite par l\u2019ancienne version) garde ses 2 séries, quelle que soit l\u2019heure', () => {
     const ex = findExercise('pull-a-hammer');
-    assert.equal(getExercisePlanForSession(ex, { date: '2026-10-05', weekIndex: 5, startedAt: AVANT - 3600e3, endedAt: AVANT }).sets, 2);
-    assert.equal(getExercisePlanForSession(ex, { date: '2026-10-05', weekIndex: 5, startedAt: AVANT, endedAt: null }).sets, 2, 'commencée avant la mise en ligne : elle garde son plan');
-    assert.equal(getExercisePlanForSession(ex, { date: '2026-10-12', weekIndex: 6, startedAt: APRES, endedAt: null }).sets, 3);
-    assert.equal(getExercisePlanForSession(ex, { date: '2026-10-05', weekIndex: 5, startedAt: AVANT, endedAt: APRES }).sets, 2, 'commencée avant, terminée après : plan d\u2019origine');
+    // Même faite aujourd\u2019hui, après la mise en ligne, sur un appareil resté à l\u2019ancienne version :
+    assert.equal(getExercisePlanForSession(ex, seance({ startedAt: Date.now(), endedAt: Date.now() })).sets, 2);
+    assert.equal(getExercisePlanForSession(ex, seance({ startedAt: Date.now(), endedAt: null })).sets, 2, 'commencée, pas terminée');
+    assert.equal(getExercisePlanForSession(ex, seance({ date: '2026-10-05', weekIndex: 5, startedAt: 1, endedAt: 2 })).sets, 2);
     assert.equal(isPreRevisionSession(null), false);
 });
 
-test('La date du jour PRÉVU ne décide pas : un Pull A daté du lundi mais fait plus tard a 3 séries', () => {
+test('Une séance importée de Colosse v2 (sans heure de début ni de fin, séries validées) garde ses 2 séries', () => {
     const ex = findExercise('pull-a-hammer');
-    assert.equal(getExercisePlanForSession(ex, { date: '2026-10-05', weekIndex: 5, startedAt: APRES, endedAt: null }).sets, 3);
-    assert.equal(getExercisePlanForSession(ex, { date: '2026-10-05', weekIndex: 5 }).sets, 3, 'séance préparée mais jamais commencée : 3 séries');
-    assert.equal(getExercisePlanForSession(ex, { date: '2026-09-14', weekIndex: 2, startedAt: null, endedAt: null }).sets, 3);
+    const v2 = seance({ startedAt: null, endedAt: null, exercises: { 'pull-a-hammer': { sets: fait(2) } } });
+    assert.equal(hasWorkTraces(v2), true);
+    assert.equal(getExercisePlanForSession(ex, v2).sets, 2);
+    const reps = seance({ startedAt: null, endedAt: null, exercises: { 'pull-a-hammer': { sets: [{ done: false, reps: 12 }] } } });
+    assert.equal(hasWorkTraces(reps), true, 'des répétitions saisies sont une trace de travail');
+    const cote = seance({ startedAt: null, endedAt: null, exercises: { 'pull-a-unilateral': { sets: [{ done: false, sides: { left: { done: true } } }] } } });
+    assert.equal(hasWorkTraces(cote), true, 'un côté fait est une trace de travail');
+});
+
+test('Une séance préparée (sans trace de travail) reçoit le marqueur et suit le programme actuel : 3 séries', () => {
+    const ex = findExercise('pull-a-hammer');
+    const preparee = seance({ startedAt: null, endedAt: null, exercises: { 'pull-a-hammer': { sets: [{ done: false, weightKg: 14, reps: null }] } } });
+    assert.equal(hasWorkTraces(preparee), false, 'une charge pré-remplie n\u2019est pas du travail');
+    assert.equal(getExercisePlanForSession(ex, preparee).sets, 3);
+    markSetsRevision(preparee);
+    assert.equal(preparee.setsRevision, SETS_REVISION);
+    assert.equal(getExercisePlanForSession(ex, preparee).sets, 3);
+});
+
+test('Le marqueur n\u2019est JAMAIS posé sur une séance qui porte du travail déjà fait', () => {
+    const faite = seance({ startedAt: 5, endedAt: 9, exercises: { 'pull-a-hammer': { sets: fait(2) } } });
+    markSetsRevision(faite);
+    assert.equal('setsRevision' in faite, false);
+    assert.equal(isPreRevisionSession(faite), true);
+});
+
+test('Une séance marquée garde 3 séries même une fois commencée ou terminée (séance faite avec la nouvelle version)', () => {
+    const ex = findExercise('pull-a-hammer');
+    const faiteApres = seance({ setsRevision: SETS_REVISION, startedAt: Date.now(), endedAt: Date.now(), exercises: { 'pull-a-hammer': { sets: fait(3) } } });
+    assert.equal(isPreRevisionSession(faiteApres), false);
+    assert.equal(getExercisePlanForSession(ex, faiteApres).sets, 3);
+});
+
+test('Toute séance créée par la nouvelle version porte le marqueur dès sa création', () => {
+    const s = makeSession('pull-a', '2026-10-12', { startDate: '2026-08-05', programStartDate: '2026-09-07' });
+    assert.equal(s.setsRevision, SETS_REVISION);
+    assert.equal(s.exercises['pull-a-hammer'].sets.length, 3);
+    assert.equal(s.exercises['pull-a-unilateral'].sets.length, 3);
 });
 
 test('Séance antérieure en décharge : la décharge d\u2019alors (1 série) est conservée', () => {
     const ex = findExercise('pull-a-hammer');
-    assert.equal(getExercisePlanForSession(ex, { date: '2026-09-14', weekIndex: 7, startedAt: AVANT - 86400e3 * 20, endedAt: AVANT - 86400e3 * 20 }).sets, 1);
-    assert.equal(getExercisePlanForSession(ex, { date: '2026-10-19', weekIndex: 7, startedAt: APRES }).sets, 2);
+    assert.equal(getExercisePlanForSession(ex, seance({ weekIndex: 7, startedAt: 1, endedAt: 2 })).sets, 1);
+    assert.equal(getExercisePlanForSession(ex, seance({ weekIndex: 7, setsRevision: SETS_REVISION, startedAt: 1 })).sets, 2);
 });
 
 test('Les 35 autres exercices sont identiques pour une séance antérieure', () => {
     for (const ex of musculation.filter((e) => !SETS_BEFORE_REVISION[e.id]))
-        assert.deepEqual(getExercisePlanForSession(ex, { date: '2026-09-14', weekIndex: 2, startedAt: AVANT, endedAt: AVANT }), getExercisePlan(ex, 2), ex.name);
+        assert.deepEqual(getExercisePlanForSession(ex, { date: '2026-09-14', weekIndex: 2, startedAt: 1, endedAt: 2 }), getExercisePlan(ex, 2), ex.name);
 });
 
 test('Historique : une exposition faite à 2 séries (avant la révision) n’est PAS « trop incomplète »', () => {
     const ex = findExercise('pull-a-hammer');
     const faite = [0, 1].map(() => ({ done: true, weightKg: 14, reps: 15, rir: 3, technique: 'good', pain: 0 })).concat([{ done: false, weightKg: null, reps: null, rir: null }]);
-    const session = { date: '2026-10-05', weekIndex: 5, startedAt: AVANT, endedAt: AVANT };
+    const session = { date: '2026-10-05', weekIndex: 5, startedAt: 1, endedAt: 2 };
     const jugeeSurTrois = prescriptionFromHistory([{ date: session.date, weekIndex: 5, sets: faite, plan: getExercisePlan(ex, 5), variantId: 'x' }], getExercisePlan(ex, 6), ex, 1);
     assert.equal(jugeeSurTrois.decision, 'HOLD_INCOMPLETE', 'sans la prise en compte de la révision, la charge resterait bloquée');
     const jugeeSurDeux = prescriptionFromHistory([{ date: session.date, weekIndex: 5, sets: faite, plan: getExercisePlanForSession(ex, session), variantId: 'x' }], getExercisePlan(ex, 6), ex, 1);
