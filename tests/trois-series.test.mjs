@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { TRAINING_DAYS, findExercise, getExercisePlan, getExercisePlanForSession, isPreRevisionSession, markSetsRevision,
-    hasWorkTraces, SETS_REVISION, SETS_BEFORE_REVISION } from '../program.js';
+    hasWorkTraces, regularSetsForSession, SETS_REVISION, SETS_BEFORE_REVISION } from '../program.js';
 import { makeSession } from '../defaults.js';
 import { prescriptionFromHistory, summarizeSession } from '../engine/progression.js';
 
@@ -47,13 +47,24 @@ test('Semaine 7 (décharge) : la moitié des séries, jamais moins de 1 ; les 3 
 const fait = (n) => Array.from({ length: n }, () => ({ done: true, weightKg: 14, reps: 15, rir: 3 }));
 const seance = (extra = {}) => ({ date: '2026-10-06', weekIndex: 5, exercises: { 'pull-a-hammer': { sets: [] } }, ...extra });
 
+const avecTravail = (extra = {}) => seance({ exercises: { 'pull-a-hammer': { sets: fait(2) } }, ...extra });
+
 test('Une séance faite SANS marqueur (écrite par l\u2019ancienne version) garde ses 2 séries, quelle que soit l\u2019heure', () => {
     const ex = findExercise('pull-a-hammer');
     // Même faite aujourd\u2019hui, après la mise en ligne, sur un appareil resté à l\u2019ancienne version :
-    assert.equal(getExercisePlanForSession(ex, seance({ startedAt: Date.now(), endedAt: Date.now() })).sets, 2);
-    assert.equal(getExercisePlanForSession(ex, seance({ startedAt: Date.now(), endedAt: null })).sets, 2, 'commencée, pas terminée');
-    assert.equal(getExercisePlanForSession(ex, seance({ date: '2026-10-05', weekIndex: 5, startedAt: 1, endedAt: 2 })).sets, 2);
+    assert.equal(getExercisePlanForSession(ex, avecTravail({ startedAt: Date.now(), endedAt: Date.now() })).sets, 2);
+    assert.equal(getExercisePlanForSession(ex, avecTravail({ startedAt: Date.now(), endedAt: null })).sets, 2, 'commencée avec du travail, pas terminée');
+    assert.equal(getExercisePlanForSession(ex, avecTravail({ date: '2026-10-05', weekIndex: 5, startedAt: 1, endedAt: 2 })).sets, 2);
     assert.equal(isPreRevisionSession(null), false);
+});
+
+test('Une séance seulement DÉMARRÉE (aucune série validée, rien saisi) n\u2019a rien à protéger : elle passe à 3 séries', () => {
+    const ex = findExercise('pull-a-hammer');
+    const demarree = seance({ startedAt: Date.now(), endedAt: null, exercises: { 'pull-a-hammer': { sets: [{ done: false, weightKg: 14, reps: null }, { done: false, weightKg: 14, reps: null }] } } });
+    assert.equal(hasWorkTraces(demarree), false);
+    assert.equal(getExercisePlanForSession(ex, demarree).sets, 3);
+    markSetsRevision(demarree);
+    assert.equal(demarree.setsRevision, SETS_REVISION, 'marquée : elle restera à 3 séries même une fois du travail validé');
 });
 
 test('Une séance importée de Colosse v2 (sans heure de début ni de fin, séries validées) garde ses 2 séries', () => {
@@ -78,7 +89,7 @@ test('Une séance préparée (sans trace de travail) reçoit le marqueur et suit
 });
 
 test('Le marqueur n\u2019est JAMAIS posé sur une séance qui porte du travail déjà fait', () => {
-    const faite = seance({ startedAt: 5, endedAt: 9, exercises: { 'pull-a-hammer': { sets: fait(2) } } });
+    const faite = avecTravail({ startedAt: 5, endedAt: 9 });
     markSetsRevision(faite);
     assert.equal('setsRevision' in faite, false);
     assert.equal(isPreRevisionSession(faite), true);
@@ -100,7 +111,9 @@ test('Toute séance créée par la nouvelle version porte le marqueur dès sa cr
 
 test('Séance antérieure en décharge : la décharge d\u2019alors (1 série) est conservée', () => {
     const ex = findExercise('pull-a-hammer');
-    assert.equal(getExercisePlanForSession(ex, seance({ weekIndex: 7, startedAt: 1, endedAt: 2 })).sets, 1);
+    assert.equal(getExercisePlanForSession(ex, avecTravail({ weekIndex: 7, startedAt: 1, endedAt: 2 })).sets, 1);
+    assert.equal(regularSetsForSession(ex, avecTravail({ weekIndex: 7, startedAt: 1, endedAt: 2 })), 2, 'libellé « au lieu de 2 » pour une séance d\u2019avant');
+    assert.equal(regularSetsForSession(ex, seance({ weekIndex: 7, setsRevision: SETS_REVISION })), 3);
     assert.equal(getExercisePlanForSession(ex, seance({ weekIndex: 7, setsRevision: SETS_REVISION, startedAt: 1 })).sets, 2);
 });
 
@@ -112,7 +125,7 @@ test('Les 35 autres exercices sont identiques pour une séance antérieure', () 
 test('Historique : une exposition faite à 2 séries (avant la révision) n’est PAS « trop incomplète »', () => {
     const ex = findExercise('pull-a-hammer');
     const faite = [0, 1].map(() => ({ done: true, weightKg: 14, reps: 15, rir: 3, technique: 'good', pain: 0 })).concat([{ done: false, weightKg: null, reps: null, rir: null }]);
-    const session = { date: '2026-10-05', weekIndex: 5, startedAt: 1, endedAt: 2 };
+    const session = { date: '2026-10-05', weekIndex: 5, startedAt: 1, endedAt: 2, exercises: { 'pull-a-hammer': { sets: faite } } };
     const jugeeSurTrois = prescriptionFromHistory([{ date: session.date, weekIndex: 5, sets: faite, plan: getExercisePlan(ex, 5), variantId: 'x' }], getExercisePlan(ex, 6), ex, 1);
     assert.equal(jugeeSurTrois.decision, 'HOLD_INCOMPLETE', 'sans la prise en compte de la révision, la charge resterait bloquée');
     const jugeeSurDeux = prescriptionFromHistory([{ date: session.date, weekIndex: 5, sets: faite, plan: getExercisePlanForSession(ex, session), variantId: 'x' }], getExercisePlan(ex, 6), ex, 1);

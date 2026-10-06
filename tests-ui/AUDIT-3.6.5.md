@@ -11,7 +11,7 @@ Vérifications en **émulation iPhone 15 dans Chrome** (393×852), pas sur un vr
 
 ## Ce qui est protégé
 
-Règle (marqueur `setsRevision` écrit sur chaque séance par la nouvelle version, `getExercisePlanForSession`) : une séance **sans marqueur et avec des traces de travail** (début, fin, série validée, côté fait, répétitions saisies) a été faite avec l'ancien programme et garde ses 2 séries prévues. Une séance sans trace de travail reçoit le marqueur et suit le programme actuel. Une séance créée par la nouvelle version a le marqueur dès sa création.
+Règle (marqueur `setsRevision` écrit sur chaque séance par la nouvelle version, `getExercisePlanForSession`) : une séance **sans marqueur et avec des traces de travail** (série validée, côté fait, répétitions saisies — pas la seule heure de début) a été faite avec l'ancien programme et garde ses 2 séries prévues. Une séance sans trace de travail (même démarrée, échauffement fait) n'a rien à protéger : elle reçoit le marqueur et suit le programme actuel. Une séance créée par la nouvelle version a le marqueur dès sa création.
 
 Ni la date de la séance (c'est le jour *prévu*) ni une heure de mise en ligne ne sont utilisées : un premier essai avec un repère horaire a été écarté par la relecture (une séance faite aujourd'hui sur l'ancienne version, avant la mise à jour de l'appareil, aurait été rejugée sur 3 séries ; les séances importées de Colosse v2, sans heure de début, aussi).
 
@@ -26,5 +26,10 @@ Ni la date de la séance (c'est le jour *prévu*) ni une heure de mise en ligne 
 ## Tests
 
 - `tests/trois-series.test.mjs` (comportement) : 43 exercices de musculation ≥ 3 séries hors décharge ; 8 passent à 3, 35 inchangés ; répétitions/repos inchangés ; décharge ; plan d'une séance antérieure ; historique d'une exposition à 2 séries non « incomplète » et charge qui monte.
-- Scénarios d'interface S39 (séance du 05/10 intacte, lundi 12 à 3 séries avec charge recalculée), S40 (3e série ajoutée avec la charge pré-remplie, charge saisie non copiée) et S41 (séance faite aujourd'hui sur l'ancienne version : inchangée, 22/22), sur horloge simulée pour S39/S40. Chaque protection est vérifiée par mutation (retirée → le scénario échoue).
+- Scénarios d'interface S39 (séance du 05/10 intacte, lundi 12 à 3 séries avec charge recalculée), S40 (3e série ajoutée avec la charge pré-remplie, charge saisie non copiée) et S41 (séance faite aujourd'hui sur l'ancienne version : inchangée, 22/22) et S42 (séance seulement démarrée : 3 séries), sur horloge simulée pour S39/S40. S40 couvre aussi la pose du marqueur par `syncSession` (séance préparée sans marqueur, démarrée puis rechargée). Chaque protection est vérifiée par mutation (retirée → le scénario échoue).
 - Ancien tests « 2 séries » mis à jour (tirage unilatéral, Pull A).
+
+## Relecture
+
+- Tour 1 : repère horaire insuffisant (séance faite sur l'ancienne version après la mise en ligne) ; séances importées de Colosse v2 sans heure → remplacés par le marqueur.
+- Tour 2 (mineurs) : pose du marqueur par `syncSession` non testée → S40 étendu, mutation détectée ; séance seulement démarrée restée à 2 séries → les heures ne comptent plus comme trace de travail (S42) ; libellé « décharge, au lieu de N » faux pour une ancienne séance de décharge → `regularSetsForSession`.

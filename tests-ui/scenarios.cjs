@@ -1455,12 +1455,13 @@ async function scenario(nom, fn, tentative = 1) {
     await page.reload({ waitUntil: 'load' }); await wait(2500);
     const modele = await modeleSeance(page, 'pull-a');
     const prete = JSON.parse(JSON.stringify(modele));
+    delete prete.setsRevision;   // préparée par l'ancienne version : pas de marqueur
     const l = logMarteau(prete);
     l.sets = [0, 1].map((k) => ({ ...(modele.exercises['pull-a-hammer'].sets[0]), id: 'p' + k, done: false, weightKg: 14, reps: null, rir: null }));
     l.autoSeed = { loadKg: 14, sources: [], sets: [0, 1] };
     const unilat = prete.exercises['pull-a-unilateral'];
     unilat.sets = [0, 1].map((k) => ({ ...(modele.exercises['pull-a-unilateral'].sets[0]), id: 'u' + k, done: false, weightKg: 20, reps: null, rir: null }));
-    unilat.sets[1].weightKg = 22.5; unilat.sets[1].reps = 12;   // une charge saisie à la main : elle ne doit pas être copiée
+    unilat.sets[1].weightKg = 22.5;   // une charge choisie à la main (sans marque de pré-remplissage) : elle ne doit pas être copiée
     unilat.autoSeed = { loadKg: 0, sources: [], sets: [] };
     await ecrireBase(page, { sessions: [prete] });
     await page.reload({ waitUntil: 'load' }); await wait(2500);
@@ -1468,8 +1469,17 @@ async function scenario(nom, fn, tentative = 1) {
     const s = (await lireBase(page)).sessions.find((x) => x.id === '2026-10-12:pull-a');
     const m = logMarteau(s), u = s.exercises['pull-a-unilateral'];
     attendu(m.sets.length === 3 && m.sets.map((x) => x.weightKg).join() === '14,14,14' && JSON.stringify(m.autoSeed.sets) === '[0,1,2]', 'curl marteau : ' + JSON.stringify({ n: m.sets.length, w: m.sets.map((x) => x.weightKg), seed: m.autoSeed }));
-    attendu(u.sets.length === 3 && u.sets[0].weightKg === 20 && u.sets[1].weightKg === 22.5 && u.sets[1].reps === 12 && u.sets[2].weightKg === null, 'tirage unilatéral (charge saisie) : ' + JSON.stringify(u.sets.map((x) => [x.weightKg, x.reps])));
-    return 'curl marteau : 3e série à 14 kg (marque de pré-remplissage étendue) ; tirage unilatéral à charge saisie : 3e série vierge, saisie 22,5 kg × 12 intacte';
+    attendu(u.sets.length === 3 && u.sets[0].weightKg === 20 && u.sets[1].weightKg === 22.5 && u.sets[2].weightKg === null, 'tirage unilatéral (charge saisie) : ' + JSON.stringify(u.sets.map((x) => [x.weightKg, x.reps])));
+    attendu(s.setsRevision === 1, 'marqueur non posé sur la séance préparée : ' + s.setsRevision);
+    // Puis la séance est démarrée et rechargée : sans marqueur elle retomberait à 2 séries dès que startedAt est écrit.
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await toucher(page, '[data-action="start-session"]');
+    await page.reload({ waitUntil: 'load' }); await wait(2500);
+    await allerJour(page, 'pull-a'); await wait(500);
+    const apres = (await lireBase(page)).sessions.find((x) => x.id === '2026-10-12:pull-a');
+    const carte = await page.evaluate(() => document.querySelector('[data-exercise-card="pull-a-hammer"] .exercise-plan')?.textContent.replace(/\s+/g, ' ').trim());
+    attendu(apres.startedAt && apres.setsRevision === 1 && logMarteau(apres).sets.length === 3 && /^3 ×/.test(carte ?? ''), 'séance démarrée retombée à 2 séries : ' + JSON.stringify({ m: apres.setsRevision, n: logMarteau(apres).sets.length, carte }));
+    return 'séance préparée sans marqueur : marqueur posé, curl marteau 3e série à 14 kg (marque étendue), tirage unilatéral à charge saisie : 3e série vierge, charge saisie 22,5 kg intacte ; démarrée puis rechargée : toujours « 3 × »';
   });
 
   await scenario('S41 Séance faite AUJOURD’HUI sur l’ancienne version (sans marqueur, push-down à 2 séries) : ni complétée d’une série vide, ni jugée incomplète, même après la mise à jour', async ({ page }) => {
@@ -1492,6 +1502,23 @@ async function scenario(nom, fn, tentative = 1) {
     const m = /(\d+)\/(\d+) séries/.exec(compteur ?? '');
     attendu(m && m[1] === m[2] && /100\s*%/.test(compteur), 'séance faite jugée incomplète : ' + compteur);
     return `séance faite à 2 séries au push-down : inchangée en base (COMPLETE, sans marqueur), compteur « ${compteur} »`;
+  });
+
+  await scenario('S42 Séance seulement DÉMARRÉE sur l’ancienne version (échauffement fait, aucune série validée) : rien à protéger, elle passe à 3 séries', async ({ page }) => {
+    const modele = await modeleSeance(page, 'pull-a');
+    const demarree = JSON.parse(JSON.stringify(modele));
+    delete demarree.setsRevision;
+    Object.assign(demarree, { startedAt: Date.now() - 1200e3, endedAt: null, updatedAt: Date.now(), warmup: { general: { done: true, skipped: false, durationSec: 360 }, activation: {}, ramps: {} } });
+    for (const id of ['pull-a-unilateral', 'pull-a-hammer'])
+      demarree.exercises[id].sets = demarree.exercises[id].sets.slice(0, 2).map((x) => ({ ...x, done: false, weightKg: 14, reps: null, rir: null }));
+    await ecrireBase(page, { sessions: [demarree] });
+    await page.reload({ waitUntil: 'load' }); await wait(2500);
+    await allerJour(page, 'pull-a'); await wait(600);
+    const s = (await lireBase(page)).sessions.find((x) => x.id === demarree.id);
+    const cartes = await page.evaluate(() => ['pull-a-unilateral', 'pull-a-hammer'].map((id) => document.querySelector(`[data-exercise-card="${id}"] .exercise-plan`)?.textContent.replace(/\s+/g, ' ').trim()));
+    attendu(s.setsRevision === 1 && s.exercises['pull-a-hammer'].sets.length === 3 && s.exercises['pull-a-unilateral'].sets.length === 3 && cartes.every((c) => /^3 ×/.test(c ?? '')), 'séance démarrée restée à 2 séries : ' + JSON.stringify({ m: s.setsRevision, cartes }));
+    attendu(s.startedAt === demarree.startedAt && s.warmup.general.done, 'séance démarrée modifiée');
+    return 'séance démarrée (échauffement fait, rien validé) : marquée, tirage unilatéral et curl marteau à 3 séries, heure de début et échauffement intacts';
   });
 
   console.log('\nRESUME ' + JSON.stringify({ total: resultats.length, ok: resultats.filter((r) => r.ok).length }));

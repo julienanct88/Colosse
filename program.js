@@ -729,7 +729,7 @@ export function getExercisePlan(exerciseDef, weekIndex) {
 // ses séries ne sont ni complétées ni effacées, et l'historique ne se mélange pas.
 // Le critère n'est ni la date de la séance (c'est le jour PRÉVU) ni une heure de mise en ligne (un appareil peut
 // rester sur l'ancienne version) : c'est un MARQUEUR écrit sur la séance par la nouvelle version.
-//   · séance sans marqueur ET avec des traces de travail (début, fin, série validée, répétitions saisies) = faite avant ;
+//   · séance sans marqueur ET avec des traces de travail (série validée, côté fait, répétitions saisies) = faite avant ;
 //   · séance sans trace de travail = préparée : elle reçoit le marqueur et suit le programme actuel ;
 //   · séance créée par la nouvelle version = marqueur dès sa création.
 export const SETS_REVISION = 1;
@@ -737,10 +737,12 @@ export const SETS_BEFORE_REVISION = {
     'pull-a-unilateral': 2, 'pull-a-hammer': 2, 'push-a-pushdown': 2, 'pull-b-high-row': 2,
     'pull-b-cable-curl': 2, 'push-b-fly': 2, 'legs-b-press-high': 2, 'legs-b-leg-ext': 2,
 };
-/** La séance porte-t-elle des traces de travail réel (même sans heure de début : séances importées de Colosse v2) ? */
+/**
+ * La séance porte-t-elle du travail RÉEL (série validée, côté fait, répétitions saisies) ? Indépendant des heures de début
+ * et de fin (absentes des séances importées de Colosse v2). Une séance seulement DÉMARRÉE, sans rien de validé, n'a
+ * aucun historique à protéger : elle suit le programme actuel.
+ */
 export function hasWorkTraces(session) {
-    if (Number.isFinite(session?.startedAt) || Number.isFinite(session?.endedAt))
-        return true;
     return Object.values(session?.exercises ?? {}).some((log) => (log?.sets ?? []).some((set) => set?.done || set?.sides?.left?.done || set?.sides?.right?.done || Number(set?.reps) > 0));
 }
 export function isPreRevisionSession(session) {
@@ -751,6 +753,10 @@ export function markSetsRevision(session) {
     if (session && !session.setsRevision && !hasWorkTraces(session))
         session.setsRevision = SETS_REVISION;
     return session;
+}
+/** Nombre de séries prévu pour cet exercice dans la séance, hors décharge (sert aux libellés « au lieu de N »). */
+export function regularSetsForSession(exerciseDef, session) {
+    return getExercisePlanForSession(exerciseDef, session, 1).sets;
 }
 /** Plan d'un exercice POUR UNE SÉANCE : le plan actuel, ou celui d'avant la révision pour une séance déjà faite avant. */
 export function getExercisePlanForSession(exerciseDef, session, weekIndex = session?.weekIndex) {
