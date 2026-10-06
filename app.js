@@ -9,7 +9,7 @@ import { estimateSessionDuration, remainingSessionSeconds, } from './engine/dura
 import { aggregateSides, currentSide, bothSidesDone, countSessionSets, isSessionComplete as isSessionCompletePure, countCompletedStrengthSessions, weekdayOffset, targetRirForSet, isSetValid, countsForHistory, finishStatus, formatSeconds, closeSession, trainingWeekIndex, sessionWeekIndex, migrateProgramStart, hasValidatedWork, cancelSessionSummary, cancelSessionMessage, cancelSession, canCancelSession, seededSetIndices, legacySeededSetIndices, withoutSeedMark, resetExerciseLogForVariant, timedExerciseStatus, timedExerciseActions, timedStopRequest, } from './engine/session.js';
 import { analyzeWeightTrend, macrosForCalories, targetWeight, weeklyTargets, } from './engine/weight.js';
 import { analyzeRecovery, analyzeStrengthTrend, } from './engine/recovery.js';
-import { activityGoalHelp, activityGoalLabel, activityModeLabel, activityProgress, activitySummary, } from './engine/activity.js';
+import { activityGoalHelp, activityGoalLabel, activityModeLabel, activityProgress, activitySummary, BIKE_STEPS_PER_MINUTE_RANGE, } from './engine/activity.js';
 import { addDays, isoDate, startOfWeek, uid, weekIndexFromStart, } from './engine/math.js';
 import { computeExecutionStep, executionProgress, normalizeExecutionState, STAGES, canReorder, programOrder, normalizeOrder, pickSessionOrder, moveInOrder, deferExercise, isExercisePending, bringToFront, executionChangeDecision, halfDoneUnilateral, restAfterSetDecision, } from './engine/execution.js';
 import { createTimer, elapsedSeconds, remainingSeconds as timerRemaining, isExpired as timerExpired, pauseTimer, resumeTimer, adjustTimer as adjustTimerState, timerLabel, timerControls, canShortenTimer, timerEndMessage, } from './engine/timer.js';
@@ -935,7 +935,7 @@ export class ColosseApp {
               <option value="vigorous" ${log.bikeIntensity === 'vigorous' ? 'selected' : ''}>Soutenue</option>
             </select>
           </label>
-          <div class="activity-mode"><span>Mode détecté</span><strong>${activityModeLabel(log)}</strong><small>${activity.bikeMinutes ? `${activity.bikeEquivalentMinutes} min modérées ≈ ${activity.bikeSteps.toLocaleString('fr-FR')} pas comptés` : 'Saisie manuelle'}</small></div>
+          <div class="activity-mode"><span>Mode détecté</span><strong>${activityModeLabel(log)}</strong><small>${activity.bikeMinutes ? `${activity.bikeEquivalentExact.toLocaleString('fr-FR')} min modérées ≈ ${activity.bikeSteps.toLocaleString('fr-FR')} pas comptés` : 'Saisie manuelle'}</small></div>
         </div>
         <p class="activity-help">Pas de vitesse imposée : modérée = tu peux parler, pas chanter ; soutenue = seulement quelques mots.</p>
       </section>
@@ -2721,6 +2721,9 @@ export class ColosseApp {
                 return;
             if (field === 'weeklyLossRatePct')
                 this.snapshot.profile.weeklyLossRatePct = value / 100;
+            else if (field === 'bikeStepsPerMinute')
+                // Bornée comme son champ de saisie : la valeur affichée est toujours celle qui compte.
+                this.snapshot.profile.bikeStepsPerMinute = Math.min(BIKE_STEPS_PER_MINUTE_RANGE[1], Math.max(BIKE_STEPS_PER_MINUTE_RANGE[0], value));
             else
                 this.snapshot.profile[field] = value;
         }

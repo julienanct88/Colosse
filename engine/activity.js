@@ -12,13 +12,18 @@ export function bikeModerateEquivalentMinutes(minutes, intensity = 'moderate') {
 // Équivalence vélo → pas : celle que l'app a toujours utilisée (« 12 000 pas OU 8 000 pas + 25 min de vélo modéré » :
 // 25 min = 4 000 pas, soit 160 pas par minute modérée). Modifiable dans Réglages.
 export const BIKE_STEPS_PER_MINUTE = 160;
+export const BIKE_STEPS_PER_MINUTE_RANGE = [40, 400];
+export const BIKE_MAX_EQUIVALENT_MINUTES = 240;
+/** Pas par minute de vélo modéré : valeur du profil bornée à 40-400 ; absente ou invalide → 160. */
 export function bikeStepsPerMinute(profile = {}) {
-    return positiveNumber(profile?.bikeStepsPerMinute, BIKE_STEPS_PER_MINUTE);
+    const value = positiveNumber(profile?.bikeStepsPerMinute, BIKE_STEPS_PER_MINUTE);
+    return Math.min(BIKE_STEPS_PER_MINUTE_RANGE[1], Math.max(BIKE_STEPS_PER_MINUTE_RANGE[0], value));
 }
 export function activityProgress(log = {}, profile = {}) {
     const steps = positiveNumber(log.steps);
     const bikeMinutes = positiveNumber(log.bikeMinutes);
-    const bikeEquivalent = bikeModerateEquivalentMinutes(bikeMinutes, log.bikeIntensity);
+    // Plafond : 4 h de vélo modéré par jour au maximum (une faute de frappe — 250 au lieu de 25 — ne valide pas la journée).
+    const bikeEquivalent = Math.min(BIKE_MAX_EQUIVALENT_MINUTES, bikeModerateEquivalentMinutes(bikeMinutes, log.bikeIntensity));
     // Zone recommandée 8 000-12 000 pas. Le vélo COMPTE dans la jauge (demande du 06/10/2026) : ses minutes modérées
     // sont converties en pas équivalents et s'ajoutent aux pas mesurés. Il ne déclenche aucune hausse automatique de vélo.
     const perMinute = bikeStepsPerMinute(profile);
@@ -27,9 +32,11 @@ export function activityProgress(log = {}, profile = {}) {
     const zoneMin = positiveNumber(profile.dailyStepTarget, 8000);
     const zoneMax = Math.max(zoneMin, positiveNumber(profile.stepsOnlyTarget, 12000));
     const progress = Math.min(1, totalSteps / zoneMin);
+    const complete = totalSteps >= zoneMin;
     return {
-        percent: Math.round(progress * 100),
-        complete: totalSteps >= zoneMin,
+        // Jamais 100 % tant que l'objectif n'est pas atteint (7 960 / 8 000 s'arrondissait à 100).
+        percent: complete ? 100 : Math.min(99, Math.round(progress * 100)),
+        complete,
         inZone: totalSteps >= zoneMin && totalSteps <= zoneMax,
         steps,
         bikeSteps,
@@ -37,6 +44,7 @@ export function activityProgress(log = {}, profile = {}) {
         stepsPerBikeMinute: perMinute,
         bikeMinutes,
         bikeEquivalentMinutes: Math.round(bikeEquivalent),
+        bikeEquivalentExact: Math.round(bikeEquivalent * 10) / 10,
         stepZoneMin: zoneMin,
         stepZoneMax: zoneMax,
         // conservés pour compatibilité d'affichage

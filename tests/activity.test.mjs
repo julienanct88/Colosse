@@ -70,3 +70,28 @@ test('l’équivalence d’intensité du vélo reste calculée', () => {
   assert.equal(bikeModerateEquivalentMinutes(30, 'easy'), 18);
   assert.equal(bikeModerateEquivalentMinutes(30, 'moderate'), 30);
 });
+
+test('le pourcentage ne dit jamais 100 % tant que l’objectif n’est pas atteint', () => {
+  const presque = activityProgress({ steps: 7960 }, profile);
+  assert.equal(presque.complete, false);
+  assert.equal(presque.percent, 99);
+  assert.equal(activityProgress({ steps: 8000 }, profile).percent, 100);
+});
+
+test('le vélo est plafonné à 4 h de vélo modéré par jour (une faute de frappe ne valide pas la journée)', () => {
+  assert.equal(activityProgress({ bikeMinutes: 2400 }, profile).bikeSteps, 240 * 160);
+  assert.equal(activityProgress({ bikeMinutes: 241, bikeIntensity: 'vigorous' }, profile).bikeEquivalentMinutes, 240);
+  assert.equal(activityProgress({ bikeMinutes: 25 }, profile).bikeSteps, 4000, 'sous le plafond : inchangé');
+});
+
+test('l’équivalence réglée dans le profil est bornée à 40-400 pas par minute', () => {
+  assert.equal(activityProgress({ bikeMinutes: 10 }, { ...profile, bikeStepsPerMinute: 1 }).bikeSteps, 400);
+  assert.equal(activityProgress({ bikeMinutes: 10 }, { ...profile, bikeStepsPerMinute: 1000000 }).bikeSteps, 4000);
+  assert.equal(activityProgress({ bikeMinutes: 10 }, { ...profile, bikeStepsPerMinute: 40 }).bikeSteps, 400);
+});
+
+test('l’affichage « min modérées ≈ pas » reste cohérent avec les intensités non modérées', () => {
+  const facile = activityProgress({ bikeMinutes: 7, bikeIntensity: 'easy' }, profile);
+  assert.equal(facile.bikeEquivalentExact, 4.2);
+  assert.equal(facile.bikeSteps, Math.round(4.2 * 160), '672 pas pour 4,2 min modérées');
+});

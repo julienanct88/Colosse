@@ -1557,7 +1557,26 @@ async function scenario(nom, fn, tentative = 1) {
     attendu(plat(a.statut) === '81%' && /^6 500 pas comptés/.test(plat(a.total)), 'réglage non appliqué après rechargement : ' + JSON.stringify(a));
     const log = (await lireBase(page)).dailyLogs.find((x) => x.steps === 5000);
     attendu(log && log.bikeMinutes === 25 && log.steps === 5000 && log.bikeIntensity === 'easy', 'saisies modifiées : ' + JSON.stringify(log));
-    return 'vélo seul 25 min = 50 % ; 5 000 pas + 25 min = 9 000 comptés, objectif atteint ; facile = 93 % (accueil identique) ; réglage 100 pas/min → 81 % après rechargement ; saisies intactes';
+    // Le champ de réglage est borné (40-400) : la valeur AFFICHÉE est toujours celle qui compte.
+    await toucher(page, '.bottom-nav [data-tab="tools"]');
+    await toucher(page, '.f-tool[data-action="forge-open"][data-section="forge-nutrition"]');
+    await page.fill('[data-profile-field="bikeStepsPerMinute"]', '1');
+    await page.evaluate(() => document.querySelector('[data-profile-field="bikeStepsPerMinute"]').dispatchEvent(new Event('change', { bubbles: true }))); await wait(700);
+    // La page Réglages ne déborde pas de l'écran (sinon l'iPhone la rétrécit et les touches se décalent).
+    await page.evaluate(() => document.querySelector('.f-tool[data-section="forge-profile"]')?.click()); await wait(1);
+    const largeur = await page.evaluate(async () => { document.querySelector('.bottom-nav [data-tab="tools"]')?.click(); await new Promise((r) => setTimeout(r, 300)); document.querySelector('.f-tool[data-section="forge-profile"]')?.click(); await new Promise((r) => setTimeout(r, 500)); return { iw: innerWidth, sw: document.documentElement.scrollWidth }; });
+    attendu(largeur.sw <= largeur.iw && largeur.iw <= 393, 'la page Réglages déborde : ' + JSON.stringify(largeur));
+    await page.evaluate(() => document.querySelector('.f-tool[data-section="forge-nutrition"]')?.click()); await wait(500);
+    const borne = await page.evaluate(() => ({ champ: document.querySelector('[data-profile-field="bikeStepsPerMinute"]')?.value, aide: document.querySelector('.settings-help')?.textContent }));
+    attendu(borne.champ === '40' && /= 40 pas/.test(plat(borne.aide)), 'réglage non borné : ' + JSON.stringify(borne));
+    // 7 960 pas : 99 %, jamais 100 % sans l'objectif atteint.
+    await toucher(page, '.bottom-nav [data-tab="weight"]'); await wait(600);
+    await page.waitForSelector('#forge-activity', { timeout: 10000 });
+    await page.evaluate(() => document.getElementById('forge-activity').scrollIntoView());
+    await saisir('bikeMinutes', 0); await saisir('steps', 7960);
+    a = await lire();
+    attendu(plat(a.statut) === '99%' && !/Objectif atteint/.test(a.statut), '7 960 pas : ' + JSON.stringify(a));
+    return 'vélo seul 25 min = 50 % ; 5 000 pas + 25 min = 9 000 comptés, objectif atteint ; facile = 93 % (accueil identique) ; réglage 100 pas/min → 81 % après rechargement ; saisies intactes ; réglage borné à 40 ; 7 960 pas = 99 %';
   });
 
   console.log('\nRESUME ' + JSON.stringify({ total: resultats.length, ok: resultats.filter((r) => r.ok).length }));
